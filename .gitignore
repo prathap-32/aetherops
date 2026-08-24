@@ -1,0 +1,22 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Local SQLite databases
+*.db
+catalog.db
+
+# Log files
+logs/
+*.log
+
+# Cache directories
+.pytest_cache/
+.cache/
