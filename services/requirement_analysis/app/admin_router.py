@@ -858,11 +858,10 @@ async def serve_admin_dashboard():
                 <th class="p-4">AWS Region</th>
                 <th class="p-4">Category</th>
                 <th class="p-4">Network / Details</th>
-                <th class="p-4">Actions</th>
             `;
 
             if (items.length === 0) {
-                tableRows.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-xs text-gray-500">No specifications stored for this service. Click Sync or use the form above to add.</td></tr>`;
+                tableRows.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-xs text-gray-500">No specifications stored for this service. Click Sync.</td></tr>`;
                 return;
             }
 
@@ -873,15 +872,6 @@ async def serve_admin_dashboard():
                 const regionDisp = (item.region || 'us-east-1').toUpperCase();
                 const netOrDetailDisp = item.network_performance || item.details || '-';
                 
-                let editCall = '';
-                if (currentService === 'ec2') {
-                    editCall = `populateFormEC2('${item.instance_type}', ${item.vcpus}, ${item.ram_gb}, ${item.price_per_hour}, '${item.category}', '${item.network_performance || ""}')`;
-                } else if (currentService === 'rds') {
-                    editCall = `populateFormRDS('${item.instance_type}', ${item.vcpus}, ${item.ram_gb}, ${item.price_per_hour}, '${item.category}')`;
-                } else {
-                    editCall = `populateFormGeneric('${currentService}', '${item.instance_type}', ${item.price_per_hour}, '${item.category}', '${item.unit || "Hrs"}', '${item.region || "us-east-1"}')`;
-                }
-
                 tableRows.innerHTML += `
                     <tr class="hover:bg-slate-800/20 transition border-b border-cyber-border/40">
                         <td class="p-4 font-semibold text-white">${item.instance_type}</td>
@@ -892,10 +882,6 @@ async def serve_admin_dashboard():
                         <td class="p-4 text-gray-400 uppercase">${regionDisp}</td>
                         <td class="p-4"><span class="px-2 py-0.5 rounded bg-slate-900 text-xs capitalize text-gray-400 border border-cyber-border">${item.category}</span></td>
                         <td class="p-4 text-xs text-gray-500 truncate max-w-xs">${netOrDetailDisp}</td>
-                        <td class="p-4 space-x-2">
-                            <button onclick="${editCall}" class="text-cyber-lightViolet hover:underline text-xs">Edit</button>
-                            <button onclick="deleteCatalogItem('${currentService}', '${item.instance_type}')" class="text-cyber-coral hover:underline text-xs font-semibold">Delete</button>
-                        </td>
                     </tr>
                 `;
             });
