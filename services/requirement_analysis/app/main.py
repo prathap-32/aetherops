@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 import time
 import logging
 import asyncio
+import os
 
 from app.schemas import RequirementInput, RequirementProfileOutput, RecommendationInput, RecommendationOutput
 from app.engine import analyze_requirements, recommend_infrastructure
@@ -16,8 +17,8 @@ from app.cache import cache_manager, get_region_catalog
 from app.seed import init_db, seed_catalog
 from app.admin_router import admin_router
 from app.sync_helper import sync_catalog_from_aws
-
-import os
+from app.terminal_ui import print_banner, run_startup_diagnostics, render_catalog_dashboard, print_shutdown_banner
+from rich.logging import RichHandler
 
 # Setup logs directory relative to this service root
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -34,9 +35,14 @@ file_handler.setFormatter(log_formatter)
 file_handler.setLevel(logging.INFO)
 
 # Console handler
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(log_formatter)
-console_handler.setLevel(logging.INFO)
+console_handler = RichHandler(
+    level=logging.INFO,
+    show_time=True,
+    show_level=True,
+    show_path=False,
+    markup=True,
+    rich_tracebacks=True
+)
 
 root_logger = logging.getLogger()
 root_logger.setLevel(logging.INFO)
@@ -44,6 +50,12 @@ root_logger.setLevel(logging.INFO)
 root_logger.handlers = []
 root_logger.addHandler(file_handler)
 root_logger.addHandler(console_handler)
+
+# Silence or format other logs with RichHandler
+for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access", "fastapi"):
+    l = logging.getLogger(logger_name)
+    l.handlers = [console_handler]
+    l.propagate = False
 
 logger = logging.getLogger("requirement-analysis-service")
 
@@ -67,6 +79,12 @@ async def background_db_init_and_sync():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 1. Print Banner
+    print_banner()
+    
+    # 2. Dynamic step-by-step progress spinner
+    await run_startup_diagnostics()
+    
     # Startup Logic
     logger.info("Starting up Requirement Analysis Service...")
     await cache_manager.connect()
@@ -79,11 +97,17 @@ async def lifespan(app: FastAPI):
     # Start background db init and sync tasks asynchronously without blocking startup
     asyncio.create_task(background_db_init_and_sync())
     
+    # 3. Print Regional Matrix & Endpoints Panel
+    await render_catalog_dashboard()
+    
     yield
     
     # Shutdown Logic
     logger.info("Shutting down Requirement Analysis Service...")
     await cache_manager.disconnect()
+    
+    # 4. Graceful Shutdown Card
+    print_shutdown_banner()
 
 app = FastAPI(
     title="AetherOps AI - Requirement Analysis Service",
