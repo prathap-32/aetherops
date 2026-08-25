@@ -85,14 +85,15 @@ GENERIC_SERVICES_ITEMS = {
     ]
 }
 
-async def sync_catalog_from_aws(db: AsyncSession) -> dict:
+async def sync_catalog_from_aws(db: AsyncSession, region: str = "us-east-1") -> dict:
     """
     Fetches the latest EC2 and RDS pricing from live AWS and community APIs,
     updates the database tables (replacing existing records), and invalidates the Redis Cache.
     """
+    region = region.lower().strip()
     # 1. Fetch EC2 pricing from ec2.shop
-    logger.info("Fetching EC2 pricing from ec2.shop...")
-    ec2_url = "https://ec2.shop?region=us-east-1"
+    logger.info(f"Fetching EC2 pricing from ec2.shop for region {region}...")
+    ec2_url = f"https://ec2.shop?region={region}"
     headers = {"Accept": "application/json"}
     
     try:
@@ -108,9 +109,9 @@ async def sync_catalog_from_aws(db: AsyncSession) -> dict:
         logger.error(f"Failed to fetch EC2 pricing: {e}")
         raise RuntimeError(f"EC2 fetch failed: {str(e)}")
 
-    # 2. Fetch RDS pricing from AWS Price List Bulk API (us-east-1)
-    logger.info("Fetching RDS pricing from AWS Price List Bulk API...")
-    rds_url = "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/us-east-1/index.json"
+    # 2. Fetch RDS pricing from AWS Price List Bulk API
+    logger.info(f"Fetching RDS pricing from AWS Price List Bulk API for region {region}...")
+    rds_url = f"https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/{region}/index.json"
     
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -272,7 +273,7 @@ async def sync_catalog_from_aws(db: AsyncSession) -> dict:
             
     async def run_lookup(svc, item_t):
         try:
-            res_spec = await lookup_generic_aws_service(svc, item_t, region="us-east-1", cache=http_cache, cache_tasks=http_cache_tasks)
+            res_spec = await lookup_generic_aws_service(svc, item_t, region=region, cache=http_cache, cache_tasks=http_cache_tasks)
             db_item = GenericServiceCatalog(
                 service=svc,
                 instance_type=res_spec["instance_type"],
@@ -287,7 +288,7 @@ async def sync_catalog_from_aws(db: AsyncSession) -> dict:
             return db_item
         except Exception as ex:
             logger.warning(f"Error during async lookup of {svc} - {item_t}: {ex}")
-            fallback_item = get_generic_fallback_pricing(svc, item_t, region="us-east-1")
+            fallback_item = get_generic_fallback_pricing(svc, item_t, region=region)
             return GenericServiceCatalog(
                 service=svc,
                 instance_type=fallback_item["instance_type"],

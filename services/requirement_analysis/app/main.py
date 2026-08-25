@@ -11,7 +11,7 @@ import asyncio
 
 from app.schemas import RequirementInput, RequirementProfileOutput
 from app.engine import analyze_requirements
-from app.database import get_db_session, AsyncSessionLocal
+from app.database import get_db_session, AsyncSessionLocal, SUPPORTED_REGIONS, get_sessionmaker_for_region, init_db_for_region
 from app.cache import cache_manager
 from app.seed import init_db, seed_catalog
 from app.admin_router import admin_router
@@ -48,13 +48,17 @@ root_logger.addHandler(console_handler)
 logger = logging.getLogger("requirement-analysis-service")
 
 async def rotate_catalog_on_startup():
-    logger.info("Lifespan startup: Rotating catalog data from AWS APIs...")
-    try:
-        async with AsyncSessionLocal() as session:
-            await sync_catalog_from_aws(session)
-        logger.info("Lifespan startup: Catalog data rotated successfully.")
-    except Exception as e:
-        logger.error(f"Lifespan startup: Failed to rotate catalog data: {e}", exc_info=True)
+    logger.info("Lifespan startup: Rotating catalog data from AWS APIs for all regions...")
+    for region in SUPPORTED_REGIONS:
+        try:
+            logger.info(f"Lifespan startup: Syncing region '{region}'...")
+            await init_db_for_region(region)
+            session_factory = get_sessionmaker_for_region(region)
+            async with session_factory() as session:
+                await sync_catalog_from_aws(session, region=region)
+            logger.info(f"Lifespan startup: Catalog data for region '{region}' rotated successfully.")
+        except Exception as e:
+            logger.error(f"Lifespan startup: Failed to rotate catalog data for region '{region}': {e}", exc_info=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -63,13 +67,21 @@ async def lifespan(app: FastAPI):
     await cache_manager.connect()
     
     try:
+        # Seed default database and all regional databases if empty
         await init_db()
         async with AsyncSessionLocal() as session:
             await seed_catalog(session)
+            
+        for region in SUPPORTED_REGIONS:
+            await init_db_for_region(region)
+            session_factory = get_sessionmaker_for_region(region)
+            async with session_factory() as session:
+                await seed_catalog(session)
+                
         # Trigger catalog rotation on spinup asynchronously
         asyncio.create_task(rotate_catalog_on_startup())
     except Exception as e:
-        logger.error(f"Failed to initialize and seed database: {e}", exc_info=True)
+        logger.error(f"Failed to initialize and seed databases: {e}", exc_info=True)
         
     yield
     

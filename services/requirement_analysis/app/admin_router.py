@@ -85,7 +85,7 @@ def get_service_config(service: str):
     return None
 
 @admin_router.get("/api/admin/catalog", status_code=status.HTTP_200_OK)
-async def get_current_catalog(db: AsyncSession = Depends(get_db_session)):
+async def get_current_catalog(region: str = "us-east-1", db: AsyncSession = Depends(get_db_session)):
     """
     Returns the current active catalog items from the database.
     """
@@ -146,6 +146,7 @@ async def lookup_catalog_instance_live(
 @admin_router.get("/api/admin/catalog/categories", status_code=status.HTTP_200_OK)
 async def get_categorized_catalog(
     category: str | None = None,
+    region: str = "us-east-1",
     db: AsyncSession = Depends(get_db_session)
 ):
     """
@@ -243,13 +244,13 @@ async def get_categorized_catalog(
     }
 
 @admin_router.post("/api/admin/sync", status_code=status.HTTP_200_OK)
-async def sync_aws_docs_catalog(db: AsyncSession = Depends(get_db_session)):
+async def sync_aws_docs_catalog(region: str = "us-east-1", db: AsyncSession = Depends(get_db_session)):
     """
     Calls AWS Pricing API to fetch updated instances, inserts them,
     and invalidates the Redis Cache-Aside layer.
     """
     try:
-        result = await sync_catalog_from_aws(db)
+        result = await sync_catalog_from_aws(db, region=region)
         return result
     except Exception as e:
         logger.error(f"Live catalog synchronization failed: {e}", exc_info=True)
@@ -272,6 +273,7 @@ async def clear_redis_cache():
 async def add_or_update_instance(
     service: str,
     payload: AdminCatalogInput,
+    region: str = "us-east-1",
     db: AsyncSession = Depends(get_db_session)
 ):
     """
@@ -352,7 +354,7 @@ async def add_or_update_instance(
     return {"status": "success", "message": msg, "specs": specs, "source": source, "service": service.lower()}
 
 @admin_router.delete("/api/admin/catalog/{service}/{instance_type}", status_code=status.HTTP_200_OK)
-async def delete_instance(service: str, instance_type: str, db: AsyncSession = Depends(get_db_session)):
+async def delete_instance(service: str, instance_type: str, region: str = "us-east-1", db: AsyncSession = Depends(get_db_session)):
     """
     Deletes an instance/item from the catalog.
     """
@@ -636,9 +638,24 @@ async def serve_admin_dashboard():
                             </h2>
                             <p class="text-xs text-gray-500 mt-1">Listing registered instances and specs inside database</p>
                         </div>
-                        <div class="relative w-full md:w-64">
-                            <input type="text" onkeyup="filterTable('catalog-table', this.value)" placeholder="Search catalog items..." class="w-full py-1.5 pl-8 pr-3 bg-cyber-bg border border-cyber-border rounded-xl text-xs focus:outline-none focus:border-cyber-violet">
-                            <svg class="w-4 h-4 text-gray-500 absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 w-full md:w-auto">
+                            <!-- Region Filter -->
+                            <div class="flex items-center space-x-2 bg-cyber-bg border border-cyber-border rounded-xl px-2.5 py-1">
+                                <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Region:</span>
+                                <select id="region-filter" onchange="onRegionFilterChange()" class="bg-transparent text-xs text-cyber-lightViolet focus:outline-none cursor-pointer font-bold">
+                                    <option value="us-east-1" class="bg-cyber-bg text-white">US East (N. Virginia)</option>
+                                    <option value="us-west-2" class="bg-cyber-bg text-white">US West (Oregon)</option>
+                                    <option value="eu-west-1" class="bg-cyber-bg text-white">Europe (Ireland)</option>
+                                    <option value="ap-southeast-1" class="bg-cyber-bg text-white">Asia Pacific (Singapore)</option>
+                                    <option value="ap-south-1" class="bg-cyber-bg text-white">Asia Pacific (Mumbai)</option>
+                                </select>
+                            </div>
+
+                            <!-- Search Input -->
+                            <div class="relative w-full sm:w-64">
+                                <input type="text" onkeyup="filterTable('catalog-table', this.value)" placeholder="Search catalog items..." class="w-full py-1.5 pl-8 pr-3 bg-cyber-bg border border-cyber-border rounded-xl text-xs focus:outline-none focus:border-cyber-violet">
+                                <svg class="w-4 h-4 text-gray-500 absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            </div>
                         </div>
                     </div>
                     
@@ -692,6 +709,7 @@ async def serve_admin_dashboard():
 
         let catalogData = {};
         let currentService = 'ec2';
+        let currentRegion = 'us-east-1';
 
         function showToast(msg, type = "success") {
             const toast = document.getElementById('toast');
@@ -741,19 +759,26 @@ async def serve_admin_dashboard():
             else itemInput.placeholder = "e.g. c6i.large, db.t4g.small, Hosted Zone, Cluster";
         }
 
+        async function onRegionFilterChange() {
+            currentRegion = document.getElementById('region-filter').value;
+            // Auto update form region to match
+            document.getElementById('item-region').value = currentRegion;
+            await fetchCatalog();
+        }
+
         async function syncAWSDocs() {
             const spinner = document.getElementById('sync-spinner');
             spinner.classList.remove('hidden');
-            showToast('Ingesting AWS dynamic prices... This may take up to 30-45 seconds.');
+            showToast(`Ingesting AWS dynamic prices for region ${currentRegion.toUpperCase()}... This may take up to 30-45 seconds.`);
             try {
-                const res = await fetch('/api/admin/sync', { method: 'POST' });
+                const res = await fetch(`/api/admin/sync?region=${currentRegion}`, { method: 'POST' });
                 if (!res.ok) {
                     const err = await res.json();
                     showToast(`Sync failed: ${err.detail || 'API timeout'}`, 'error');
                     return;
                 }
                 const data = await res.json();
-                showToast(`AWS Price List Sync completed successfully! ${data.added_ec2} EC2 + ${data.added_rds} RDS ingested.`);
+                showToast(`AWS Price List Sync completed successfully for ${currentRegion.toUpperCase()}! ${data.added_ec2} EC2 + ${data.added_rds} RDS ingested.`);
                 await fetchCatalog();
             } catch (err) {
                 showToast('Sync server timeout/error', 'error');
@@ -779,7 +804,7 @@ async def serve_admin_dashboard():
 
         async function fetchCatalog() {
             try {
-                const res = await fetch('/api/admin/catalog');
+                const res = await fetch(`/api/admin/catalog?region=${currentRegion}`);
                 catalogData = await res.json();
                 
                 // Update Cache Status Badge
@@ -920,7 +945,7 @@ async def serve_admin_dashboard():
             }
 
             try {
-                const res = await fetch(`/api/admin/catalog/${service}`, {
+                const res = await fetch(`/api/admin/catalog/${service}?region=${region}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -969,7 +994,7 @@ async def serve_admin_dashboard():
         async function deleteCatalogItem(service, instanceType) {
             if (!confirm(`Are you sure you want to delete ${instanceType} from the ${service.toUpperCase()} catalog database?`)) return;
             try {
-                const res = await fetch(`/api/admin/catalog/${service}/${instanceType}`, { method: 'DELETE' });
+                const res = await fetch(`/api/admin/catalog/${service}/${instanceType}?region=${currentRegion}`, { method: 'DELETE' });
                 if (!res.ok) {
                     const err = await res.json();
                     showToast(err.detail || 'Delete failed', 'error');

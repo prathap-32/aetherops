@@ -503,6 +503,90 @@ async def test_sync_catalog_from_aws_integration(db_session):
         generic_res = await db_session.execute(select(GenericServiceCatalog))
         assert len(generic_res.scalars().all()) > 10
 
+@pytest.mark.anyio
+async def test_region_specific_catalog_sync_and_endpoints():
+    from unittest.mock import patch
+    from app.sync_helper import sync_catalog_from_aws
+    from app.database import get_sessionmaker_for_region, init_db_for_region
+    from app.models import EC2Catalog, RDSCatalog
+    from sqlalchemy.future import select
+
+    # Mock dynamic AWS data
+    mock_ec2 = [
+        {
+            "InstanceType": "c6i.large",
+            "Memory": "4 GiB",
+            "VCPUS": "2",
+            "Cost": "0.085",
+            "Network": "Up to 12 Gbps"
+        }
+    ]
+    mock_rds = {
+        "products": {
+            "SKU-RDS1": {
+                "productFamily": "Database Instance",
+                "attributes": {
+                    "databaseEngine": "PostgreSQL",
+                    "deploymentOption": "Single-AZ",
+                    "instanceType": "db.t4g.small",
+                    "vcpu": "2",
+                    "memory": "2 GiB"
+                }
+            }
+        },
+        "terms": {
+            "OnDemand": {
+                "SKU-RDS1": {
+                    "offer-term": {
+                        "priceDimensions": {
+                            "dimension1": {
+                                "unit": "Hrs",
+                                "pricePerUnit": {"USD": "0.024"}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    async def mock_get(url, *args, **kwargs):
+        class MockResponse:
+            def __init__(self, json_data):
+                self.json_data = json_data
+            def raise_for_status(self):
+                pass
+            def json(self):
+                return self.json_data
+        if "ec2.shop" in url:
+            assert "region=us-west-2" in url
+            return MockResponse(mock_ec2)
+        elif "AmazonRDS" in url:
+            assert "us-west-2" in url
+            return MockResponse(mock_rds)
+        return MockResponse({"products": {}, "terms": {}})
+
+    # Synchronize us-west-2 catalog
+    await init_db_for_region("us-west-2")
+    session_factory = get_sessionmaker_for_region("us-west-2")
+    async with session_factory() as session:
+        with patch("httpx.AsyncClient.get", side_effect=mock_get):
+            result = await sync_catalog_from_aws(session, region="us-west-2")
+            assert result["status"] == "success"
+            assert result["added_ec2"] == 1
+            assert result["added_rds"] == 1
+
+        # Check items in us-west-2 database
+        ec2_res = await session.execute(select(EC2Catalog))
+        assert len(ec2_res.scalars().all()) == 1
+
+    # Call catalog endpoint with query parameter for region us-west-2
+    response = client.get("/api/admin/catalog?region=us-west-2")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["ec2"]) == 1
+    assert data["ec2"][0]["instance_type"] == "c6i.large"
+
 
 
 
