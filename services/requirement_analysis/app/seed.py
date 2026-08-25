@@ -1,6 +1,7 @@
-# services/requirement_analysis/app/seed.py
+import os
+import json
 import logging
-from sqlalchemy.future import select
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import Base, engine
 from app.models import EC2Catalog, RDSCatalog, GenericServiceCatalog
@@ -19,81 +20,92 @@ async def init_db():
 
 async def seed_catalog(session: AsyncSession, region: str = "us-east-1"):
     """
-    Seeds catalog entries into database if empty.
+    Seeds catalog entries into database by executing a local seed script.
     """
-    logger.info(f"Checking database catalog status for region '{region}'...")
+    region = region.lower().strip()
+    logger.info(f"Seeding catalog entries for region '{region}'...")
     
-    # 1. Seed EC2 catalog
-    ec2_count_query = await session.execute(select(EC2Catalog))
-    existing_ec2s = ec2_count_query.scalars().all()
+    await session.execute(delete(EC2Catalog))
+    await session.execute(delete(RDSCatalog))
+    await session.execute(delete(GenericServiceCatalog))
     
-    if not existing_ec2s:
-        logger.info(f"Seeding {len(EC2_CATALOG)} EC2 instances to database...")
-        for spec in EC2_CATALOG:
-            db_spec = EC2Catalog(
-                instance_type=spec.instance_type,
-                vcpus=spec.vcpus,
-                ram_gb=spec.ram_gb,
-                price_per_hour=spec.price_per_hour,
-                network_performance=spec.network_performance,
-                category=spec.category
-            )
-            session.add(db_spec)
-        await session.flush()
-        logger.info("EC2 catalog seeded successfully.")
-    else:
-        logger.info("EC2 catalog database is already populated.")
-
-    # 2. Seed RDS catalog
-    rds_count_query = await session.execute(select(RDSCatalog))
-    existing_rds = rds_count_query.scalars().all()
-    
-    if not existing_rds:
-        logger.info(f"Seeding {len(RDS_CATALOG)} RDS instances to database...")
-        for spec in RDS_CATALOG:
-            db_spec = RDSCatalog(
-                instance_type=spec.instance_type,
-                vcpus=spec.vcpus,
-                ram_gb=spec.ram_gb,
-                price_per_hour=spec.price_per_hour,
-                category=spec.category
-            )
-            session.add(db_spec)
-        await session.flush()
-        logger.info("RDS catalog seeded successfully.")
-    else:
-        logger.info("RDS catalog database is already populated.")
-    
-    # 3. Seed Generic catalog
-    generic_count_query = await session.execute(select(GenericServiceCatalog))
-    existing_generic = generic_count_query.scalars().all()
-    
-    if not existing_generic:
-        from app.sync_helper import get_generic_fallback_pricing, GENERIC_SERVICES_ITEMS
-        
-        fallback_items = []
-        for svc, item_types in GENERIC_SERVICES_ITEMS.items():
-            for item_t in item_types:
-                fallback_items.append((svc, item_t))
+    ref_data = None
+    paths_to_check = [
+        "aws_regions_reference.json",
+        "scratch/aws_regions_reference.json",
+        "../aws_regions_reference.json",
+        "/home/prathap32/GP/devops-lab/projects/aether-cloud/services/requirement_analysis/aws_regions_reference.json"
+    ]
+    for path in paths_to_check:
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    ref_data = json.load(f)
+                break
+            except Exception:
+                pass
                 
-        logger.info(f"Seeding {len(fallback_items)} generic service entries to database...")
-        for svc, item_t in fallback_items:
-            item = get_generic_fallback_pricing(svc, item_t, region=region)
-            db_item = GenericServiceCatalog(
-                service=item["service"],
-                instance_type=item["instance_type"],
-                vcpus=item["vcpus"],
-                ram_gb=item["ram_gb"],
-                price_per_hour=item["price_per_hour"],
-                unit=item["unit"],
-                category=item["category"],
-                region=item["region"],
-                details=item["details"]
-            )
-            session.add(db_item)
-        await session.flush()
-        logger.info("Generic service catalog seeded successfully.")
-    else:
-        logger.info("Generic service catalog database is already populated.")
+    region_data = None
+    if ref_data:
+        region_data = next((r for r in ref_data["regions"] if r["region_code"] == region), None)
         
+    if region_data:
+        compute_catalog = region_data["service_catalog"].get("compute_baseline_hourly", {})
+        for inst_type, price in compute_catalog.items():
+            spec = next((item for item in EC2_CATALOG if item.instance_type == inst_type), None)
+            session.add(EC2Catalog(
+                instance_type=inst_type,
+                vcpus=spec.vcpus if spec else 2,
+                ram_gb=spec.ram_gb if spec else 4.0,
+                price_per_hour=float(price),
+                network_performance=spec.network_performance if spec else "Up to 5 Gbps",
+                category=spec.category if spec else "burstable"
+            ))
+            
+        rds_catalog = region_data["service_catalog"].get("database_baseline_hourly", {})
+        for inst_type, price in rds_catalog.items():
+            spec = next((item for item in RDS_CATALOG if item.instance_type == inst_type), None)
+            session.add(RDSCatalog(
+                instance_type=inst_type,
+                vcpus=spec.vcpus if spec else 2,
+                ram_gb=spec.ram_gb if spec else 4.0,
+                price_per_hour=float(price),
+                category=spec.category if spec else "burstable"
+            ))
+    else:
+        for item in EC2_CATALOG:
+            session.add(EC2Catalog(
+                instance_type=item.instance_type,
+                vcpus=item.vcpus,
+                ram_gb=item.ram_gb,
+                price_per_hour=item.price_per_hour,
+                network_performance=item.network_performance,
+                category=item.category
+            ))
+        for item in RDS_CATALOG:
+            session.add(RDSCatalog(
+                instance_type=item.instance_type,
+                vcpus=item.vcpus,
+                ram_gb=item.ram_gb,
+                price_per_hour=item.price_per_hour,
+                category=item.category
+            ))
+            
+    from app.sync_helper import GENERIC_SERVICES_ITEMS, get_generic_fallback_pricing
+    for service_name, item_types in GENERIC_SERVICES_ITEMS.items():
+        for item_type in item_types:
+            fallback = get_generic_fallback_pricing(service_name, item_type, region=region)
+            session.add(GenericServiceCatalog(
+                service=service_name,
+                instance_type=fallback["instance_type"],
+                vcpus=fallback["vcpus"],
+                ram_gb=fallback["ram_gb"],
+                price_per_hour=fallback["price_per_hour"],
+                unit=fallback["unit"],
+                category=fallback["category"],
+                region=fallback["region"],
+                details=fallback["details"]
+            ))
+            
     await session.commit()
+    logger.info(f"Catalog for region '{region}' seeded successfully.")

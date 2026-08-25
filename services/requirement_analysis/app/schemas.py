@@ -154,3 +154,22 @@ class RequirementProfileOutput(BaseModel):
     components: ArchitectureComponents
     educational_notes: List[str]
     remediation_steps: List[str]
+
+class RecommendationInput(BaseModel):
+    region: str = Field(..., examples=["us-east-1", "ap-southeast-1"])
+    tech_stack: str = Field(..., examples=["web_api", "ai_ml", "iot"])
+    traffic_scale: Literal["low", "medium", "high"] = Field(..., examples=["low", "medium", "high"])
+    storage_size_gb: float = Field(..., ge=0.0, examples=[50.0])
+    security_level: Literal["standard", "enhanced", "strict"] = Field(..., examples=["standard", "enhanced", "strict"])
+    monthly_max_budget: Optional[float] = Field(None, ge=0.0, examples=[500.0])
+
+class RecommendationOutput(BaseModel):
+    region: str
+    tech_stack: str
+    traffic_scale: str
+    budget_status: Literal["WITHIN_BUDGET", "EXCEEDED", "UNLIMITED"]
+    monthly_budget_limit: Optional[float]
+    total_monthly_cost: float
+    cost_breakdown: dict
+    recommended_resources: dict
+

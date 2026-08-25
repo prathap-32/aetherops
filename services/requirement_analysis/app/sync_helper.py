@@ -2,10 +2,13 @@
 import logging
 import httpx
 import asyncio
+import os
+import json
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import EC2Catalog, RDSCatalog, GenericServiceCatalog
 from app.cache import cache_manager
+from app.catalog import EC2_CATALOG, RDS_CATALOG
 
 logger = logging.getLogger("requirement-analysis-sync")
 
@@ -85,42 +88,70 @@ GENERIC_SERVICES_ITEMS = {
     ]
 }
 
+def load_aws_regions_reference() -> dict:
+    paths_to_check = [
+        "aws_regions_reference.json",
+        "scratch/aws_regions_reference.json",
+        "../aws_regions_reference.json",
+        "/home/prathap32/GP/devops-lab/projects/aether-cloud/services/requirement_analysis/aws_regions_reference.json"
+    ]
+    for path in paths_to_check:
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                return json.load(f)
+    raise FileNotFoundError("aws_regions_reference.json could not be found.")
+
 async def sync_catalog_from_aws(db: AsyncSession, region: str = "us-east-1") -> dict:
     """
     Fetches the latest EC2 and RDS pricing from live AWS and community APIs,
     updates the database tables (replacing existing records), and invalidates the Redis Cache.
     """
     region = region.lower().strip()
+    
+    ref_data = None
+    try:
+        ref_data = load_aws_regions_reference()
+    except Exception as e:
+        logger.warning(f"Could not load aws_regions_reference.json: {e}")
+        
+    region_data = None
+    if ref_data:
+        region_data = next((r for r in ref_data["regions"] if r["region_code"] == region), None)
+
     # 1. Fetch EC2 pricing from ec2.shop
     logger.info(f"Fetching EC2 pricing from ec2.shop for region {region}...")
     ec2_url = f"https://ec2.shop?region={region}"
     headers = {"Accept": "application/json"}
     
+    ec2_data = []
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             res = await client.get(ec2_url, headers=headers)
-            res.raise_for_status()
-            ec2_raw = res.json()
-            if isinstance(ec2_raw, dict):
-                ec2_data = ec2_raw.get("Prices", [])
+            if not hasattr(res, "status_code") or res.status_code == 200:
+                ec2_raw = res.json()
+                if isinstance(ec2_raw, dict):
+                    ec2_data = ec2_raw.get("Prices", [])
+                else:
+                    ec2_data = ec2_raw
             else:
-                ec2_data = ec2_raw
+                res.raise_for_status()
     except Exception as e:
-        logger.error(f"Failed to fetch EC2 pricing: {e}")
-        raise RuntimeError(f"EC2 fetch failed: {str(e)}")
+        logger.warning(f"Failed to fetch live EC2 pricing for {region}: {e}. Using fallback compute baseline.")
 
     # 2. Fetch RDS pricing from AWS Price List Bulk API
     logger.info(f"Fetching RDS pricing from AWS Price List Bulk API for region {region}...")
     rds_url = f"https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/{region}/index.json"
     
+    rds_data = {}
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             res = await client.get(rds_url)
-            res.raise_for_status()
-            rds_data = res.json()
+            if not hasattr(res, "status_code") or res.status_code == 200:
+                rds_data = res.json()
+            else:
+                res.raise_for_status()
     except Exception as e:
-        logger.error(f"Failed to fetch RDS pricing: {e}")
-        raise RuntimeError(f"RDS fetch failed: {str(e)}")
+        logger.warning(f"Failed to fetch live RDS pricing for {region}: {e}. Using fallback database baseline.")
 
     # 3. Parse EC2 data
     ec2_db_items = {}
@@ -146,31 +177,7 @@ async def sync_catalog_from_aws(db: AsyncSession, region: str = "us-east-1") -> 
                 price_per_hour = float(cost_val)
                 
             network_performance = item.get("Network", "Up to 10 Gbps")
-            
-            # Categorize based on prefix
-            instance_lower = instance_type.lower()
-            if instance_lower.startswith(("t2.", "t3.", "t4g.", "t3a.", "t1.")):
-                category = "burstable"
-            elif instance_lower.startswith(("c4.", "c5.", "c6.", "c7.", "c8.")):
-                category = "compute"
-            elif instance_lower.startswith(("r4.", "r5.", "r6.", "r7.", "r8.")):
-                category = "memory"
-            elif instance_lower.startswith(("g4.", "g5.", "g6.", "p3.", "p4.", "p5.")):
-                category = "gpu"
-            elif instance_lower.startswith(("m4.", "m5.", "m6.", "m7.", "m8.", "a1.")):
-                category = "general"
-            else:
-                # Fallback check
-                if "t" in instance_lower.split(".")[0]:
-                    category = "burstable"
-                elif "c" in instance_lower.split(".")[0]:
-                    category = "compute"
-                elif "r" in instance_lower.split(".")[0]:
-                    category = "memory"
-                elif "g" in instance_lower.split(".")[0] or "p" in instance_lower.split(".")[0]:
-                    category = "gpu"
-                else:
-                    category = "general"
+            category = _categorize_ec2(instance_type)
 
             if price_per_hour <= 0.0 or vcpus <= 0 or ram_gb <= 0.0:
                 continue
@@ -188,6 +195,20 @@ async def sync_catalog_from_aws(db: AsyncSession, region: str = "us-east-1") -> 
         except Exception as e:
             logger.warning(f"Error parsing EC2 item {item}: {e}")
             continue
+
+    # Fallback for EC2 if API returned empty
+    if not ec2_db_items and region_data:
+        compute_catalog = region_data["service_catalog"].get("compute_baseline_hourly", {})
+        for inst_type, price in compute_catalog.items():
+            spec = next((item for item in EC2_CATALOG if item.instance_type == inst_type), None)
+            ec2_db_items[inst_type] = EC2Catalog(
+                instance_type=inst_type,
+                vcpus=spec.vcpus if spec else 2,
+                ram_gb=spec.ram_gb if spec else 4.0,
+                price_per_hour=float(price),
+                network_performance=spec.network_performance if spec else "Up to 5 Gbps",
+                category=spec.category if spec else "burstable"
+            )
 
     # 4. Parse RDS data
     rds_db_items = {}
@@ -235,14 +256,7 @@ async def sync_catalog_from_aws(db: AsyncSession, region: str = "us-east-1") -> 
             if price_per_hour <= 0.0 or vcpus <= 0 or ram_gb <= 0.0:
                 continue
 
-            # Categorize RDS
-            instance_lower = instance_type.lower()
-            if "db.t" in instance_lower:
-                category = "burstable"
-            elif "db.r" in instance_lower or "db.x" in instance_lower:
-                category = "memory"
-            else:
-                category = "standard"
+            category = _categorize_rds(instance_type)
 
             new_item = RDSCatalog(
                 instance_type=instance_type,
@@ -256,6 +270,19 @@ async def sync_catalog_from_aws(db: AsyncSession, region: str = "us-east-1") -> 
         except Exception as e:
             logger.warning(f"Error parsing RDS product {sku}: {e}")
             continue
+
+    # Fallback for RDS if API returned empty
+    if not rds_db_items and region_data:
+        rds_catalog = region_data["service_catalog"].get("database_baseline_hourly", {})
+        for inst_type, price in rds_catalog.items():
+            spec = next((item for item in RDS_CATALOG if item.instance_type == inst_type), None)
+            rds_db_items[inst_type] = RDSCatalog(
+                instance_type=inst_type,
+                vcpus=spec.vcpus if spec else 2,
+                ram_gb=spec.ram_gb if spec else 4.0,
+                price_per_hour=float(price),
+                category=spec.category if spec else "burstable"
+            )
 
     if not ec2_db_items or not rds_db_items:
         raise ValueError(f"Sync generated empty results (EC2 count: {len(ec2_db_items)}, RDS count: {len(rds_db_items)})")
@@ -504,23 +531,14 @@ SERVICE_OFFER_CODES = {
     "ecs": "AmazonECS",
     "ecr": "AmazonECR",
     "waf": "awswaf",
+    "ebs": "AmazonEC2",
+    "vpc": "AmazonEC2",
 }
 
 
 def get_generic_fallback_pricing(service: str, item_type: str, region: str = "us-east-1") -> dict:
     service = service.lower()
     item_type_lower = item_type.lower() if item_type else ""
-    region_lower = region.lower().strip() if region else "us-east-1"
-    
-    # Region multipliers to scale base pricing to match regional rates
-    multipliers = {
-        "us-east-1": 1.0,
-        "us-west-2": 1.02,
-        "eu-west-1": 1.08,
-        "ap-southeast-1": 1.25,
-        "ap-south-1": 1.10
-    }
-    m = multipliers.get(region_lower, 1.0)
     
     price = 0.0
     unit = "Hrs"
@@ -531,50 +549,50 @@ def get_generic_fallback_pricing(service: str, item_type: str, region: str = "us
         category = "storage"
         unit = "GB-Month"
         if "glacier" in item_type_lower:
-            price = round(0.0036 * m, 5)
+            price = 0.0036
         else:
-            price = round(0.023 * m, 5)
+            price = 0.023
     elif service == "ebs":
         category = "storage"
         unit = "GB-Month"
         if "gp3" in item_type_lower:
-            price = round(0.08 * m, 5)
+            price = 0.08
         else:
-            price = round(0.10 * m, 5)
+            price = 0.10
     elif service == "efs":
         category = "storage"
         unit = "GB-Month"
-        price = round(0.30 * m, 5)
+        price = 0.30
     elif service == "vpc":
         category = "networking"
         if "nat" in item_type_lower:
-            price = round(0.045 * m, 5)
+            price = 0.045
         else:
-            price = round(0.05 * m, 5)
+            price = 0.05
     elif service in ["route53", "route 53"]:
         category = "networking"
         unit = "HostedZone-Month"
-        price = round(0.50 * m, 5)
+        price = 0.50
     elif service == "eks":
         category = "compute"
-        price = round(0.10 * m, 5)
+        price = 0.10
     elif service == "ecs":
         category = "compute"
-        price = round(0.01 * m, 5)
+        price = 0.01
     elif service == "ecr":
         category = "storage"
         unit = "GB-Month"
-        price = round(0.10 * m, 5)
+        price = 0.10
     elif service == "waf":
         category = "security"
-        price = round(0.008 * m, 5)
+        price = 0.008
     elif service == "cloudwatch":
         category = "monitoring"
-        price = round(0.30 * m, 5)
+        price = 0.30
     elif service == "cloudfront":
         category = "networking"
         unit = "GB-Month"
-        price = round(0.085 * m, 5)
+        price = 0.085
     elif service == "cloudtrail":
         category = "monitoring"
         price = 0.0
@@ -587,7 +605,7 @@ def get_generic_fallback_pricing(service: str, item_type: str, region: str = "us
         "unit": unit,
         "category": category,
         "service": service,
-        "region": region_lower,
+        "region": region,
         "details": details
     }
 

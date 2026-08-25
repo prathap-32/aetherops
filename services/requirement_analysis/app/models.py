@@ -1,5 +1,5 @@
 # services/requirement_analysis/app/models.py
-from sqlalchemy import Column, Integer, String, Float, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, UniqueConstraint, DateTime
 from app.database import Base
 
 class EC2Catalog(Base):
@@ -71,5 +71,24 @@ class GenericServiceCatalog(Base):
             "unit": self.unit,
             "region": self.region,
             "details": self.details
+        }
+
+class SyncMetadata(Base):
+    __tablename__ = "sync_metadata"
+
+    id = Column(Integer, primary_key=True, index=True)
+    region_code = Column(String(50), unique=True, index=True, nullable=False)
+    last_sync_timestamp = Column(DateTime, nullable=False)
+    status = Column(String(20), nullable=False)  # SUCCESS, FAILED, IN_PROGRESS
+    records_synced = Column(Integer, nullable=False, default=0)
+    error_message = Column(String(500), nullable=True)
+
+    def to_dict(self):
+        return {
+            "region_code": self.region_code,
+            "last_sync_timestamp": self.last_sync_timestamp.isoformat() if self.last_sync_timestamp else None,
+            "status": self.status,
+            "records_synced": self.records_synced,
+            "error_message": self.error_message
         }
 

@@ -9,10 +9,10 @@ import time
 import logging
 import asyncio
 
-from app.schemas import RequirementInput, RequirementProfileOutput
-from app.engine import analyze_requirements
+from app.schemas import RequirementInput, RequirementProfileOutput, RecommendationInput, RecommendationOutput
+from app.engine import analyze_requirements, recommend_infrastructure
 from app.database import get_db_session, AsyncSessionLocal, SUPPORTED_REGIONS, get_sessionmaker_for_region, init_db_for_region
-from app.cache import cache_manager
+from app.cache import cache_manager, get_region_catalog
 from app.seed import init_db, seed_catalog
 from app.admin_router import admin_router
 from app.sync_helper import sync_catalog_from_aws
@@ -47,21 +47,23 @@ root_logger.addHandler(console_handler)
 
 logger = logging.getLogger("requirement-analysis-service")
 
-async def rotate_catalog_on_startup():
-    logger.info("Lifespan startup: Rotating catalog data from AWS APIs for all regions concurrently...")
+async def background_db_init_and_sync():
+    logger.info("Lifespan startup: Starting background non-blocking seeding and sync for all 39 regions...")
+    sem = asyncio.Semaphore(5)
     
-    async def sync_one_region(region):
-        try:
-            logger.info(f"Lifespan startup: Syncing region '{region}'...")
-            await init_db_for_region(region)
-            session_factory = get_sessionmaker_for_region(region)
-            async with session_factory() as session:
-                await sync_catalog_from_aws(session, region=region)
-            logger.info(f"Lifespan startup: Catalog data for region '{region}' rotated successfully.")
-        except Exception as e:
-            logger.error(f"Lifespan startup: Failed to rotate catalog data for region '{region}': {e}", exc_info=True)
+    async def seed_and_sync_one(region):
+        async with sem:
+            try:
+                logger.info(f"Background worker: Initializing database and cache for region '{region}'...")
+                await init_db_for_region(region)
+                session_factory = get_sessionmaker_for_region(region)
+                async with session_factory() as session:
+                    await seed_catalog(session, region=region)
+                logger.info(f"Background worker: Completed successfully for region '{region}'.")
+            except Exception as e:
+                logger.error(f"Background worker error for region '{region}': {e}", exc_info=True)
 
-    await asyncio.gather(*(sync_one_region(r) for r in SUPPORTED_REGIONS))
+    await asyncio.gather(*(seed_and_sync_one(r) for r in SUPPORTED_REGIONS))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -70,22 +72,13 @@ async def lifespan(app: FastAPI):
     await cache_manager.connect()
     
     try:
-        # Seed default database and all regional databases if empty
         await init_db()
-        async with AsyncSessionLocal() as session:
-            await seed_catalog(session, region="us-east-1")
-            
-        for region in SUPPORTED_REGIONS:
-            await init_db_for_region(region)
-            session_factory = get_sessionmaker_for_region(region)
-            async with session_factory() as session:
-                await seed_catalog(session, region=region)
-                
-        # Trigger catalog rotation on spinup asynchronously
-        asyncio.create_task(rotate_catalog_on_startup())
     except Exception as e:
-        logger.error(f"Failed to initialize and seed databases: {e}", exc_info=True)
+        logger.error(f"Failed to initialize default database: {e}", exc_info=True)
         
+    # Start background db init and sync tasks asynchronously without blocking startup
+    asyncio.create_task(background_db_init_and_sync())
+    
     yield
     
     # Shutdown Logic
@@ -139,6 +132,8 @@ async def root():
         "endpoints": {
             "health": "/health",
             "analyze": "/api/v1/analyze",
+            "catalog": "/api/v1/catalog/{region}",
+            "recommendation": "/api/v1/recommendation",
             "docs": "/docs"
         }
     }
@@ -165,4 +160,49 @@ async def analyze_workload_requirements(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to compile requirement profile: {str(e)}"
+        )
+
+@app.get("/api/v1/catalog/{region}", response_model=dict, status_code=status.HTTP_200_OK)
+async def get_regional_catalog(
+    region: str,
+    db: AsyncSession = Depends(get_db_session)
+):
+    region_lower = region.lower().strip()
+    if region_lower not in SUPPORTED_REGIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported region '{region}'. Must be one of: {', '.join(SUPPORTED_REGIONS)}"
+        )
+    try:
+        catalog = await get_region_catalog(region_lower, db)
+        return catalog
+    except Exception as e:
+        logger.error(f"Failed to fetch catalog for region {region_lower}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load catalog: {str(e)}"
+        )
+
+@app.post("/api/v1/recommendation", response_model=RecommendationOutput, status_code=status.HTTP_200_OK)
+async def recommend_regional_infra(
+    payload: RecommendationInput,
+    db: AsyncSession = Depends(get_db_session)
+):
+    region_lower = payload.region.lower().strip()
+    if region_lower not in SUPPORTED_REGIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported region '{payload.region}'. Must be one of: {', '.join(SUPPORTED_REGIONS)}"
+        )
+    logger.info(f"Received infrastructure recommendation request for region {region_lower}, stack={payload.tech_stack}")
+    try:
+        session_factory = get_sessionmaker_for_region(region_lower)
+        async with session_factory() as session:
+            result = await recommend_infrastructure(payload, session)
+            return result
+    except Exception as e:
+        logger.error(f"Recommendation engine failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to compile recommendation: {str(e)}"
         )

@@ -4,7 +4,7 @@ from typing import List, Tuple, Optional
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import EC2Catalog, RDSCatalog
+from app.models import EC2Catalog, RDSCatalog, GenericServiceCatalog
 from app.cache import cache_manager
 from app.catalog import STORAGE_PRICING, NETWORK_PRICING
 from app.schemas import (
@@ -13,6 +13,8 @@ from app.schemas import (
     ArchitectureComponents,
     ComputeRecommendation,
     DatabaseRecommendation,
+    RecommendationInput,
+    RecommendationOutput,
     NetworkingRecommendation,
     StorageRecommendation,
     SecurityRecommendation,
@@ -73,6 +75,14 @@ async def get_cheapest_ec2_matching_db(
         pref_candidates = [c for c in candidates if c.category == category_preference]
         if pref_candidates:
             best_candidate = min(pref_candidates, key=lambda x: x.price_per_hour)
+        else:
+            # Try static catalog fallback for preferred category
+            from app.catalog import get_cheapest_ec2_matching
+            fallback = get_cheapest_ec2_matching(min_vcpus, min_ram_gb, category_preference)
+            if fallback:
+                res_dict = fallback.model_dump()
+                await cache_manager.set_json(cache_key, res_dict, expire_seconds=3600)
+                return DynamicEC2Spec(res_dict)
 
     if best_candidate is None:
         best_candidate = min(candidates, key=lambda x: x.price_per_hour)
@@ -117,6 +127,14 @@ async def get_cheapest_rds_matching_db(
         pref_candidates = [c for c in candidates if c.category == category_preference]
         if pref_candidates:
             best_candidate = min(pref_candidates, key=lambda x: x.price_per_hour)
+        else:
+            # Try static catalog fallback for preferred category
+            from app.catalog import get_cheapest_rds_matching
+            fallback = get_cheapest_rds_matching(min_vcpus, min_ram_gb, category_preference)
+            if fallback:
+                res_dict = fallback.model_dump()
+                await cache_manager.set_json(cache_key, res_dict, expire_seconds=3600)
+                return DynamicRDSSpec(res_dict)
 
     if best_candidate is None:
         best_candidate = min(candidates, key=lambda x: x.price_per_hour)
@@ -497,3 +515,215 @@ async def analyze_requirements(inputs: RequirementInput, session: AsyncSession) 
         educational_notes=educational_notes,
         remediation_steps=remediation_steps
     )
+
+async def recommend_infrastructure(inputs: RecommendationInput, session: AsyncSession) -> RecommendationOutput:
+    # 1. Translate traffic_scale to instance requirements
+    if inputs.traffic_scale == "low":
+        min_vcpus, min_ram = 1, 2.0
+        ec2_category = "burstable"
+        node_count = 1
+        db_instances = 1  # Single-AZ
+        estimated_data_transfer = 10.0
+        ebs_size = 20
+    elif inputs.traffic_scale == "medium":
+        min_vcpus, min_ram = 2, 8.0
+        ec2_category = "general"
+        node_count = 2
+        db_instances = 2  # Multi-AZ (2x)
+        estimated_data_transfer = 100.0
+        ebs_size = 50
+    else:  # high
+        min_vcpus, min_ram = 4, 16.0
+        ec2_category = "gpu" if inputs.tech_stack == "ai_ml" else "compute"
+        node_count = 3
+        db_instances = 3  # Multi-AZ + 1 replica (3x)
+        estimated_data_transfer = 500.0
+        ebs_size = 100
+
+    # 2. Fetch cheapest matching EC2 instance from DB
+    ec2_query = select(EC2Catalog).where(
+        EC2Catalog.vcpus >= min_vcpus,
+        EC2Catalog.ram_gb >= min_ram
+    )
+    result = await session.execute(ec2_query)
+    candidates = result.scalars().all()
+    
+    # Filter by category preference if possible
+    pref_candidates = [c for c in candidates if c.category == ec2_category]
+    if pref_candidates:
+        selected_ec2 = min(pref_candidates, key=lambda x: x.price_per_hour)
+    elif candidates:
+        selected_ec2 = min(candidates, key=lambda x: x.price_per_hour)
+    else:
+        # Static fallback if DB is completely unseeded
+        selected_ec2 = type('EC2', (object,), {
+            "instance_type": "t3.medium", "vcpus": 2, "ram_gb": 4.0, 
+            "price_per_hour": 0.0416, "network_performance": "Up to 5 Gbps", "category": "burstable"
+        })()
+
+    # 3. Fetch cheapest RDS instance from DB (if stack needs database)
+    needs_db = inputs.tech_stack in ["web_api", "iot"]
+    selected_rds = None
+    if needs_db:
+        # DB category mapping
+        db_category = "burstable" if inputs.traffic_scale == "low" else ("standard" if inputs.traffic_scale == "medium" else "memory")
+        db_min_vcpu = 2 if inputs.traffic_scale in ["low", "medium"] else 4
+        db_min_ram = 2.0 if inputs.traffic_scale == "low" else (8.0 if inputs.traffic_scale == "medium" else 16.0)
+
+        rds_query = select(RDSCatalog).where(
+            RDSCatalog.vcpus >= db_min_vcpu,
+            RDSCatalog.ram_gb >= db_min_ram
+        )
+        result = await session.execute(rds_query)
+        candidates = result.scalars().all()
+        pref_rds = [c for c in candidates if c.category == db_category]
+        if pref_rds:
+            selected_rds = min(pref_rds, key=lambda x: x.price_per_hour)
+        elif candidates:
+            selected_rds = min(candidates, key=lambda x: x.price_per_hour)
+        else:
+            selected_rds = type('RDS', (object,), {
+                "instance_type": "db.t4g.micro", "vcpus": 2, "ram_gb": 1.0,
+                "price_per_hour": 0.016, "category": "burstable"
+            })()
+
+    # 4. Fetch generic service rates from DB
+    generic_query = select(GenericServiceCatalog)
+    result = await session.execute(generic_query)
+    generic_rates = {item.service: item.price_per_hour for item in result.scalars().all()}
+
+    # Pricing helpers with static defaults matching standard reference
+    s3_standard_rate = generic_rates.get("s3_standard_per_gb", 0.023)
+    ebs_gp3_rate = generic_rates.get("ebs_gp3_per_gb", 0.08)
+    nat_gw_rate = generic_rates.get("nat_gateway_per_hour", 0.045)
+    data_transfer_rate = generic_rates.get("data_transfer_out_per_gb", 0.09)
+    waf_acl_rate = generic_rates.get("waf_web_acl_monthly", 5.0)
+    waf_rule_rate = generic_rates.get("waf_rule_monthly", 1.0)
+    cw_alarm_rate = generic_rates.get("cloudwatch_alarm_monthly", 0.1)
+    kms_key_rate = generic_rates.get("kms_key_monthly", 1.0)
+
+    # 5. Perform cost calculations
+    # Compute: hourly rate * 730 hours * nodes count
+    compute_monthly = selected_ec2.price_per_hour * 730 * node_count
+    
+    # DB: (hourly rate * 730 * instances count) + (storage * ebs gp3 rate * instances count)
+    db_monthly = 0.0
+    if needs_db and selected_rds:
+        db_instance_cost = selected_rds.price_per_hour * 730 * db_instances
+        db_storage_cost = inputs.storage_size_gb * ebs_gp3_rate * db_instances
+        db_monthly = db_instance_cost + db_storage_cost
+
+    # Storage: EBS per node + S3 storage
+    ebs_monthly = ebs_size * ebs_gp3_rate * node_count
+    s3_monthly = inputs.storage_size_gb * s3_standard_rate
+    storage_monthly = ebs_monthly + s3_monthly
+
+    # Network: NAT Gateway + Data Transfer Out
+    nat_gateways_count = 0
+    if inputs.traffic_scale == "medium":
+        nat_gateways_count = 1
+    elif inputs.traffic_scale == "high":
+        nat_gateways_count = 2
+    nat_gw_monthly = nat_gateways_count * nat_gw_rate * 730
+    transfer_monthly = estimated_data_transfer * data_transfer_rate
+    network_monthly = nat_gw_monthly + transfer_monthly
+
+    # Security/Monitoring: WAF + KMS + CloudWatch Alarms
+    waf_monthly = 0.0
+    if inputs.security_level == "enhanced":
+        waf_monthly = waf_acl_rate
+    elif inputs.security_level == "strict":
+        waf_monthly = waf_acl_rate + 5 * waf_rule_rate
+        
+    kms_monthly = kms_key_rate if inputs.security_level == "strict" else 0.0
+    cw_alarms_count = 0 if inputs.traffic_scale == "low" else 3
+    cw_monthly = cw_alarms_count * cw_alarm_rate
+    security_monitoring_monthly = waf_monthly + kms_monthly + cw_monthly
+
+    total_monthly_cost = compute_monthly + db_monthly + storage_monthly + network_monthly + security_monitoring_monthly
+
+    # 6. Budget validation and optimization loop
+    budget_status = "UNLIMITED"
+    if inputs.monthly_max_budget is not None:
+        budget_status = "WITHIN_BUDGET"
+        if total_monthly_cost > inputs.monthly_max_budget:
+            # Optimization 1: Downgrade EC2 to burstable class if not already
+            if selected_ec2.category != "burstable":
+                # Find burstable candidates
+                burstable_candidates = [c for c in candidates if c.category == "burstable"]
+                if burstable_candidates:
+                    selected_ec2 = min(burstable_candidates, key=lambda x: x.price_per_hour)
+                    compute_monthly = selected_ec2.price_per_hour * 730 * node_count
+                    total_monthly_cost = compute_monthly + db_monthly + storage_monthly + network_monthly + security_monitoring_monthly
+
+            # Optimization 2: Downgrade RDS database if budget still exceeded
+            if total_monthly_cost > inputs.monthly_max_budget and needs_db and selected_rds:
+                if selected_rds.category != "burstable":
+                    rds_burstable_candidates = [c for c in candidates if hasattr(c, 'category') and c.category == "burstable"]
+                    if rds_burstable_candidates:
+                        selected_rds = min(rds_burstable_candidates, key=lambda x: x.price_per_hour)
+                        db_instance_cost = selected_rds.price_per_hour * 730 * db_instances
+                        db_storage_cost = inputs.storage_size_gb * ebs_gp3_rate * db_instances
+                        db_monthly = db_instance_cost + db_storage_cost
+                        total_monthly_cost = compute_monthly + db_monthly + storage_monthly + network_monthly + security_monitoring_monthly
+
+            # Optimization 3: Reduce NAT Gateways
+            if total_monthly_cost > inputs.monthly_max_budget and nat_gateways_count > 1:
+                nat_gateways_count = 1
+                nat_gw_monthly = nat_gateways_count * nat_gw_rate * 730
+                network_monthly = nat_gw_monthly + transfer_monthly
+                total_monthly_cost = compute_monthly + db_monthly + storage_monthly + network_monthly + security_monitoring_monthly
+
+            # Check final status
+            if total_monthly_cost > inputs.monthly_max_budget:
+                budget_status = "EXCEEDED"
+
+    cost_breakdown = {
+        "compute": round(compute_monthly, 2),
+        "database": round(db_monthly, 2),
+        "storage": round(storage_monthly, 2),
+        "networking": round(network_monthly, 2),
+        "security_monitoring": round(security_monitoring_monthly, 2)
+    }
+
+    recommended_resources = {
+        "compute": {
+            "instance_type": selected_ec2.instance_type,
+            "vcpus": selected_ec2.vcpus,
+            "ram_gb": selected_ec2.ram_gb,
+            "nodes_count": node_count,
+            "network_performance": getattr(selected_ec2, "network_performance", "Up to 5 Gbps")
+        },
+        "database": {
+            "instance_type": selected_rds.instance_type if selected_rds else "none",
+            "vcpus": selected_rds.vcpus if selected_rds else 0,
+            "ram_gb": selected_rds.ram_gb if selected_rds else 0,
+            "instances_count": db_instances if needs_db else 0,
+            "storage_gb": inputs.storage_size_gb if needs_db else 0
+        } if needs_db else None,
+        "storage": {
+            "ebs_gb_per_node": ebs_size,
+            "s3_gb": inputs.storage_size_gb
+        },
+        "networking": {
+            "nat_gateways_count": nat_gateways_count,
+            "estimated_data_transfer_gb": estimated_data_transfer
+        },
+        "security_monitoring": {
+            "waf_enabled": inputs.security_level in ["enhanced", "strict"],
+            "kms_enabled": inputs.security_level == "strict",
+            "cloudwatch_alarms_count": cw_alarms_count
+        }
+    }
+
+    return RecommendationOutput(
+        region=inputs.region,
+        tech_stack=inputs.tech_stack,
+        traffic_scale=inputs.traffic_scale,
+        budget_status=budget_status,
+        monthly_budget_limit=inputs.monthly_max_budget,
+        total_monthly_cost=round(total_monthly_cost, 2),
+        cost_breakdown=cost_breakdown,
+        recommended_resources=recommended_resources
+    )
+

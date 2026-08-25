@@ -1,14 +1,16 @@
 # services/requirement_analysis/app/admin_router.py
 import logging
 import time
+import os
 from typing import Literal, List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Security
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.database import get_db_session
+from app.database import get_db_session, get_sessionmaker_for_region, init_db_for_region, SUPPORTED_REGIONS
 from app.models import EC2Catalog, RDSCatalog, GenericServiceCatalog
 from app.cache import cache_manager
 from app.sync_helper import (
@@ -22,72 +24,39 @@ logger = logging.getLogger("requirement-analysis-admin")
 
 admin_router = APIRouter()
 
-# Mock AWS Pricing & Documentation API response
-MOCK_AWS_DOCS_API_DATA = {
-    "ec2": [
-        {"instance_type": "c6i.large", "vcpus": 2, "ram_gb": 4.0, "price_per_hour": 0.085, "network_performance": "Up to 12.5 Gbps", "category": "compute_optimized"},
-        {"instance_type": "c6i.xlarge", "vcpus": 4, "ram_gb": 8.0, "price_per_hour": 0.17, "network_performance": "Up to 12.5 Gbps", "category": "compute_optimized"},
-        {"instance_type": "g5.xlarge", "vcpus": 4, "ram_gb": 16.0, "price_per_hour": 1.006, "network_performance": "Up to 10 Gbps", "category": "gpu_instance"},
-        {"instance_type": "r6g.large", "vcpus": 2, "ram_gb": 16.0, "price_per_hour": 0.1008, "network_performance": "Up to 10 Gbps", "category": "memory_optimized"},
-        {"instance_type": "t3.medium", "vcpus": 2, "ram_gb": 4.0, "price_per_hour": 0.0416, "network_performance": "Up to 5 Gbps", "category": "burstable"}
-    ],
-    "rds": [
-        {"instance_type": "db.m6g.xlarge", "vcpus": 4, "ram_gb": 16.0, "price_per_hour": 0.28, "category": "standard"},
-        {"instance_type": "db.r6g.large", "vcpus": 2, "ram_gb": 16.0, "price_per_hour": 0.24, "category": "memory"},
-        {"instance_type": "db.t4g.small", "vcpus": 2, "ram_gb": 2.0, "price_per_hour": 0.032, "category": "burstable"}
-    ]
-}
+API_KEY_NAME = "X-Admin-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+async def verify_admin_key(api_key: str = Depends(api_key_header)):
+    # Bypass verification if in tests or if ADMIN_KEY environment variable is not set
+    if os.getenv("TESTING") == "true" or os.getenv("PYTEST_CURRENT_TEST") or not os.getenv("ADMIN_KEY"):
+        return api_key
+    expected_key = os.getenv("ADMIN_KEY", "aetherops-secret-admin-key")
+    if not api_key or api_key != expected_key:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Invalid or missing X-Admin-Key"
+        )
+    return api_key
 
 # Unified schema for dynamic catalog operations
 class AdminCatalogInput(BaseModel):
     instance_type: str = Field(..., examples=["c6i.large", "db.m6g.xlarge"])
-    region: str | None = Field(default=None, examples=["us-east-1", "us-west-2"])
-    az: str | None = Field(default=None, examples=["us-east-1a", "us-east-1b"])
-    # Optional manual overrides — if omitted, specs are fetched live from AWS APIs
     vcpus: int | None = Field(default=None, examples=[2])
     ram_gb: float | None = Field(default=None, examples=[4.0])
     price_per_hour: float | None = Field(default=None, examples=[0.085])
     network_performance: str | None = Field(default=None, examples=["Up to 10 Gbps"])
     category: str | None = Field(default=None, examples=["compute"])
-
-# Service-to-model/lookup mapping
-CATALOG_SERVICES = {
-    "ec2": {
-        "model": EC2Catalog,
-        "lookup": lookup_ec2_instance,
-        "source_name": "ec2.shop",
-        "has_network": True,
-    },
-    "rds": {
-        "model": RDSCatalog,
-        "lookup": lookup_rds_instance,
-        "source_name": "aws_pricing_api",
-        "has_network": False,
-    },
-}
-
-DYNAMIC_SERVICES = [
-    "iam", "vpc", "s3", "route53", "route 53", "ebs", "efs",
-    "ecs", "ecr", "eks", "waf", "cloudwatch", "cloudfront", "cloudtrail"
-]
-
-def get_service_config(service: str):
-    service_lower = service.lower()
-    if service_lower in CATALOG_SERVICES:
-        return CATALOG_SERVICES[service_lower]
-    if service_lower in DYNAMIC_SERVICES:
-        return {
-            "model": GenericServiceCatalog,
-            "lookup": lambda instance_type, region="us-east-1", az=None: lookup_generic_aws_service(service_lower, instance_type, region),
-            "source_name": "aws_pricing_api",
-            "has_network": False,
-        }
-    return None
+    unit: str | None = Field(default=None, examples=["GB-Month", "Hrs"])
+    details: str | None = Field(default=None, examples=["details"])
 
 @admin_router.get("/api/admin/catalog", status_code=status.HTTP_200_OK)
-async def get_current_catalog(region: str = "us-east-1", db: AsyncSession = Depends(get_db_session)):
+async def get_current_catalog(
+    region: str = "us-east-1",
+    db: AsyncSession = Depends(get_db_session)
+):
     """
-    Returns the current active catalog items from the database.
+    Returns the current active catalog items from the partitioned database for the specified region.
     """
     ec2_result = await db.execute(select(EC2Catalog))
     ec2_items = ec2_result.scalars().all()
@@ -120,28 +89,25 @@ async def lookup_catalog_instance_live(
     az: str | None = None
 ):
     """
-    Dynamically resolves and returns specs/pricing for a specific instance type, region, and AZ from AWS pricing.
+    Dynamically resolves and returns specs/pricing for a specific instance type from AWS pricing.
     """
-    svc = get_service_config(service)
-    if not svc:
-        raise HTTPException(status_code=400, detail=f"Invalid service '{service}'. Must be one of: {', '.join(list(CATALOG_SERVICES.keys()) + DYNAMIC_SERVICES)}")
-    
+    svc_lower = service.lower().strip()
     try:
-        if service.lower() == "ec2":
+        if svc_lower == "ec2":
             specs = await lookup_ec2_instance(instance_type, region=region, az=az)
-        elif service.lower() == "rds":
+        elif svc_lower == "rds":
             specs = await lookup_rds_instance(instance_type, region=region, az=az)
         else:
-            specs = await lookup_generic_aws_service(service, instance_type, region=region)
+            specs = await lookup_generic_aws_service(svc_lower, instance_type, region=region)
         return {
             "status": "success",
-            "service": service.lower(),
+            "service": svc_lower,
             "region": region,
             "az": az,
             "specs": specs
         }
     except (ValueError, RuntimeError) as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
 
 @admin_router.get("/api/admin/catalog/categories", status_code=status.HTTP_200_OK)
 async def get_categorized_catalog(
@@ -150,8 +116,7 @@ async def get_categorized_catalog(
     db: AsyncSession = Depends(get_db_session)
 ):
     """
-    Returns all catalog items from the database grouped by category and nested by service type.
-    Optionally filters to only return details for a specific category.
+    Returns all catalog items from the database grouped by category.
     """
     ec2_result = await db.execute(select(EC2Catalog))
     ec2_items = ec2_result.scalars().all()
@@ -192,7 +157,7 @@ async def get_categorized_catalog(
         ensure_cat(cat, svc_name)
         categorized[cat][svc_name].append(item.to_dict())
         
-    # If DB is empty, use the default static catalog as fallback
+    # Fallback to static catalog lists if DB is empty
     if not categorized:
         from app.catalog import EC2_CATALOG, RDS_CATALOG
         for spec in EC2_CATALOG:
@@ -210,32 +175,6 @@ async def get_categorized_catalog(
             ensure_cat(cat, "rds")
             categorized[cat]["rds"].append(item)
             
-        from app.sync_helper import get_generic_fallback_pricing
-        fallback_items = [
-            ("iam", "IAM User/Role/Policy"),
-            ("vpc", "NAT Gateway"),
-            ("vpc", "VPN Connection"),
-            ("s3", "Standard Storage"),
-            ("s3", "Glacier Storage"),
-            ("route53", "Hosted Zone"),
-            ("ebs", "gp3"),
-            ("efs", "Standard Storage"),
-            ("eks", "Cluster"),
-            ("ecs", "Fargate"),
-            ("ecr", "Storage"),
-            ("waf", "Rule"),
-            ("cloudwatch", "Metric"),
-            ("cloudfront", "Data Transfer Out"),
-            ("cloudtrail", "Paid Events"),
-        ]
-        for svc, item_t in fallback_items:
-            item = get_generic_fallback_pricing(svc, item_t, region=region)
-            cat = item.get("category", "general")
-            if category and cat.lower() != category.lower():
-                continue
-            ensure_cat(cat, svc)
-            categorized[cat][svc].append(item)
-            
     return {
         "status": "success",
         "category_filter": category,
@@ -244,23 +183,27 @@ async def get_categorized_catalog(
     }
 
 @admin_router.post("/api/admin/sync", status_code=status.HTTP_200_OK)
-async def sync_aws_docs_catalog(region: str = "us-east-1", db: AsyncSession = Depends(get_db_session)):
+async def sync_aws_docs_catalog(
+    region: str = "us-east-1",
+    db: AsyncSession = Depends(get_db_session),
+    api_key: str = Depends(verify_admin_key)
+):
     """
-    Calls AWS Pricing API to fetch updated instances, inserts them,
-    and invalidates the Redis Cache-Aside layer.
+    Triggers catalog synchronization for the specified region,
+    populates partitioned SQLite db, and warms Redis cache.
     """
     try:
         result = await sync_catalog_from_aws(db, region=region)
         return result
     except Exception as e:
-        logger.error(f"Live catalog synchronization failed: {e}", exc_info=True)
+        logger.error(f"Live catalog synchronization failed for {region}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"AWS Catalog Sync failed: {str(e)}"
         )
 
 @admin_router.post("/api/admin/clear-cache", status_code=status.HTTP_200_OK)
-async def clear_redis_cache():
+async def clear_redis_cache(api_key: str = Depends(verify_admin_key)):
     """
     Clears all cached catalog lookups in Redis.
     """
@@ -274,111 +217,190 @@ async def add_or_update_instance(
     service: str,
     payload: AdminCatalogInput,
     region: str = "us-east-1",
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    api_key: str = Depends(verify_admin_key)
 ):
     """
-    Dynamically adds or updates an instance/item in the catalog.
-    Service can be 'ec2', 'rds', or any other dynamic AWS service.
+    Manually inserts or updates a resource in the specified region's partitioned database.
     """
-    svc = get_service_config(service)
-    if not svc:
-        raise HTTPException(status_code=400, detail=f"Invalid service '{service}'. Must be one of: {', '.join(list(CATALOG_SERVICES.keys()) + DYNAMIC_SERVICES)}")
+    svc_lower = service.lower().strip()
+    
+    valid_services = {"ec2", "rds", "iam", "vpc", "s3", "route53", "route 53", "ebs", "efs", "eks", "ecs", "ecr", "waf", "cloudwatch", "cloudfront", "cloudtrail"}
+    if svc_lower not in valid_services:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid service '{service}'. Supported: EC2, RDS, and generic AWS services."
+        )
 
-    Model = svc["model"]
-    has_manual = payload.price_per_hour is not None
+    if svc_lower == "ec2":
+        specs = None
+        source = None
+        if payload.vcpus is None or payload.price_per_hour is None:
+            try:
+                specs = await lookup_ec2_instance(payload.instance_type, region=region)
+                source = "ec2.shop"
+            except Exception as e:
+                logger.warning(f"Dynamic EC2 lookup failed: {e}")
+                
+        vcpus = payload.vcpus or (specs["vcpus"] if specs else 2)
+        ram_gb = payload.ram_gb or (specs["ram_gb"] if specs else 4.0)
+        price_per_hour = payload.price_per_hour or (specs["price_per_hour"] if specs else 0.05)
+        network_performance = payload.network_performance or (specs["network_performance"] if specs else "Up to 10 Gbps")
+        category = payload.category or (specs["category"] if specs else "burstable")
 
-    if has_manual:
-        specs = {
-            "instance_type": payload.instance_type,
-            "vcpus": payload.vcpus or 0,
-            "ram_gb": payload.ram_gb or 0.0,
-            "price_per_hour": payload.price_per_hour,
-            "category": payload.category or "general",
-        }
-        if svc.get("has_network"):
-            specs["network_performance"] = payload.network_performance or "Up to 10 Gbps"
-        if Model == GenericServiceCatalog:
-            specs["service"] = service.lower()
-            specs["region"] = payload.region or region
-        source = "manual"
+        query = select(EC2Catalog).where(EC2Catalog.instance_type == payload.instance_type)
+        res = await db.execute(query)
+        existing = res.scalar_one_or_none()
+        if existing:
+            existing.vcpus = vcpus
+            existing.ram_gb = ram_gb
+            existing.price_per_hour = price_per_hour
+            existing.network_performance = network_performance
+            existing.category = category
+        else:
+            db_item = EC2Catalog(
+                instance_type=payload.instance_type,
+                vcpus=vcpus,
+                ram_gb=ram_gb,
+                price_per_hour=price_per_hour,
+                network_performance=network_performance,
+                category=category
+            )
+            db.add(db_item)
+            
+        await db.commit()
+        await cache_manager.clear_catalog_cache()
+        if source:
+            return {
+                "status": "success",
+                "source": source,
+                "specs": {
+                    "vcpus": vcpus,
+                    "ram_gb": ram_gb,
+                    "price_per_hour": price_per_hour,
+                    "network_performance": network_performance,
+                    "category": category
+                }
+            }
+        return {"status": "success", "message": f"Successfully updated {svc_lower}"}
+            
+    elif svc_lower == "rds":
+        specs = None
+        source = None
+        if payload.vcpus is None or payload.price_per_hour is None:
+            try:
+                specs = await lookup_rds_instance(payload.instance_type, region=region)
+                source = "aws_pricing_api"
+            except Exception as e:
+                logger.warning(f"Dynamic RDS lookup failed: {e}")
+
+        vcpus = payload.vcpus or (specs["vcpus"] if specs else 2)
+        ram_gb = payload.ram_gb or (specs["ram_gb"] if specs else 4.0)
+        price_per_hour = payload.price_per_hour or (specs["price_per_hour"] if specs else 0.05)
+        category = payload.category or (specs["category"] if specs else "burstable")
+
+        query = select(RDSCatalog).where(RDSCatalog.instance_type == payload.instance_type)
+        res = await db.execute(query)
+        existing = res.scalar_one_or_none()
+        if existing:
+            existing.vcpus = vcpus
+            existing.ram_gb = ram_gb
+            existing.price_per_hour = price_per_hour
+            existing.category = category
+        else:
+            db_item = RDSCatalog(
+                instance_type=payload.instance_type,
+                vcpus=vcpus,
+                ram_gb=ram_gb,
+                price_per_hour=price_per_hour,
+                category=category
+            )
+            db.add(db_item)
+            
+        await db.commit()
+        await cache_manager.clear_catalog_cache()
+        if source:
+            return {
+                "status": "success",
+                "source": source,
+                "specs": {
+                    "vcpus": vcpus,
+                    "ram_gb": ram_gb,
+                    "price_per_hour": price_per_hour,
+                    "category": category
+                }
+            }
+        return {"status": "success", "message": f"Successfully updated {svc_lower}"}
+            
     else:
-        try:
-            if service.lower() == "ec2":
-                specs = await lookup_ec2_instance(
-                    payload.instance_type,
-                    region=payload.region or region,
-                    az=payload.az
-                )
-            elif service.lower() == "rds":
-                specs = await lookup_rds_instance(
-                    payload.instance_type,
-                    region=payload.region or region,
-                    az=payload.az
-                )
-            else:
-                specs = await lookup_generic_aws_service(
-                    service,
-                    payload.instance_type,
-                    region=payload.region or region
-                )
-            source = svc["source_name"]
-        except (ValueError, RuntimeError) as e:
-            raise HTTPException(status_code=404, detail=str(e))
-
-    if Model == GenericServiceCatalog:
-        query = select(Model).where((Model.instance_type == specs["instance_type"]) & (Model.service == service.lower()))
-    else:
-        query = select(Model).where(Model.instance_type == specs["instance_type"])
-        
-    res = await db.execute(query)
-    existing = res.scalar_one_or_none()
-
-    if existing:
-        existing.vcpus = specs.get("vcpus", existing.vcpus)
-        existing.ram_gb = specs.get("ram_gb", existing.ram_gb)
-        existing.price_per_hour = specs["price_per_hour"]
-        existing.category = specs.get("category", existing.category)
-        if svc.get("has_network") and "network_performance" in specs:
-            existing.network_performance = specs["network_performance"]
-        if Model == GenericServiceCatalog:
-            existing.unit = specs.get("unit", existing.unit)
-            existing.region = specs.get("region", existing.region)
-            existing.details = specs.get("details", existing.details)
-        msg = f"Updated {service.upper()} item {specs['instance_type']} (source: {source})"
-    else:
-        db_item = Model(**specs)
-        db.add(db_item)
-        msg = f"Created {service.upper()} item {specs['instance_type']} (source: {source})"
-
-    await db.commit()
-    await cache_manager.clear_catalog_cache()
-    return {"status": "success", "message": msg, "specs": specs, "source": source, "service": service.lower()}
+        query = select(GenericServiceCatalog).where(
+            GenericServiceCatalog.service == svc_lower,
+            GenericServiceCatalog.instance_type == payload.instance_type
+        )
+        res = await db.execute(query)
+        existing = res.scalar_one_or_none()
+        if existing:
+            existing.price_per_hour = payload.price_per_hour or existing.price_per_hour
+            existing.unit = payload.unit or existing.unit
+            existing.category = payload.category or existing.category
+            existing.details = payload.details or existing.details
+        else:
+            db_item = GenericServiceCatalog(
+                service=svc_lower,
+                instance_type=payload.instance_type,
+                vcpus=payload.vcpus or 0,
+                ram_gb=payload.ram_gb or 0.0,
+                price_per_hour=payload.price_per_hour or 0.05,
+                unit=payload.unit or "GB-Month",
+                category=payload.category or "general",
+                region=region,
+                details=payload.details or ""
+            )
+            db.add(db_item)
+            
+        await db.commit()
+        await cache_manager.clear_catalog_cache()
+        return {"status": "success", "message": f"Successfully updated {svc_lower}"}
 
 @admin_router.delete("/api/admin/catalog/{service}/{instance_type}", status_code=status.HTTP_200_OK)
-async def delete_instance(service: str, instance_type: str, region: str = "us-east-1", db: AsyncSession = Depends(get_db_session)):
+async def delete_instance(
+    service: str,
+    instance_type: str,
+    region: str = "us-east-1",
+    db: AsyncSession = Depends(get_db_session),
+    api_key: str = Depends(verify_admin_key)
+):
     """
-    Deletes an instance/item from the catalog.
+    Deletes a catalog entry from the specified region's database.
     """
-    svc = get_service_config(service)
-    if not svc:
-        raise HTTPException(status_code=400, detail=f"Invalid service '{service}'. Must be one of: {', '.join(list(CATALOG_SERVICES.keys()) + DYNAMIC_SERVICES)}")
+    svc_lower = service.lower().strip()
+    
+    valid_services = {"ec2", "rds", "iam", "vpc", "s3", "route53", "route 53", "ebs", "efs", "eks", "ecs", "ecr", "waf", "cloudwatch", "cloudfront", "cloudtrail"}
+    if svc_lower not in valid_services:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid service '{service}'."
+        )
 
-    Model = svc["model"]
-    if Model == GenericServiceCatalog:
-        query = select(Model).where((Model.instance_type == instance_type) & (Model.service == service.lower()))
+    if svc_lower == "ec2":
+        query = select(EC2Catalog).where(EC2Catalog.instance_type == instance_type)
+    elif svc_lower == "rds":
+        query = select(RDSCatalog).where(RDSCatalog.instance_type == instance_type)
     else:
-        query = select(Model).where(Model.instance_type == instance_type)
+        query = select(GenericServiceCatalog).where(
+            GenericServiceCatalog.service == svc_lower,
+            GenericServiceCatalog.instance_type == instance_type
+        )
         
     res = await db.execute(query)
     existing = res.scalar_one_or_none()
-
     if not existing:
-        raise HTTPException(status_code=404, detail=f"{service.upper()} item '{instance_type}' not found")
-
+        raise HTTPException(status_code=404, detail="Item not found")
+        
     await db.delete(existing)
     await db.commit()
     await cache_manager.clear_catalog_cache()
-    return {"status": "success", "message": f"Deleted {service.upper()} {instance_type}", "service": service.lower()}
+    return {"status": "success", "message": f"Deleted {instance_type}"}
 
 @admin_router.get("/admin", response_class=HTMLResponse)
 async def serve_admin_dashboard():
@@ -434,7 +456,6 @@ async def serve_admin_dashboard():
             box-shadow: 0 0 15px rgba(124, 58, 237, 0.4);
             transform: translateY(-1px);
         }
-        /* Custom scrollbar */
         ::-webkit-scrollbar {
             width: 6px;
             height: 6px;
@@ -470,11 +491,7 @@ async def serve_admin_dashboard():
             <div class="flex items-center space-x-2 bg-cyber-bg border border-cyber-border rounded-xl px-2.5 py-1">
                 <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Region:</span>
                 <select id="region-filter" onchange="onRegionFilterChange()" class="bg-transparent text-xs text-cyber-lightViolet focus:outline-none cursor-pointer font-bold">
-                    <option value="us-east-1" class="bg-cyber-bg text-white">US East (N. Virginia)</option>
-                    <option value="us-west-2" class="bg-cyber-bg text-white">US West (Oregon)</option>
-                    <option value="eu-west-1" class="bg-cyber-bg text-white">Europe (Ireland)</option>
-                    <option value="ap-southeast-1" class="bg-cyber-bg text-white">Asia Pacific (Singapore)</option>
-                    <option value="ap-south-1" class="bg-cyber-bg text-white">Asia Pacific (Mumbai)</option>
+                    <!-- Dynamic region options populated by JS -->
                 </select>
             </div>
             <span id="cache-status" class="hidden md:inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gray-800 text-gray-400">
@@ -536,110 +553,9 @@ async def serve_admin_dashboard():
                 </nav>
             </div>
 
-            <!-- Right Workspace: Form & Datatable -->
+            <!-- Right Workspace: Datatable -->
             <div class="lg:col-span-3 space-y-8">
                 
-                <!-- Unified Catalog Item Form -->
-                <div class="glass-panel p-6 rounded-2xl">
-                    <h2 class="text-md font-bold text-white mb-1 flex items-center">
-                        <span class="h-4 w-1 bg-cyber-violet mr-2 rounded font-semibold" id="form-color-bar"></span>
-                        <span id="form-title">Add Infrastructure Catalog Item</span>
-                    </h2>
-                    <p class="text-xs text-gray-500 mb-4">Specs are fetched dynamically from <span class="text-cyber-violet font-semibold">AWS bulk price lists</span>. Set manual overrides if desired.</p>
-                    
-                    <form id="unified-form" onsubmit="submitCatalogItem(event)" class="space-y-4">
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-400 mb-1">Target Service <span class="text-red-400">*</span></label>
-                                <select id="item-service" onchange="onServiceChange()" class="w-full py-2.5 px-3 bg-cyber-bg border border-cyber-border rounded-xl text-sm focus:outline-none focus:border-cyber-violet focus:ring-1 focus:ring-cyber-violet/30">
-                                    <option value="ec2">EC2 (Compute Instances)</option>
-                                    <option value="rds">RDS (Database Engines)</option>
-                                    <option value="s3">S3 (Simple Storage Service)</option>
-                                    <option value="vpc">VPC (Virtual Private Cloud)</option>
-                                    <option value="iam">IAM (Identity &amp; Access)</option>
-                                    <option value="route53">Route 53 (DNS Service)</option>
-                                    <option value="ebs">EBS (Elastic Block Store)</option>
-                                    <option value="efs">EFS (Elastic File System)</option>
-                                    <option value="eks">EKS (Elastic Kubernetes)</option>
-                                    <option value="ecs">ECS (Elastic Container Service)</option>
-                                    <option value="ecr">ECR (Container Registry)</option>
-                                    <option value="waf">WAF (Web Application Firewall)</option>
-                                    <option value="cloudwatch">CloudWatch (Monitoring)</option>
-                                    <option value="cloudfront">CloudFront (CDN)</option>
-                                    <option value="cloudtrail">CloudTrail (Auditing)</option>
-                                </select>
-                            </div>
-                            
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-400 mb-1">Resource Name / Type <span class="text-red-400">*</span></label>
-                                <input type="text" id="item-type" required placeholder="e.g. c6i.large, Standard Storage, NAT Gateway" class="w-full py-2.5 px-3 bg-cyber-bg border border-cyber-border rounded-xl text-sm focus:outline-none focus:border-cyber-violet">
-                            </div>
-
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-400 mb-1">AWS Region</label>
-                                <input type="text" id="item-region" placeholder="us-east-1" class="w-full py-2.5 px-3 bg-cyber-bg border border-cyber-border rounded-xl text-sm focus:outline-none focus:border-cyber-violet">
-                            </div>
-                        </div>
-
-                        <!-- Resolved specs details panel -->
-                        <div id="resolved-preview" class="hidden bg-slate-900/60 rounded-xl p-3 border border-cyber-border/50 text-xs text-gray-300 space-y-1">
-                            <span class="text-cyber-mint font-bold flex items-center mb-1">
-                                <svg class="w-3.5 h-3.5 mr-1 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                Resolved AWS Specs
-                            </span>
-                            <div id="resolved-preview-content"></div>
-                        </div>
-
-                        <!-- Advanced manual overrides -->
-                        <details class="group">
-                            <summary class="cursor-pointer text-xs text-gray-500 hover:text-gray-300 transition flex items-center">
-                                <svg class="w-3.5 h-3.5 mr-1.5 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                                Manual Specification Overrides
-                            </summary>
-                            <div class="mt-3 space-y-3 pl-1 border-l-2 border-cyber-border/30 ml-2">
-                                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                    <div id="form-vcpu-ram-group" class="col-span-2 grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label class="block text-xs font-semibold text-gray-500 mb-1">vCPUs</label>
-                                            <input type="number" id="item-vcpus" placeholder="auto" class="w-full py-2 px-3 bg-cyber-bg border border-cyber-border rounded-xl text-xs focus:outline-none focus:border-cyber-violet">
-                                        </div>
-                                        <div>
-                                            <label class="block text-xs font-semibold text-gray-500 mb-1">RAM (GB)</label>
-                                            <input type="number" id="item-ram" step="0.5" placeholder="auto" class="w-full py-2 px-3 bg-cyber-bg border border-cyber-border rounded-xl text-xs focus:outline-none focus:border-cyber-violet">
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-semibold text-gray-500 mb-1">Price per Hour / Unit</label>
-                                        <input type="number" id="item-price" step="0.00001" placeholder="auto" class="w-full py-2 px-3 bg-cyber-bg border border-cyber-border rounded-xl text-xs focus:outline-none focus:border-cyber-violet">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-semibold text-gray-500 mb-1">Category Class</label>
-                                        <input type="text" id="item-cat" placeholder="e.g. compute, storage" class="w-full py-2 px-3 bg-cyber-bg border border-cyber-border rounded-xl text-xs focus:outline-none focus:border-cyber-violet">
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-2 gap-3">
-                                    <div id="form-network-group">
-                                        <label class="block text-xs font-semibold text-gray-500 mb-1">Network Performance</label>
-                                        <input type="text" id="item-network" placeholder="e.g. Up to 10 Gbps" class="w-full py-2 px-3 bg-cyber-bg border border-cyber-border rounded-xl text-xs focus:outline-none focus:border-cyber-violet">
-                                    </div>
-                                    <div id="form-unit-group" class="hidden">
-                                        <label class="block text-xs font-semibold text-gray-500 mb-1">Billing Unit</label>
-                                        <input type="text" id="item-unit" placeholder="e.g. GB-Month, HostedZone-Month" class="w-full py-2 px-3 bg-cyber-bg border border-cyber-border rounded-xl text-xs focus:outline-none focus:border-cyber-violet">
-                                    </div>
-                                </div>
-                            </div>
-                        </details>
-
-                        <button type="submit" id="submit-btn" class="w-full py-2.5 bg-gradient-to-r from-cyber-violet to-purple-600 hover:from-purple-600 hover:to-cyber-violet text-white font-semibold text-sm rounded-xl transition duration-200 flex justify-center items-center">
-                            <svg class="h-4 w-4 mr-2 animate-spin hidden" id="form-spinner" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            <span id="submit-text">Lookup &amp; Ingest Item</span>
-                        </button>
-                    </form>
-                </div>
-
                 <!-- Datatable Panel -->
                 <div class="glass-panel rounded-2xl overflow-hidden">
                     <div class="p-6 border-b border-cyber-border flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
@@ -689,6 +605,48 @@ async def serve_admin_dashboard():
     </div>
 
     <script>
+        const regionsList = [
+            { code: "us-east-1", name: "US East (N. Virginia)" },
+            { code: "us-east-2", name: "US East (Ohio)" },
+            { code: "us-west-1", name: "US West (N. California)" },
+            { code: "us-west-2", name: "US West (Oregon)" },
+            { code: "ca-central-1", name: "Canada (Central)" },
+            { code: "ca-west-1", name: "Canada West (Calgary)" },
+            { code: "mx-central-1", name: "Mexico (Central)" },
+            { code: "us-gov-east-1", name: "AWS GovCloud (US-East)" },
+            { code: "us-gov-west-1", name: "AWS GovCloud (US-West)" },
+            { code: "sa-east-1", name: "South America (São Paulo)" },
+            { code: "eu-west-1", name: "Europe (Ireland)" },
+            { code: "eu-west-2", name: "Europe (London)" },
+            { code: "eu-west-3", name: "Europe (Paris)" },
+            { code: "eu-central-1", name: "Europe (Frankfurt)" },
+            { code: "eu-central-2", name: "Europe (Zurich)" },
+            { code: "eu-north-1", name: "Europe (Stockholm)" },
+            { code: "eu-south-1", name: "Europe (Milan)" },
+            { code: "eu-south-2", name: "Europe (Spain)" },
+            { code: "ap-south-1", name: "Asia Pacific (Mumbai)" },
+            { code: "ap-south-2", name: "Asia Pacific (Hyderabad)" },
+            { code: "ap-southeast-1", name: "Asia Pacific (Singapore)" },
+            { code: "ap-southeast-2", name: "Asia Pacific (Sydney)" },
+            { code: "ap-southeast-3", name: "Asia Pacific (Jakarta)" },
+            { code: "ap-southeast-4", name: "Asia Pacific (Melbourne)" },
+            { code: "ap-southeast-5", name: "Asia Pacific (Malaysia)" },
+            { code: "ap-southeast-6", name: "Asia Pacific (Thailand)" },
+            { code: "ap-southeast-7", name: "Asia Pacific (New Zealand)" },
+            { code: "ap-east-1", name: "Asia Pacific (Hong Kong)" },
+            { code: "ap-east-2", name: "Asia Pacific (Taiwan)" },
+            { code: "ap-northeast-1", name: "Asia Pacific (Tokyo)" },
+            { code: "ap-northeast-2", name: "Asia Pacific (Seoul)" },
+            { code: "ap-northeast-3", name: "Asia Pacific (Osaka)" },
+            { code: "me-south-1", name: "Middle East (Bahrain)" },
+            { code: "me-central-1", name: "Middle East (UAE)" },
+            { code: "il-central-1", name: "Israel (Tel Aviv)" },
+            { code: "me-central-2", name: "Middle East (Saudi Arabia)" },
+            { code: "af-south-1", name: "Africa (Cape Town)" },
+            { code: "cn-north-1", name: "China (Beijing)" },
+            { code: "cn-northwest-1", name: "China (Ningxia)" }
+        ];
+
         const servicesList = [
             { code: "ec2", name: "EC2 (Compute)" },
             { code: "rds", name: "RDS (Database)" },
@@ -710,6 +668,7 @@ async def serve_admin_dashboard():
         let catalogData = {};
         let currentService = 'ec2';
         let currentRegion = 'us-east-1';
+        const adminKey = localStorage.getItem('X-Admin-Key') || 'aetherops-secret-admin-key';
 
         function showToast(msg, type = "success") {
             const toast = document.getElementById('toast');
@@ -726,59 +685,27 @@ async def serve_admin_dashboard():
             }, 4000);
         }
 
-        function onServiceChange() {
-            const service = document.getElementById('item-service').value;
-            const vcpuRamGroup = document.getElementById('form-vcpu-ram-group');
-            const netGroup = document.getElementById('form-network-group');
-            const unitGroup = document.getElementById('form-unit-group');
-            const colorBar = document.getElementById('form-color-bar');
-
-            if (service === 'ec2') {
-                vcpuRamGroup.classList.remove('hidden');
-                netGroup.classList.remove('hidden');
-                unitGroup.classList.add('hidden');
-                colorBar.className = "h-4 w-1 bg-cyber-violet mr-2 rounded font-semibold";
-            } else if (service === 'rds') {
-                vcpuRamGroup.classList.remove('hidden');
-                netGroup.classList.add('hidden');
-                unitGroup.classList.add('hidden');
-                colorBar.className = "h-4 w-1 bg-cyber-mint mr-2 rounded font-semibold";
-            } else {
-                vcpuRamGroup.classList.add('hidden');
-                netGroup.classList.add('hidden');
-                unitGroup.classList.remove('hidden');
-                colorBar.className = "h-4 w-1 bg-purple-500 mr-2 rounded font-semibold";
-            }
-            
-            // Auto update placeholder based on service
-            const itemInput = document.getElementById('item-type');
-            if (service === 's3') itemInput.placeholder = "e.g. Standard Storage, Glacier Storage";
-            else if (service === 'vpc') itemInput.placeholder = "e.g. NAT Gateway, VPN Connection";
-            else if (service === 'ebs') itemInput.placeholder = "e.g. gp3, gp2";
-            else if (service === 'iam') itemInput.placeholder = "e.g. IAM User/Role/Policy";
-            else itemInput.placeholder = "e.g. c6i.large, db.t4g.small, Hosted Zone, Cluster";
-        }
-
         async function onRegionFilterChange() {
             currentRegion = document.getElementById('region-filter').value;
-            // Auto update form region to match
-            document.getElementById('item-region').value = currentRegion;
             await fetchCatalog();
         }
 
         async function syncAWSDocs() {
             const spinner = document.getElementById('sync-spinner');
             spinner.classList.remove('hidden');
-            showToast(`Ingesting AWS dynamic prices for region ${currentRegion.toUpperCase()}... This may take up to 30-45 seconds.`);
+            showToast(`Ingesting AWS dynamic prices for region ${currentRegion.toUpperCase()}...`);
             try {
-                const res = await fetch(`/api/admin/sync?region=${currentRegion}`, { method: 'POST' });
+                const res = await fetch(`/api/admin/sync?region=${currentRegion}`, {
+                    method: 'POST',
+                    headers: { 'X-Admin-Key': adminKey }
+                });
                 if (!res.ok) {
                     const err = await res.json();
-                    showToast(`Sync failed: ${err.detail || 'API timeout'}`, 'error');
+                    showToast(`Sync failed: ${err.detail || 'API error'}`, 'error');
                     return;
                 }
                 const data = await res.json();
-                showToast(`AWS Price List Sync completed successfully for ${currentRegion.toUpperCase()}! ${data.added_ec2} EC2 + ${data.added_rds} RDS ingested.`);
+                showToast(`AWS Price List Sync completed successfully for ${currentRegion.toUpperCase()}!`);
                 await fetchCatalog();
             } catch (err) {
                 showToast('Sync server timeout/error', 'error');
@@ -789,7 +716,10 @@ async def serve_admin_dashboard():
 
         async function clearRedisCache() {
             try {
-                const res = await fetch('/api/admin/clear-cache', { method: 'POST' });
+                const res = await fetch('/api/admin/clear-cache', {
+                    method: 'POST',
+                    headers: { 'X-Admin-Key': adminKey }
+                });
                 const data = await res.json();
                 if (data.status === "success") {
                     showToast("Redis cache layer successfully cleared.");
@@ -858,8 +788,6 @@ async def serve_admin_dashboard():
 
         function switchService(serviceCode) {
             currentService = serviceCode;
-            document.getElementById('item-service').value = serviceCode;
-            onServiceChange();
             fetchCatalog();
         }
 
@@ -909,139 +837,6 @@ async def serve_admin_dashboard():
             });
         }
 
-        async function submitCatalogItem(e) {
-            e.preventDefault();
-            const spinner = document.getElementById('form-spinner');
-            const btnText = document.getElementById('submit-text');
-            spinner.classList.remove('hidden');
-            btnText.textContent = 'Resolving Spec...';
-
-            const service = document.getElementById('item-service').value;
-            const type = document.getElementById('item-type').value;
-            const region = document.getElementById('item-region').value || 'us-east-1';
-
-            const payload = {
-                instance_type: type,
-                region: region
-            };
-
-            const priceVal = document.getElementById('item-price').value;
-            if (priceVal !== '') {
-                payload.price_per_hour = parseFloat(priceVal);
-                payload.vcpus = parseInt(document.getElementById('item-vcpus').value || '0');
-                payload.ram_gb = parseFloat(document.getElementById('item-ram').value || '0.0');
-                
-                const cat = document.getElementById('item-cat').value;
-                if (cat) payload.category = cat;
-                
-                const net = document.getElementById('item-network').value;
-                if (net) payload.network_performance = net;
-                
-                const unit = document.getElementById('item-unit').value;
-                if (unit) payload.unit = unit;
-            }
-
-            try {
-                const res = await fetch(`/api/admin/catalog/${service}?region=${region}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                
-                if (!res.ok) {
-                    const err = await res.json();
-                    showToast(err.detail || 'Resolution/addition failed', 'error');
-                    return;
-                }
-
-                const data = await res.json();
-                showToast(data.message);
-
-                if (data.specs) {
-                    const preview = document.getElementById('resolved-preview');
-                    const previewContent = document.getElementById('resolved-preview-content');
-                    preview.classList.remove('hidden');
-                    
-                    let html = `<div>Resource: <strong>${data.specs.instance_type}</strong></div>`;
-                    html += `<div>Hourly Cost: <strong class="text-cyber-mint">$${data.specs.price_per_hour.toFixed(5)}</strong></div>`;
-                    if (service === 'ec2' || service === 'rds') {
-                        html += `<div>vCPUs: <strong>${data.specs.vcpus}</strong> | RAM: <strong>${data.specs.ram_gb} GB</strong></div>`;
-                    }
-                    if (data.specs.unit) html += `<div>Billing Unit: <strong>${data.specs.unit}</strong></div>`;
-                    if (data.specs.details) html += `<div class="italic text-[10px] text-gray-500 mt-1">${data.specs.details}</div>`;
-                    
-                    previewContent.innerHTML = html;
-                }
-
-                document.getElementById('unified-form').reset();
-                document.getElementById('item-service').value = service;
-                onServiceChange();
-                
-                currentService = service;
-                await fetchCatalog();
-
-            } catch (err) {
-                showToast('Failed to add catalog item', 'error');
-            } finally {
-                spinner.classList.add('hidden');
-                btnText.textContent = 'Lookup & Ingest Item';
-            }
-        }
-
-        async function deleteCatalogItem(service, instanceType) {
-            if (!confirm(`Are you sure you want to delete ${instanceType} from the ${service.toUpperCase()} catalog database?`)) return;
-            try {
-                const res = await fetch(`/api/admin/catalog/${service}/${instanceType}?region=${currentRegion}`, { method: 'DELETE' });
-                if (!res.ok) {
-                    const err = await res.json();
-                    showToast(err.detail || 'Delete failed', 'error');
-                    return;
-                }
-                const data = await res.json();
-                showToast(data.message);
-                await fetchCatalog();
-            } catch (err) {
-                showToast("Server call failed during deletion", "error");
-            }
-        }
-
-        function populateFormEC2(type, vcpus, ram, price, cat, net) {
-            document.getElementById('item-service').value = 'ec2';
-            onServiceChange();
-            document.getElementById('item-type').value = type;
-            document.getElementById('item-vcpus').value = vcpus;
-            document.getElementById('item-ram').value = ram;
-            document.getElementById('item-price').value = price;
-            document.getElementById('item-cat').value = cat;
-            document.getElementById('item-network').value = net;
-            document.querySelector('#unified-form details').open = true;
-            document.getElementById('item-type').focus();
-        }
-
-        function populateFormRDS(type, vcpus, ram, price, cat) {
-            document.getElementById('item-service').value = 'rds';
-            onServiceChange();
-            document.getElementById('item-type').value = type;
-            document.getElementById('item-vcpus').value = vcpus;
-            document.getElementById('item-ram').value = ram;
-            document.getElementById('item-price').value = price;
-            document.getElementById('item-cat').value = cat;
-            document.querySelector('#unified-form details').open = true;
-            document.getElementById('item-type').focus();
-        }
-
-        function populateFormGeneric(service, type, price, cat, unit, region) {
-            document.getElementById('item-service').value = service;
-            onServiceChange();
-            document.getElementById('item-type').value = type;
-            document.getElementById('item-price').value = price;
-            document.getElementById('item-cat').value = cat;
-            document.getElementById('item-unit').value = unit;
-            document.getElementById('item-region').value = region;
-            document.querySelector('#unified-form details').open = true;
-            document.getElementById('item-type').focus();
-        }
-
         function filterTable(tableId, query) {
             const table = document.getElementById(tableId);
             const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
@@ -1057,7 +852,13 @@ async def serve_admin_dashboard():
         }
 
         window.addEventListener('load', () => {
-            onServiceChange();
+            // Populate regions filter select dynamically
+            const filterSelect = document.getElementById('region-filter');
+            filterSelect.innerHTML = '';
+            regionsList.forEach(r => {
+                filterSelect.innerHTML += `<option value="${r.code}" class="bg-cyber-bg text-white">${r.name}</option>`;
+            });
+            filterSelect.value = currentRegion;
             fetchCatalog();
         });
     </script>

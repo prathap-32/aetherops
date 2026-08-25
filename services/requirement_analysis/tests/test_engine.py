@@ -356,7 +356,8 @@ def test_admin_categorized_catalog():
     for cat in filtered_data["categories"]:
         assert cat.lower() == "burstable"
 
-def test_admin_categorized_catalog_fallback():
+@pytest.mark.anyio
+async def test_admin_categorized_catalog_fallback():
     """Test retrieving categorized catalog fallback when database is empty."""
     from unittest.mock import AsyncMock, MagicMock
     mock_db = AsyncMock()
@@ -365,10 +366,8 @@ def test_admin_categorized_catalog_fallback():
     mock_db.execute.return_value = mock_result
     
     from app.admin_router import get_categorized_catalog
-    import asyncio
     
-    loop = asyncio.get_event_loop()
-    result = loop.run_until_complete(get_categorized_catalog(db=mock_db))
+    result = await get_categorized_catalog(db=mock_db)
     
     assert result["status"] == "success"
     assert "categories" in result
