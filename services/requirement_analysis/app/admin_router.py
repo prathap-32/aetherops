@@ -465,7 +465,18 @@ async def serve_admin_dashboard():
             </div>
         </div>
         
-        <div class="flex items-center space-x-4">
+        <div class="flex items-center space-x-4 mr-2">
+            <!-- Global Region Selector -->
+            <div class="flex items-center space-x-2 bg-cyber-bg border border-cyber-border rounded-xl px-2.5 py-1">
+                <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Region:</span>
+                <select id="region-filter" onchange="onRegionFilterChange()" class="bg-transparent text-xs text-cyber-lightViolet focus:outline-none cursor-pointer font-bold">
+                    <option value="us-east-1" class="bg-cyber-bg text-white">US East (N. Virginia)</option>
+                    <option value="us-west-2" class="bg-cyber-bg text-white">US West (Oregon)</option>
+                    <option value="eu-west-1" class="bg-cyber-bg text-white">Europe (Ireland)</option>
+                    <option value="ap-southeast-1" class="bg-cyber-bg text-white">Asia Pacific (Singapore)</option>
+                    <option value="ap-south-1" class="bg-cyber-bg text-white">Asia Pacific (Mumbai)</option>
+                </select>
+            </div>
             <span id="cache-status" class="hidden md:inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gray-800 text-gray-400">
                 Checking Cache...
             </span>
@@ -640,18 +651,6 @@ async def serve_admin_dashboard():
                             <p class="text-xs text-gray-500 mt-1">Listing registered instances and specs inside database</p>
                         </div>
                         <div class="flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 w-full md:w-auto">
-                            <!-- Region Filter -->
-                            <div class="flex items-center space-x-2 bg-cyber-bg border border-cyber-border rounded-xl px-2.5 py-1">
-                                <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Region:</span>
-                                <select id="region-filter" onchange="onRegionFilterChange()" class="bg-transparent text-xs text-cyber-lightViolet focus:outline-none cursor-pointer font-bold">
-                                    <option value="us-east-1" class="bg-cyber-bg text-white">US East (N. Virginia)</option>
-                                    <option value="us-west-2" class="bg-cyber-bg text-white">US West (Oregon)</option>
-                                    <option value="eu-west-1" class="bg-cyber-bg text-white">Europe (Ireland)</option>
-                                    <option value="ap-southeast-1" class="bg-cyber-bg text-white">Asia Pacific (Singapore)</option>
-                                    <option value="ap-south-1" class="bg-cyber-bg text-white">Asia Pacific (Mumbai)</option>
-                                </select>
-                            </div>
-
                             <!-- Search Input -->
                             <div class="relative w-full sm:w-64">
                                 <input type="text" onkeyup="filterTable('catalog-table', this.value)" placeholder="Search catalog items..." class="w-full py-1.5 pl-8 pr-3 bg-cyber-bg border border-cyber-border rounded-xl text-xs focus:outline-none focus:border-cyber-violet">
@@ -870,7 +869,7 @@ async def serve_admin_dashboard():
             const tableRows = document.getElementById('table-rows');
 
             const serviceName = servicesList.find(s => s.code === currentService)?.name || currentService.toUpperCase();
-            tableTitle.innerText = `${serviceName} Catalog Database`;
+            tableTitle.innerText = `${serviceName} Catalog Database (${currentRegion.toUpperCase()})`;
 
             tableRows.innerHTML = '';
             const items = catalogData[currentService] || [];
@@ -879,15 +878,14 @@ async def serve_admin_dashboard():
                 <th class="p-4">Resource Type / Name</th>
                 <th class="p-4">vCPUs</th>
                 <th class="p-4">RAM / Size</th>
-                <th class="p-4">Price / Rate</th>
                 <th class="p-4">Billing Unit</th>
-                <th class="p-4">AWS Region</th>
                 <th class="p-4">Category</th>
                 <th class="p-4">Network / Details</th>
+                <th class="p-4 text-right">Price / Rate</th>
             `;
 
             if (items.length === 0) {
-                tableRows.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-xs text-gray-500">No specifications stored for this service. Click Sync.</td></tr>`;
+                tableRows.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-xs text-gray-500">No specifications stored for this service. Click Sync.</td></tr>`;
                 return;
             }
 
@@ -895,7 +893,6 @@ async def serve_admin_dashboard():
                 const vcpuDisp = (item.vcpus && item.vcpus > 0) ? item.vcpus : '-';
                 const ramDisp = (item.ram_gb && item.ram_gb > 0) ? `${item.ram_gb} GB` : '-';
                 const unitDisp = item.unit || 'Hrs';
-                const regionDisp = (item.region || 'us-east-1').toUpperCase();
                 const netOrDetailDisp = item.network_performance || item.details || '-';
                 
                 tableRows.innerHTML += `
@@ -903,11 +900,10 @@ async def serve_admin_dashboard():
                         <td class="p-4 font-semibold text-white">${item.instance_type}</td>
                         <td class="p-4 text-gray-400 font-mono">${vcpuDisp}</td>
                         <td class="p-4 text-gray-400 font-mono">${ramDisp}</td>
-                        <td class="p-4 text-cyber-lightViolet font-mono font-bold">$${item.price_per_hour.toFixed(4)}</td>
                         <td class="p-4 text-gray-400 font-mono">${unitDisp}</td>
-                        <td class="p-4 text-gray-400 uppercase">${regionDisp}</td>
                         <td class="p-4"><span class="px-2 py-0.5 rounded bg-slate-900 text-xs capitalize text-gray-400 border border-cyber-border">${item.category}</span></td>
                         <td class="p-4 text-xs text-gray-500 truncate max-w-xs">${netOrDetailDisp}</td>
+                        <td class="p-4 text-right text-cyber-lightViolet font-mono font-bold">$${item.price_per_hour.toFixed(4)}</td>
                     </tr>
                 `;
             });
