@@ -48,8 +48,9 @@ root_logger.addHandler(console_handler)
 logger = logging.getLogger("requirement-analysis-service")
 
 async def rotate_catalog_on_startup():
-    logger.info("Lifespan startup: Rotating catalog data from AWS APIs for all regions...")
-    for region in SUPPORTED_REGIONS:
+    logger.info("Lifespan startup: Rotating catalog data from AWS APIs for all regions concurrently...")
+    
+    async def sync_one_region(region):
         try:
             logger.info(f"Lifespan startup: Syncing region '{region}'...")
             await init_db_for_region(region)
@@ -59,6 +60,8 @@ async def rotate_catalog_on_startup():
             logger.info(f"Lifespan startup: Catalog data for region '{region}' rotated successfully.")
         except Exception as e:
             logger.error(f"Lifespan startup: Failed to rotate catalog data for region '{region}': {e}", exc_info=True)
+
+    await asyncio.gather(*(sync_one_region(r) for r in SUPPORTED_REGIONS))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

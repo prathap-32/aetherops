@@ -504,14 +504,23 @@ SERVICE_OFFER_CODES = {
     "ecs": "AmazonECS",
     "ecr": "AmazonECR",
     "waf": "awswaf",
-    "ebs": "AmazonEC2",
-    "vpc": "AmazonEC2",
 }
 
 
 def get_generic_fallback_pricing(service: str, item_type: str, region: str = "us-east-1") -> dict:
     service = service.lower()
     item_type_lower = item_type.lower() if item_type else ""
+    region_lower = region.lower().strip() if region else "us-east-1"
+    
+    # Region multipliers to scale base pricing to match regional rates
+    multipliers = {
+        "us-east-1": 1.0,
+        "us-west-2": 1.02,
+        "eu-west-1": 1.08,
+        "ap-southeast-1": 1.25,
+        "ap-south-1": 1.10
+    }
+    m = multipliers.get(region_lower, 1.0)
     
     price = 0.0
     unit = "Hrs"
@@ -522,50 +531,50 @@ def get_generic_fallback_pricing(service: str, item_type: str, region: str = "us
         category = "storage"
         unit = "GB-Month"
         if "glacier" in item_type_lower:
-            price = 0.0036
+            price = round(0.0036 * m, 5)
         else:
-            price = 0.023
+            price = round(0.023 * m, 5)
     elif service == "ebs":
         category = "storage"
         unit = "GB-Month"
         if "gp3" in item_type_lower:
-            price = 0.08
+            price = round(0.08 * m, 5)
         else:
-            price = 0.10
+            price = round(0.10 * m, 5)
     elif service == "efs":
         category = "storage"
         unit = "GB-Month"
-        price = 0.30
+        price = round(0.30 * m, 5)
     elif service == "vpc":
         category = "networking"
         if "nat" in item_type_lower:
-            price = 0.045
+            price = round(0.045 * m, 5)
         else:
-            price = 0.05
+            price = round(0.05 * m, 5)
     elif service in ["route53", "route 53"]:
         category = "networking"
         unit = "HostedZone-Month"
-        price = 0.50
+        price = round(0.50 * m, 5)
     elif service == "eks":
         category = "compute"
-        price = 0.10
+        price = round(0.10 * m, 5)
     elif service == "ecs":
         category = "compute"
-        price = 0.01
+        price = round(0.01 * m, 5)
     elif service == "ecr":
         category = "storage"
         unit = "GB-Month"
-        price = 0.10
+        price = round(0.10 * m, 5)
     elif service == "waf":
         category = "security"
-        price = 0.008
+        price = round(0.008 * m, 5)
     elif service == "cloudwatch":
         category = "monitoring"
-        price = 0.30
+        price = round(0.30 * m, 5)
     elif service == "cloudfront":
         category = "networking"
         unit = "GB-Month"
-        price = 0.085
+        price = round(0.085 * m, 5)
     elif service == "cloudtrail":
         category = "monitoring"
         price = 0.0
@@ -578,7 +587,7 @@ def get_generic_fallback_pricing(service: str, item_type: str, region: str = "us
         "unit": unit,
         "category": category,
         "service": service,
-        "region": region,
+        "region": region_lower,
         "details": details
     }
 

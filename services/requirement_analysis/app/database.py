@@ -7,8 +7,13 @@ from fastapi import Request
 
 logger = logging.getLogger("requirement-analysis-database")
 
-# Default to local SQLite fallback if DATABASE_URL is not set
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./catalog.db")
+import sys
+# Detect if running under pytest to isolate test database state
+IS_TESTING = "pytest" in sys.modules or any("pytest" in arg for arg in sys.argv)
+if IS_TESTING:
+    DATABASE_URL = "sqlite+aiosqlite:///./test_catalog.db"
+else:
+    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./catalog.db")
 
 # Echo SQL queries in development/debug modes
 ECHO_SQL = os.getenv("ECHO_SQL", "False").lower() in ("true", "1", "yes")
