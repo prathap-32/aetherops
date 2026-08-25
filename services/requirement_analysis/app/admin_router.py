@@ -41,7 +41,7 @@ MOCK_AWS_DOCS_API_DATA = {
 # Unified schema for dynamic catalog operations
 class AdminCatalogInput(BaseModel):
     instance_type: str = Field(..., examples=["c6i.large", "db.m6g.xlarge"])
-    region: str | None = Field(default="us-east-1", examples=["us-east-1", "us-west-2"])
+    region: str | None = Field(default=None, examples=["us-east-1", "us-west-2"])
     az: str | None = Field(default=None, examples=["us-east-1a", "us-east-1b"])
     # Optional manual overrides — if omitted, specs are fetched live from AWS APIs
     vcpus: int | None = Field(default=None, examples=[2])
@@ -229,7 +229,7 @@ async def get_categorized_catalog(
             ("cloudtrail", "Paid Events"),
         ]
         for svc, item_t in fallback_items:
-            item = get_generic_fallback_pricing(svc, item_t)
+            item = get_generic_fallback_pricing(svc, item_t, region=region)
             cat = item.get("category", "general")
             if category and cat.lower() != category.lower():
                 continue
@@ -299,26 +299,27 @@ async def add_or_update_instance(
             specs["network_performance"] = payload.network_performance or "Up to 10 Gbps"
         if Model == GenericServiceCatalog:
             specs["service"] = service.lower()
+            specs["region"] = payload.region or region
         source = "manual"
     else:
         try:
             if service.lower() == "ec2":
                 specs = await lookup_ec2_instance(
                     payload.instance_type,
-                    region=payload.region or "us-east-1",
+                    region=payload.region or region,
                     az=payload.az
                 )
             elif service.lower() == "rds":
                 specs = await lookup_rds_instance(
                     payload.instance_type,
-                    region=payload.region or "us-east-1",
+                    region=payload.region or region,
                     az=payload.az
                 )
             else:
                 specs = await lookup_generic_aws_service(
                     service,
                     payload.instance_type,
-                    region=payload.region or "us-east-1"
+                    region=payload.region or region
                 )
             source = svc["source_name"]
         except (ValueError, RuntimeError) as e:

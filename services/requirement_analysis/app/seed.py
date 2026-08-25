@@ -17,11 +17,11 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database schemas initialized.")
 
-async def seed_catalog(session: AsyncSession):
+async def seed_catalog(session: AsyncSession, region: str = "us-east-1"):
     """
     Seeds catalog entries into database if empty.
     """
-    logger.info("Checking database catalog status...")
+    logger.info(f"Checking database catalog status for region '{region}'...")
     
     # 1. Seed EC2 catalog
     ec2_count_query = await session.execute(select(EC2Catalog))
@@ -78,7 +78,7 @@ async def seed_catalog(session: AsyncSession):
                 
         logger.info(f"Seeding {len(fallback_items)} generic service entries to database...")
         for svc, item_t in fallback_items:
-            item = get_generic_fallback_pricing(svc, item_t)
+            item = get_generic_fallback_pricing(svc, item_t, region=region)
             db_item = GenericServiceCatalog(
                 service=item["service"],
                 instance_type=item["instance_type"],

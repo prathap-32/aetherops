@@ -70,13 +70,13 @@ async def lifespan(app: FastAPI):
         # Seed default database and all regional databases if empty
         await init_db()
         async with AsyncSessionLocal() as session:
-            await seed_catalog(session)
+            await seed_catalog(session, region="us-east-1")
             
         for region in SUPPORTED_REGIONS:
             await init_db_for_region(region)
             session_factory = get_sessionmaker_for_region(region)
             async with session_factory() as session:
-                await seed_catalog(session)
+                await seed_catalog(session, region=region)
                 
         # Trigger catalog rotation on spinup asynchronously
         asyncio.create_task(rotate_catalog_on_startup())
