@@ -77,18 +77,12 @@ def get_login_page_html(redirect: str = "/admin") -> str:
     <!-- AWS Console Top Navigation Bar -->
     <header class="bg-[#161e2e] border-b border-[#2d3748] px-6 py-3 flex items-center justify-between shadow-sm">
         <div class="flex items-center space-x-3">
-            <!-- AWS Logo Graphic with Smile Accent -->
-            <div class="flex items-center space-x-1.5 cursor-pointer">
-                <div class="flex items-baseline font-black tracking-tight text-white text-xl">
-                    <span>aws</span>
-                    <span class="text-[#ff9900] text-2xl leading-none -ml-0.5">.</span>
-                </div>
-                <div class="h-4 w-px bg-gray-600 mx-1"></div>
-                <div class="flex flex-col">
-                    <span class="text-xs font-extrabold text-white tracking-wide uppercase">Quick Infra Manager</span>
-                    <span class="text-[9px] text-gray-400 font-medium tracking-wider">AetherOps Cloud Console</span>
-                </div>
+            <div class="flex items-center space-x-2 cursor-pointer">
+                <span class="font-extrabold text-white text-lg tracking-tight">AetherOps</span>
+                <span class="text-[#ff9900] text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-[#232f3e] border border-[#ff9900]/40 font-mono">AWS CLOUD</span>
             </div>
+            <div class="h-4 w-px bg-gray-600 hidden sm:block"></div>
+            <span class="text-xs text-[#9ba7b6] hidden sm:inline">Infrastructure Management Console</span>
         </div>
 
         <div class="flex items-center space-x-3 text-xs text-gray-400 font-medium">
@@ -111,7 +105,7 @@ def get_login_page_html(redirect: str = "/admin") -> str:
                     <h2 class="text-xl font-bold text-white tracking-tight">Admin Authentication</h2>
                     <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-[#ec7211]/20 text-[#ff9900] border border-[#ec7211]/40 font-mono">ROOT SECURE</span>
                 </div>
-                <p class="text-xs text-[#9ba7b6]">Sign in to AWS Quick Infra Manager with your administrative credentials</p>
+                <p class="text-xs text-[#9ba7b6]">Sign in to AetherOps AWS Infrastructure Management Console</p>
             </div>
 
             <!-- AWS Account Type Indicator (Root User vs IAM User style) -->
@@ -177,7 +171,7 @@ def get_login_page_html(redirect: str = "/admin") -> str:
 
                 <!-- Submit Button: Official AWS Orange CTA -->
                 <button type="submit" id="submit-btn" class="aws-btn-primary w-full py-2.5 px-4 rounded font-bold text-sm shadow-sm flex items-center justify-center space-x-2 cursor-pointer mt-2">
-                    <span id="btn-text">Sign In to AWS Console</span>
+                    <span id="btn-text">Sign In to AetherOps Console</span>
                     <svg id="btn-arrow" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
                     <svg id="btn-spinner" class="w-4 h-4 animate-spin hidden" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
                 </button>
@@ -192,11 +186,11 @@ def get_login_page_html(redirect: str = "/admin") -> str:
                 </button>
             </div>
 
-            <!-- AWS Security Footnote -->
+            <!-- Platform Architecture Footnote -->
             <div class="text-center pt-2">
                 <div class="inline-flex items-center space-x-1.5 text-[11px] text-[#9ba7b6]">
                     <svg class="w-3.5 h-3.5 text-[#1d8102]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-                    <span>Multi-Tier Hybrid Vault • PostgreSQL L3 Master • Redis L1 Guard</span>
+                    <span>Autonomous Infrastructure Platform • Orchestrated by Kubernetes (K8s)</span>
                 </div>
             </div>
 
@@ -211,8 +205,8 @@ def get_login_page_html(redirect: str = "/admin") -> str:
             <a href="#" class="hover:text-white transition">Documentation</a>
             <a href="#" class="hover:text-white transition">Support</a>
         </div>
-        <div>
-            &copy; 2026 Amazon Web Services / AetherOps Cloud AI. All rights reserved.
+        <div class="font-mono text-[11px] text-gray-400">
+            &copy; 2026 AetherOps Cloud • Distributed Microservices Orchestrated by Kubernetes (K8s)
         </div>
     </footer>
 

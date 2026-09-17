@@ -166,17 +166,14 @@ def get_dashboard_page_html() -> str:
         <aside id="sidebar" class="bg-[#161e2e] border-r border-[#2d3748] flex flex-col justify-between shrink-0 overflow-hidden select-none z-40">
             <div class="w-[17rem] h-full flex flex-col justify-between overflow-hidden">
                 <div>
-                    <!-- AWS Console Brand Header -->
+                    <!-- AetherOps Console Brand Header -->
                     <div class="p-3.5 border-b border-[#2d3748] flex items-center justify-between bg-[#161e2e]">
-                        <div class="flex items-center space-x-2.5">
-                            <div class="flex items-baseline font-black tracking-tight text-white text-lg">
-                                <span>aws</span><span class="text-[#ff9900] text-xl leading-none -ml-0.5">.</span>
+                        <div class="min-w-0">
+                            <div class="flex items-center space-x-2">
+                                <span class="font-extrabold text-white text-base tracking-tight">AetherOps</span>
+                                <span class="text-[#ff9900] text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-[#232f3e] border border-[#ff9900]/40 font-mono">AWS</span>
                             </div>
-                            <div class="h-4 w-px bg-gray-600"></div>
-                            <div class="min-w-0">
-                                <h1 class="text-xs font-bold text-white tracking-wide truncate">Quick Infra Manager</h1>
-                                <p class="text-[9px] text-[#9ba7b6] tracking-wider uppercase truncate">AetherOps Control Plane</p>
-                            </div>
+                            <p class="text-[9px] text-[#9ba7b6] tracking-wider uppercase truncate mt-0.5">Autonomous Cloud Infrastructure</p>
                         </div>
                         <button onclick="toggleSidebar()" class="text-gray-400 hover:text-white p-1 rounded hover:bg-[#232f3e] transition cursor-pointer" title="Close Drawer" aria-label="Close Drawer">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -257,9 +254,9 @@ def get_dashboard_page_html() -> str:
                 <div class="p-3 border-t border-[#2d3748] bg-[#0f141c] text-[11px] text-[#9ba7b6] flex items-center justify-between shrink-0">
                     <div class="flex items-center space-x-2">
                         <div class="h-2 w-2 rounded-full bg-[#1d8102]"></div>
-                        <span class="font-medium text-gray-300">Cluster Healthy</span>
+                        <span class="font-medium text-gray-300">K8s Cluster Healthy</span>
                     </div>
-                    <span class="font-mono text-[10px] text-gray-400">AWS Console v1.0</span>
+                    <span class="font-mono text-[10px] text-[#ff9900]">8 Microservices</span>
                 </div>
             </div>
         </aside>
@@ -272,14 +269,14 @@ def get_dashboard_page_html() -> str:
                 
                 <!-- Left: Hamburger Services Launcher & Breadcrumb -->
                 <div class="flex items-center space-x-2 sm:space-x-3 shrink-0">
-                    <button onclick="toggleSidebar()" id="hamburger-btn" class="px-2.5 py-1.5 rounded bg-[#232f3e] hover:bg-[#2a384c] text-white border border-[#414d5c] focus:outline-none transition flex items-center gap-1.5 text-xs font-bold cursor-pointer" title="AWS Services Menu">
+                    <button onclick="toggleSidebar()" id="hamburger-btn" class="px-2.5 py-1.5 rounded bg-[#232f3e] hover:bg-[#2a384c] text-white border border-[#414d5c] focus:outline-none transition flex items-center gap-1.5 text-xs font-bold cursor-pointer" title="AetherOps Modules Menu">
                         <svg class="w-4 h-4 text-[#ff9900]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
                         <span>Services</span>
                     </button>
-                    <div class="flex items-center space-x-1.5 shrink-0">
-                        <span class="font-black text-white text-base tracking-tight">aws</span>
-                        <span class="text-[#ff9900] font-black text-xl leading-none -ml-1">.</span>
-                        <span class="text-gray-500 hidden md:inline ml-1">/</span>
+                    <div class="flex items-center space-x-2 shrink-0">
+                        <span class="font-extrabold text-white text-base tracking-tight">AetherOps</span>
+                        <span class="text-[#ff9900] text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-[#232f3e] border border-[#ff9900]/40 font-mono hidden sm:inline">AWS CONSOLE</span>
+                        <span class="text-gray-500 hidden md:inline">/</span>
                         <span class="text-xs font-bold text-[#ff9900] font-mono hidden md:inline" id="nav-view-label">CATALOG</span>
                     </div>
                 </div>
@@ -598,14 +595,14 @@ def get_dashboard_page_html() -> str:
                     <!-- Modules Hub Header -->
                     <div class="aws-card p-5 border-l-4 border-l-[#539fe5] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
-                            <div class="text-[10px] font-bold text-[#539fe5] uppercase tracking-widest">AWS Architecture Map</div>
-                            <h3 class="text-lg font-bold text-white mt-1">Platform Modules Ecosystem (8 Modules)</h3>
+                            <div class="text-[10px] font-bold text-[#539fe5] uppercase tracking-widest">Kubernetes Microservices Architecture</div>
+                            <h3 class="text-lg font-bold text-white mt-1">AetherOps Microservices Ecosystem (8 Modules)</h3>
                             <p class="text-xs text-[#9ba7b6] mt-1 max-w-3xl">
-                                Centralized catalog in Redis (L1) and PostgreSQL (L3) powers all 8 microservices. Each service queries real-time regional rates and instance profiles to deliver automated, right-sized cloud infrastructure.
+                                Distributed cloud-native microservices orchestrated by Kubernetes (K8s). Each service queries real-time regional rates and instance profiles to deliver automated, right-sized AWS cloud infrastructure.
                             </p>
                         </div>
                         <span class="px-2.5 py-1 rounded bg-[#0f141c] text-white border border-[#2d3748] text-xs font-mono">
-                            39 Regions Ready
+                            K8s Managed
                         </span>
                     </div>
 
@@ -695,10 +692,17 @@ def get_dashboard_page_html() -> str:
 
             </main>
 
-            <!-- AWS Console Footer -->
+            <!-- AetherOps Console Footer -->
             <footer class="mt-auto border-t border-[#2d3748] bg-[#161e2e] py-3.5 px-6 text-xs text-[#9ba7b6] flex flex-col sm:flex-row justify-between items-center gap-2">
-                <span>&copy; 2026 Amazon Web Services / AetherOps Cloud. AWS Quick Infra Manager.</span>
-                <span class="font-mono text-[11px] text-gray-400">PostgreSQL (L3 Master) • Redis (L1 Cache) • SQLite (L2 Local)</span>
+                <div class="flex items-center space-x-2">
+                    <span class="font-semibold text-gray-300">&copy; 2026 AetherOps Cloud</span>
+                    <span class="text-gray-600">•</span>
+                    <span>Autonomous AWS Infrastructure Management</span>
+                </div>
+                <div class="flex items-center space-x-2 font-mono text-[11px] text-[#9ba7b6]">
+                    <span class="inline-block w-2 h-2 rounded-full bg-[#1d8102]"></span>
+                    <span>Architecture: Distributed Microservices • Orchestrated by Kubernetes (K8s)</span>
+                </div>
             </footer>
 
         </div>
