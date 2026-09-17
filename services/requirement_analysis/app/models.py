@@ -81,6 +81,10 @@ class SyncMetadata(Base):
     last_sync_timestamp = Column(DateTime, nullable=False)
     status = Column(String(20), nullable=False)  # SUCCESS, FAILED, IN_PROGRESS
     records_synced = Column(Integer, nullable=False, default=0)
+    ec2_count = Column(Integer, nullable=False, default=0)
+    rds_count = Column(Integer, nullable=False, default=0)
+    generic_count = Column(Integer, nullable=False, default=0)
+    duration_ms = Column(Integer, nullable=False, default=0)
     error_message = Column(String(500), nullable=True)
 
     def to_dict(self):
@@ -89,6 +93,10 @@ class SyncMetadata(Base):
             "last_sync_timestamp": self.last_sync_timestamp.isoformat() if self.last_sync_timestamp else None,
             "status": self.status,
             "records_synced": self.records_synced,
+            "ec2_count": self.ec2_count,
+            "rds_count": self.rds_count,
+            "generic_count": self.generic_count,
+            "duration_ms": self.duration_ms,
             "error_message": self.error_message
         }
 

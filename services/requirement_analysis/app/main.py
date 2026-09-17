@@ -71,7 +71,9 @@ async def background_db_init_and_sync():
                 session_factory = get_sessionmaker_for_region(region)
                 async with session_factory() as session:
                     await seed_catalog(session, region=region)
-                logger.info(f"Background worker: Completed successfully for region '{region}'.")
+                    # Auto-warm Redis cache immediately for this region
+                    await get_region_catalog(region, session)
+                logger.info(f"Background worker: Initialized DB and warmed Redis cache for region '{region}'.")
             except Exception as e:
                 logger.error(f"Background worker error for region '{region}': {e}", exc_info=True)
 
@@ -91,6 +93,8 @@ async def lifespan(app: FastAPI):
     
     try:
         await init_db()
+        from app.auth import init_admin_security
+        await init_admin_security()
     except Exception as e:
         logger.error(f"Failed to initialize default database: {e}", exc_info=True)
         

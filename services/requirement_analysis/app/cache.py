@@ -116,6 +116,32 @@ class CacheManager:
             logger.warning(f"Error clearing catalog cache prefix: {e}")
             return False
 
+    async def invalidate_region_cache(self, region: str) -> int:
+        """
+        Invalidates ONLY the cache keys belonging to the specified region.
+        Returns the number of keys deleted.
+        """
+        if not self._is_connected or not self.redis_client:
+            return 0
+        region = region.lower().strip()
+        target_keys = [
+            f"catalog:{region}:ec2:summary",
+            f"catalog:{region}:rds:summary",
+            f"catalog:{region}:generic:all",
+            f"catalog:{region}:metadata",
+            f"catalog:{region}:full_admin",
+        ]
+        deleted = 0
+        try:
+            for key in target_keys:
+                result = await self.redis_client.delete(key)
+                deleted += result
+            logger.info(f"Invalidated {deleted} cache keys for region '{region}'.")
+            return deleted
+        except Exception as e:
+            logger.warning(f"Error invalidating cache for region '{region}': {e}")
+            return deleted
+
     async def disconnect(self):
         """
         Closes the Redis connection pool.

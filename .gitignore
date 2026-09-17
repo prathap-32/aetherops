@@ -9,9 +9,12 @@ wheels/
 # Virtual environments
 .venv
 
-# Local SQLite databases
+# Local SQLite databases & Docker data
 *.db
+*.db-shm
+*.db-wal
 catalog.db
+data/
 
 # Log files
 logs/
@@ -20,3 +23,14 @@ logs/
 # Cache directories
 .pytest_cache/
 .cache/
+
+# Environment files
+.env
+*.env
+!.env.example
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -4,10 +4,13 @@ import httpx
 import asyncio
 import os
 import json
+import time
+import datetime
 from sqlalchemy import delete
+from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import EC2Catalog, RDSCatalog, GenericServiceCatalog
-from app.cache import cache_manager
+from app.models import EC2Catalog, RDSCatalog, GenericServiceCatalog, SyncMetadata
+from app.cache import cache_manager, warm_region_cache
 from app.catalog import EC2_CATALOG, RDS_CATALOG
 
 logger = logging.getLogger("requirement-analysis-sync")
@@ -101,12 +104,42 @@ def load_aws_regions_reference() -> dict:
                 return json.load(f)
     raise FileNotFoundError("aws_regions_reference.json could not be found.")
 
-async def sync_catalog_from_aws(db: AsyncSession, region: str = "us-east-1") -> dict:
+async def sync_catalog_from_aws(db: AsyncSession, region: str = "us-east-1", force_live_fetch: bool = True, include_generic_services: bool = True) -> dict:
     """
     Fetches the latest EC2 and RDS pricing from live AWS and community APIs,
     updates the database tables (replacing existing records), and invalidates the Redis Cache.
+    Supports isolated single-region execution with telemetry tracking.
     """
     region = region.lower().strip()
+    start_time = time.monotonic()
+
+    # Mark IN_PROGRESS in SyncMetadata
+    try:
+        meta_res = await db.execute(select(SyncMetadata).where(SyncMetadata.region_code == region))
+        meta_row = meta_res.scalar_one_or_none()
+        if meta_row:
+            meta_row.status = "IN_PROGRESS"
+            meta_row.last_sync_timestamp = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+            meta_row.error_message = None
+        else:
+            meta_row = SyncMetadata(
+                region_code=region,
+                last_sync_timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
+                status="IN_PROGRESS",
+                records_synced=0,
+                ec2_count=0,
+                rds_count=0,
+                generic_count=0,
+                duration_ms=0,
+            )
+            db.add(meta_row)
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"Could not set IN_PROGRESS metadata for {region}: {e}")
+        try:
+            await db.rollback()
+        except Exception:
+            pass
     
     ref_data = None
     try:
@@ -340,20 +373,110 @@ async def sync_catalog_from_aws(db: AsyncSession, region: str = "us-east-1") -> 
     db.add_all(ec2_db_items.values())
     db.add_all(rds_db_items.values())
     db.add_all(generic_db_items)
+
+    # Record sync telemetry
+    duration_ms = int((time.monotonic() - start_time) * 1000)
+    total_records = len(ec2_db_items) + len(rds_db_items) + len(generic_db_items)
+    try:
+        meta_res = await db.execute(select(SyncMetadata).where(SyncMetadata.region_code == region))
+        meta_row = meta_res.scalar_one_or_none()
+        if meta_row:
+            meta_row.status = "SUCCESS"
+            meta_row.last_sync_timestamp = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+            meta_row.records_synced = total_records
+            meta_row.ec2_count = len(ec2_db_items)
+            meta_row.rds_count = len(rds_db_items)
+            meta_row.generic_count = len(generic_db_items)
+            meta_row.duration_ms = duration_ms
+            meta_row.error_message = None
+        else:
+            db.add(SyncMetadata(
+                region_code=region,
+                last_sync_timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
+                status="SUCCESS",
+                records_synced=total_records,
+                ec2_count=len(ec2_db_items),
+                rds_count=len(rds_db_items),
+                generic_count=len(generic_db_items),
+                duration_ms=duration_ms,
+            ))
+    except Exception as e:
+        logger.warning(f"Could not write SyncMetadata for {region}: {e}")
+
     await db.commit()
 
-    # 6. Clear Redis Cache
-    cache_cleared = await cache_manager.clear_catalog_cache()
+    # 5.5 Dual-Write Replication to PostgreSQL container master if reachable
+    from app.database import get_postgres_sessionmaker, IS_TESTING
+    if not IS_TESTING:
+        try:
+            pg_sf = get_postgres_sessionmaker(region)
+            async with pg_sf() as pg_session:
+                await pg_session.execute(delete(EC2Catalog))
+                await pg_session.execute(delete(RDSCatalog))
+                await pg_session.execute(delete(GenericServiceCatalog))
+                
+                # Re-create model objects for PG session
+                for item in ec2_db_items.values():
+                    pg_session.add(EC2Catalog(
+                        instance_type=item.instance_type, vcpus=item.vcpus, ram_gb=item.ram_gb,
+                        price_per_hour=item.price_per_hour, network_performance=item.network_performance, category=item.category
+                    ))
+                for item in rds_db_items.values():
+                    pg_session.add(RDSCatalog(
+                        instance_type=item.instance_type, vcpus=item.vcpus, ram_gb=item.ram_gb,
+                        price_per_hour=item.price_per_hour, category=item.category
+                    ))
+                for item in generic_db_items:
+                    pg_session.add(GenericServiceCatalog(
+                        service=item.service, instance_type=item.instance_type, vcpus=item.vcpus, ram_gb=item.ram_gb,
+                        price_per_hour=item.price_per_hour, unit=item.unit, category=item.category, region=item.region, details=item.details
+                    ))
+                
+                pg_meta_res = await pg_session.execute(select(SyncMetadata).where(SyncMetadata.region_code == region))
+                pg_meta = pg_meta_res.scalar_one_or_none()
+                if pg_meta:
+                    pg_meta.status = "SUCCESS"
+                    pg_meta.last_sync_timestamp = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+                    pg_meta.records_synced = total_records
+                    pg_meta.ec2_count = len(ec2_db_items)
+                    pg_meta.rds_count = len(rds_db_items)
+                    pg_meta.generic_count = len(generic_db_items)
+                    pg_meta.duration_ms = duration_ms
+                    pg_meta.error_message = None
+                else:
+                    pg_session.add(SyncMetadata(
+                        region_code=region, last_sync_timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
+                        status="SUCCESS", records_synced=total_records, ec2_count=len(ec2_db_items),
+                        rds_count=len(rds_db_items), generic_count=len(generic_db_items), duration_ms=duration_ms
+                    ))
+                await pg_session.commit()
+                logger.info(f"Replicated live sync dataset for region '{region}' to PostgreSQL container master.")
+        except Exception as pg_err:
+            logger.warning(f"Could not replicate live sync data to PostgreSQL container for region '{region}': {pg_err}")
 
-    logger.info(f"Database synced successfully. Cache cleared: {cache_cleared}")
+    # 6. Targeted Redis Cache Invalidation & Re-warming for this region only
+    await cache_manager.invalidate_region_cache(region)
+
+    ec2_dicts = [item.to_dict() if hasattr(item, 'to_dict') else {} for item in ec2_db_items.values()]
+    rds_dicts = [item.to_dict() if hasattr(item, 'to_dict') else {} for item in rds_db_items.values()]
+    generic_dicts = [item.to_dict() if hasattr(item, 'to_dict') else {} for item in generic_db_items]
+    await warm_region_cache(region, ec2_dicts, rds_dicts, generic_dicts, {
+        "az_count": region_data.get("az_count", 3) if region_data else 3,
+        "launch_year": region_data.get("launch_year", 2016) if region_data else 2016,
+        "pricing_tier_multiplier": region_data.get("pricing_tier_multiplier", 1.0) if region_data else 1.0,
+        "records_count": total_records
+    })
+
+    logger.info(f"Database synced successfully for region '{region}'. Duration: {duration_ms}ms, Records: {total_records}")
     return {
         "status": "success",
+        "region": region,
         "added_ec2": len(ec2_db_items),
-        "updated_ec2": 0,
         "added_rds": len(rds_db_items),
-        "updated_rds": 0,
         "added_generic": len(generic_db_items),
-        "cache_cleared": cache_cleared
+        "total_records": total_records,
+        "duration_ms": duration_ms,
+        "cache_warmed": True
     }
 
 

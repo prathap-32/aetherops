@@ -2,54 +2,31 @@
 import os
 import sys
 import logging
+from typing import Optional
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import event
+from sqlalchemy import event, text
 from fastapi import Request
 
 logger = logging.getLogger("requirement-analysis-database")
 
-# Detect if running under pytest to isolate test database state
+# Detect test execution environment
 IS_TESTING = "pytest" in sys.modules or any("pytest" in arg for arg in sys.argv)
 
-if IS_TESTING:
-    DATABASE_URL = "sqlite+aiosqlite:///test_catalog.db"
-else:
-    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///catalog.db")
+# PostgreSQL Environment Defaults (Docker Container)
+POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgrespassword")
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "aether_catalog")
+
+RAW_DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 ECHO_SQL = os.getenv("ECHO_SQL", "False").lower() in ("true", "1", "yes")
 
-# Configure the default async engine
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=ECHO_SQL,
-    future=True,
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
-)
-
-# Apply SQLite performance PRAGMAs on connection
-@event.listens_for(engine.sync_engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA journal_mode = WAL;")
-    cursor.execute("PRAGMA synchronous = NORMAL;")
-    cursor.execute("PRAGMA cache_size = -64000;")
-    cursor.execute("PRAGMA busy_timeout = 5000;")
-    cursor.close()
-
-# Async session factory
-AsyncSessionLocal = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False
-)
-
 Base = declarative_base()
 
-# Supported AWS Regions for production
-# All 39 regions from the user's master list
+# All 39 Supported AWS Regions
 SUPPORTED_REGIONS = [
     # North America
     "us-east-1", "us-east-2", "us-west-1", "us-west-2", "ca-central-1", "ca-west-1", "mx-central-1", "us-gov-east-1", "us-gov-west-1",
@@ -67,76 +44,146 @@ SUPPORTED_REGIONS = [
     "cn-north-1", "cn-northwest-1"
 ]
 
-# Cache of engines and sessionmakers by region
-_region_engines = {}
-_region_sessions = {}
-
-def get_region_db_url(region: str) -> str:
-    region = region.lower().strip()
+def get_sqlite_url(region: str) -> str:
+    region_raw = region.lower().strip()
     if IS_TESTING:
-        return f"sqlite+aiosqlite:///test_catalog_{region}.db"
-    else:
-        return f"sqlite+aiosqlite:///catalog_{region}.db"
+        return f"sqlite+aiosqlite:///test_catalog_{region_raw}.db"
+    return f"sqlite+aiosqlite:///catalog_{region_raw}.db"
 
-def get_engine_for_region(region: str):
+def get_postgres_url(region: str) -> str:
+    if RAW_DATABASE_URL.startswith("postgresql") or RAW_DATABASE_URL.startswith("postgres"):
+        return RAW_DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://").replace("postgres://", "postgresql+asyncpg://")
+    return f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+
+# Engine & Session Registries
+_sqlite_engines = {}
+_sqlite_sessions = {}
+_postgres_engines = {}
+_postgres_sessions = {}
+
+def get_sqlite_engine(region: str):
     region = region.lower().strip()
-    if region not in _region_engines:
-        url = get_region_db_url(region)
+    if region not in _sqlite_engines:
+        url = get_sqlite_url(region)
         eng = create_async_engine(
             url,
             echo=ECHO_SQL,
             future=True,
-            connect_args={"check_same_thread": False} if "sqlite" in url else {}
+            connect_args={"check_same_thread": False}
         )
-        # Apply SQLite performance PRAGMAs on connection
         @event.listens_for(eng.sync_engine, "connect")
-        def set_region_sqlite_pragma(dbapi_connection, connection_record):
+        def set_sqlite_pragma(dbapi_connection, connection_record):
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA journal_mode = WAL;")
             cursor.execute("PRAGMA synchronous = NORMAL;")
             cursor.execute("PRAGMA cache_size = -64000;")
             cursor.execute("PRAGMA busy_timeout = 5000;")
             cursor.close()
-        _region_engines[region] = eng
-    return _region_engines[region]
+        _sqlite_engines[region] = eng
+    return _sqlite_engines[region]
 
-def get_sessionmaker_for_region(region: str):
+def get_sqlite_sessionmaker(region: str):
     region = region.lower().strip()
-    if region not in _region_sessions:
-        eng = get_engine_for_region(region)
-        _region_sessions[region] = async_sessionmaker(
+    if region not in _sqlite_sessions:
+        eng = get_sqlite_engine(region)
+        _sqlite_sessions[region] = async_sessionmaker(
             bind=eng,
             class_=AsyncSession,
             expire_on_commit=False,
             autocommit=False,
             autoflush=False
         )
-    return _region_sessions[region]
+    return _sqlite_sessions[region]
+
+def get_postgres_engine(region: str):
+    region_raw = region.lower().strip()
+    region_pg = region_raw.replace("-", "_")
+    if region_raw not in _postgres_engines:
+        url = get_postgres_url(region_raw)
+        _postgres_engines[region_raw] = create_async_engine(
+            url,
+            echo=ECHO_SQL,
+            future=True,
+            pool_size=10,
+            max_overflow=20,
+            pool_pre_ping=True,
+            connect_args={
+                "command_timeout": 10,
+                "server_settings": {"search_path": f'"region_{region_pg}", public'}
+            }
+        )
+    return _postgres_engines[region_raw]
+
+def get_postgres_sessionmaker(region: str):
+    region = region.lower().strip()
+    if region not in _postgres_sessions:
+        eng = get_postgres_engine(region)
+        _postgres_sessions[region] = async_sessionmaker(
+            bind=eng,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autocommit=False,
+            autoflush=False
+        )
+    return _postgres_sessions[region]
+
+# Backward Compatibility Aliases
+def get_region_db_url(region: str) -> str:
+    return get_sqlite_url(region)
+
+def get_engine_for_region(region: str):
+    return get_sqlite_engine(region)
+
+def get_sessionmaker_for_region(region: str):
+    return get_sqlite_sessionmaker(region)
 
 async def init_db_for_region(region: str):
     """
-    Ensures that database tables are initialized for the specified region.
+    Initializes database tables for the given region in local SQLite and PostgreSQL (if reachable).
     """
-    region = region.lower().strip()
-    eng = get_engine_for_region(region)
-    async with eng.begin() as conn:
+    region_raw = region.lower().strip()
+    region_pg = region_raw.replace("-", "_")
+    
+    # 1. Initialize local SQLite
+    sqlite_eng = get_sqlite_engine(region_raw)
+    async with sqlite_eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # 2. Try initializing PostgreSQL container DB if not testing
+    if not IS_TESTING:
+        try:
+            pg_eng = get_postgres_engine(region_raw)
+            async with pg_eng.begin() as conn:
+                await conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "region_{region_pg}"'))
+                await conn.run_sync(Base.metadata.create_all)
+        except Exception as e:
+            logger.warning(f"PostgreSQL initialization deferred for region '{region_raw}': {e}")
 
 async def get_db_session(request: Request = None) -> AsyncSession:
     """
-    Dependency helper to yield an async database session mapped to the requested region.
+    Resilient Database Session Dependency:
+    1. Primary Path: Uses local SQLite (0ms local file read).
+    2. Failover Path: If SQLite file is missing/error, fails over to PostgreSQL Docker Container.
     """
     region = "us-east-1"
     if request is not None:
-        # Check query parameters
         region = request.query_params.get("region", "us-east-1")
     
     region = region.lower().strip()
-    # Auto-initialize schemas if not done
     await init_db_for_region(region)
+
+    sqlite_sf = get_sqlite_sessionmaker(region)
+    sqlite_available = False
     
-    session_factory = get_sessionmaker_for_region(region)
-    async with session_factory() as session:
+    try:
+        session = sqlite_sf()
+        await session.execute(text("SELECT 1"))
+        sqlite_available = True
+    except Exception as sqlite_err:
+        logger.warning(f"Local SQLite database unavailable for region '{region}': {sqlite_err}. Failing over to PostgreSQL Docker container...")
+        sqlite_available = False
+
+    if sqlite_available:
         try:
             yield session
             await session.commit()
@@ -145,3 +192,18 @@ async def get_db_session(request: Request = None) -> AsyncSession:
             raise
         finally:
             await session.close()
+    else:
+        pg_sf = get_postgres_sessionmaker(region)
+        async with pg_sf() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+            finally:
+                await session.close()
+
+# Default engine and sessionmaker for general imports
+engine = get_sqlite_engine("us-east-1")
+AsyncSessionLocal = get_sqlite_sessionmaker("us-east-1")
