@@ -13,20 +13,25 @@ def get_login_page_html(redirect: str = "/admin") -> str:
             theme: {{
                 extend: {{
                     fontFamily: {{
-                        sans: ['Plus Jakarta Sans', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace'],
+                        sans: ['Plus Jakarta Sans', 'Segoe UI', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Consolas', 'monospace'],
                     }},
                     colors: {{
-                        cyber: {{
-                            bg: '#07080c',
-                            card: 'rgba(17, 20, 31, 0.85)',
-                            border: 'rgba(255, 255, 255, 0.08)',
-                            accent: '#6366f1',
-                            violet: '#8b5cf6',
-                            mint: '#10b981',
-                            amber: '#f59e0b',
-                            coral: '#ef4444',
-                            cyan: '#06b6d4'
+                        aws: {{
+                            squid: '#161e2e',
+                            squidDark: '#0f141c',
+                            navy: '#232f3e',
+                            orange: '#ec7211',
+                            orangeHover: '#eb5f07',
+                            orangeLight: '#ff9900',
+                            blue: '#0972d3',
+                            blueHover: '#033ebc',
+                            card: '#1b2533',
+                            border: '#2d3748',
+                            borderLight: '#39465a',
+                            textMuted: '#9ba7b6',
+                            green: '#1d8102',
+                            red: '#d13212'
                         }}
                     }}
                 }}
@@ -35,67 +40,101 @@ def get_login_page_html(redirect: str = "/admin") -> str:
     </script>
     <style>
         body {{
-            background-color: #07080c;
-            background-image: 
-                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.18) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.15) 0px, transparent 50%);
-            background-attachment: fixed;
+            background-color: #0f141c;
+            color: #eaeded;
         }}
-        .glass-panel {{
-            background: rgba(15, 18, 28, 0.75);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+        .aws-card {{
+            background-color: #1b2533;
+            border: 1px solid #2d3748;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
         }}
-        .glow-accent {{
-            box-shadow: 0 0 35px -5px rgba(99, 102, 241, 0.35);
+        .aws-btn-primary {{
+            background-color: #ec7211;
+            color: #ffffff;
+            transition: all 0.15s ease-in-out;
+        }}
+        .aws-btn-primary:hover {{
+            background-color: #eb5f07;
+        }}
+        .aws-btn-primary:active {{
+            background-color: #dd5706;
+        }}
+        .aws-input {{
+            background-color: #0f141c;
+            border: 1px solid #3b444b;
+            color: #ffffff;
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }}
+        .aws-input:focus {{
+            border-color: #ec7211;
+            box-shadow: 0 0 0 1px #ec7211;
+            outline: none;
         }}
     </style>
 </head>
-<body class="text-gray-100 min-h-screen antialiased flex flex-col justify-between font-sans selection:bg-indigo-500/30 selection:text-indigo-200">
+<body class="min-h-screen antialiased flex flex-col justify-between font-sans selection:bg-[#ec7211]/30 selection:text-[#ff9900]">
 
-    <!-- Top Minimal Navigation -->
-    <header class="p-6 flex items-center justify-between max-w-7xl mx-auto w-full">
+    <!-- AWS Console Top Navigation Bar -->
+    <header class="bg-[#161e2e] border-b border-[#2d3748] px-6 py-3 flex items-center justify-between shadow-sm">
         <div class="flex items-center space-x-3">
-            <div class="h-10 w-10 rounded-2xl bg-gradient-to-tr from-cyber-accent via-indigo-500 to-cyber-cyan flex items-center justify-center shadow-lg shadow-cyber-accent/25">
-                <span class="font-extrabold text-lg text-white">A</span>
-            </div>
-            <div>
-                <h1 class="text-base font-extrabold tracking-tight text-white flex items-center gap-1.5">
-                    <span>AetherOps</span>
-                    <span class="text-[9px] px-1.5 py-0.5 rounded bg-cyber-accent/20 text-indigo-300 font-semibold border border-cyber-accent/30 font-mono">CORE</span>
-                </h1>
-                <p class="text-[10px] text-gray-400 tracking-wider uppercase font-medium">Autonomous CloudOps Platform</p>
+            <!-- AWS Logo Graphic with Smile Accent -->
+            <div class="flex items-center space-x-1.5 cursor-pointer">
+                <div class="flex items-baseline font-black tracking-tight text-white text-xl">
+                    <span>aws</span>
+                    <span class="text-[#ff9900] text-2xl leading-none -ml-0.5">.</span>
+                </div>
+                <div class="h-4 w-px bg-gray-600 mx-1"></div>
+                <div class="flex flex-col">
+                    <span class="text-xs font-extrabold text-white tracking-wide uppercase">Quick Infra Manager</span>
+                    <span class="text-[9px] text-gray-400 font-medium tracking-wider">AetherOps Cloud Console</span>
+                </div>
             </div>
         </div>
-        <div class="flex items-center space-x-2 text-xs text-gray-400 font-mono">
-            <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>Auth Gate v1.0.0</span>
+
+        <div class="flex items-center space-x-3 text-xs text-gray-400 font-medium">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#0f141c] border border-[#2d3748] text-gray-300 font-mono text-[11px]">
+                <span class="h-2 w-2 rounded-full bg-[#1d8102] animate-pulse"></span>
+                <span>Console Gateway</span>
+            </span>
+            <span class="hidden sm:inline text-gray-500">|</span>
+            <span class="hidden sm:inline text-xs text-gray-400">Global (39 Regions)</span>
         </div>
     </header>
 
-    <!-- Main Central Login Card -->
-    <main class="flex-1 flex items-center justify-center p-4">
-        <div class="glass-panel w-full max-w-md p-8 rounded-3xl border border-cyber-border shadow-2xl space-y-6 glow-accent">
+    <!-- Main Sign-In Workspace (Modeled directly after AWS Management Console Sign-In) -->
+    <main class="flex-1 flex items-center justify-center p-4 sm:p-6 my-6">
+        <div class="aws-card w-full max-w-md p-6 sm:p-8 rounded-lg space-y-6">
             
-            <!-- Card Header & Icon -->
-            <div class="text-center space-y-2">
-                <div class="inline-flex p-3.5 rounded-2xl bg-gradient-to-br from-indigo-600/20 to-cyber-cyan/20 border border-indigo-500/30 text-indigo-400 mb-1">
-                    <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+            <!-- AWS Header Section -->
+            <div class="space-y-1.5 border-b border-[#2d3748] pb-5">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xl font-bold text-white tracking-tight">Admin Authentication</h2>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-[#ec7211]/20 text-[#ff9900] border border-[#ec7211]/40 font-mono">ROOT SECURE</span>
                 </div>
-                <h2 class="text-2xl font-extrabold text-white tracking-tight">Admin Authentication</h2>
-                <p class="text-xs text-gray-400">PostgreSQL Credential Vault & JWT HttpOnly Session</p>
+                <p class="text-xs text-[#9ba7b6]">Sign in to AWS Quick Infra Manager with your administrative credentials</p>
             </div>
 
-            <!-- Error Banner (Hidden by default) -->
-            <div id="error-banner" class="hidden p-3.5 rounded-xl bg-rose-950/80 border border-rose-500/40 text-rose-300 text-xs flex items-center space-x-2.5">
-                <svg class="w-4 h-4 text-rose-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <!-- AWS Account Type Indicator (Root User vs IAM User style) -->
+            <div class="p-3 bg-[#0f141c] rounded border border-[#2d3748] flex items-center space-x-3">
+                <div class="p-2 rounded bg-[#232f3e] text-[#ff9900] shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                </div>
+                <div class="text-xs">
+                    <div class="font-bold text-white">Root Account Authentication</div>
+                    <div class="text-[11px] text-[#9ba7b6]">PostgreSQL Credential Vault & JWT HttpOnly Session</div>
+                </div>
+            </div>
+
+            <!-- Error Banner -->
+            <div id="error-banner" class="hidden p-3 rounded bg-[#3d1314] border border-[#d13212] text-[#ff9492] text-xs flex items-center space-x-2.5">
+                <svg class="w-4 h-4 text-[#d13212] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                 <span id="error-text">Authentication failed</span>
             </div>
 
-            <!-- Success Banner (Hidden by default) -->
-            <div id="success-banner" class="hidden p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs flex items-center space-x-2.5">
-                <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                <span>Authenticated! Redirecting to AetherOps Console...</span>
+            <!-- Success Banner -->
+            <div id="success-banner" class="hidden p-3 rounded bg-[#0e3118] border border-[#1d8102] text-[#8ce299] text-xs flex items-center space-x-2.5">
+                <svg class="w-4 h-4 text-[#1d8102] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                <span>Authenticated! Redirecting to AWS Console Dashboard...</span>
             </div>
 
             <!-- Login Form -->
@@ -103,43 +142,42 @@ def get_login_page_html(redirect: str = "/admin") -> str:
                 
                 <!-- Username Input -->
                 <div class="space-y-1.5">
-                    <label for="username" class="block text-xs font-bold text-gray-300 uppercase tracking-wider">Username or Email</label>
+                    <label for="username" class="block text-xs font-bold text-gray-300">Root User Username or Email</label>
                     <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-                        </div>
                         <input type="text" id="username" name="username" required autocomplete="username" placeholder="admin"
-                            class="w-full pl-10 pr-4 py-2.5 bg-slate-900/90 border border-cyber-border rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition font-mono">
+                            class="aws-input w-full px-3 py-2 rounded text-sm placeholder-gray-500 font-mono">
                     </div>
                 </div>
 
                 <!-- Password Input -->
                 <div class="space-y-1.5">
-                    <label for="password" class="block text-xs font-bold text-gray-300 uppercase tracking-wider">Master Password</label>
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                        </div>
-                        <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="••••••••••••"
-                            class="w-full pl-10 pr-10 py-2.5 bg-slate-900/90 border border-cyber-border rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition font-mono">
-                        <button type="button" onclick="togglePasswordVisibility()" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-500 hover:text-gray-300 cursor-pointer">
-                            <svg id="eye-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                    <div class="flex justify-between items-center">
+                        <label for="password" class="block text-xs font-bold text-gray-300">Master Password</label>
+                        <button type="button" onclick="togglePasswordVisibility()" class="text-[11px] text-[#0972d3] hover:text-[#033ebc] font-semibold cursor-pointer">
+                            Show / Hide
                         </button>
+                    </div>
+                    <div class="relative">
+                        <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="••••••••••••"
+                            class="aws-input w-full px-3 py-2 pr-10 rounded text-sm placeholder-gray-500 font-mono">
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-500">
+                            <svg id="eye-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Remember Me & Security Policy -->
                 <div class="flex items-center justify-between pt-1">
                     <label class="flex items-center space-x-2 cursor-pointer">
-                        <input type="checkbox" id="remember-me" class="rounded bg-slate-900 border-cyber-border text-indigo-600 focus:ring-indigo-500 focus:ring-offset-0">
-                        <span class="text-xs text-gray-400">Remember session (7 days)</span>
+                        <input type="checkbox" id="remember-me" class="rounded bg-[#0f141c] border-[#3b444b] text-[#ec7211] focus:ring-[#ec7211] focus:ring-offset-0">
+                        <span class="text-xs text-[#9ba7b6]">Remember this account (7 days)</span>
                     </label>
-                    <span class="text-[10px] text-indigo-400 font-mono">JWT • HttpOnly</span>
+                    <span class="text-[10px] text-[#9ba7b6] font-mono">HttpOnly • SameSite</span>
                 </div>
 
-                <!-- Submit Button -->
-                <button type="submit" id="submit-btn" class="w-full py-3 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyber-cyan text-white shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:brightness-110 active:scale-[0.99] transition flex items-center justify-center space-x-2 cursor-pointer">
-                    <span id="btn-text">Authenticate & Enter Console</span>
+                <!-- Submit Button: Official AWS Orange CTA -->
+                <button type="submit" id="submit-btn" class="aws-btn-primary w-full py-2.5 px-4 rounded font-bold text-sm shadow-sm flex items-center justify-center space-x-2 cursor-pointer mt-2">
+                    <span id="btn-text">Sign In to AWS Console</span>
                     <svg id="btn-arrow" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
                     <svg id="btn-spinner" class="w-4 h-4 animate-spin hidden" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
                 </button>
@@ -147,27 +185,35 @@ def get_login_page_html(redirect: str = "/admin") -> str:
             </form>
 
             <!-- Auto-fill Demo Box -->
-            <div class="pt-4 border-t border-cyber-border/60">
-                <button onclick="fillDemoCredentials()" class="w-full py-2 px-3 rounded-xl bg-slate-900/60 hover:bg-indigo-950/30 border border-cyber-border hover:border-indigo-500/30 text-xs text-gray-400 hover:text-indigo-300 transition flex items-center justify-between cursor-pointer">
-                    <span class="font-mono text-[11px]">Demo: admin / AetherOps@2026!</span>
-                    <span class="text-[10px] font-bold text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-500/20">Auto Fill</span>
+            <div class="pt-4 border-t border-[#2d3748]">
+                <button onclick="fillDemoCredentials()" class="w-full py-2 px-3 rounded bg-[#0f141c] hover:bg-[#232f3e] border border-[#2d3748] hover:border-[#ec7211]/50 text-xs text-gray-300 transition flex items-center justify-between cursor-pointer">
+                    <span class="font-mono text-[11px] text-[#9ba7b6]">Default: <strong class="text-white">admin</strong> / <strong class="text-white">AetherOps@2026!</strong></span>
+                    <span class="text-[10px] font-bold text-[#ff9900] bg-[#ec7211]/15 px-2 py-0.5 rounded border border-[#ec7211]/30">Auto Fill</span>
                 </button>
             </div>
 
-            <!-- Security Footer Guarantee -->
+            <!-- AWS Security Footnote -->
             <div class="text-center pt-2">
-                <div class="inline-flex items-center space-x-1.5 text-[10px] text-gray-500 font-mono">
-                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-                    <span>PostgreSQL Vault • Redis Rate Guard • Zero-Trust</span>
+                <div class="inline-flex items-center space-x-1.5 text-[11px] text-[#9ba7b6]">
+                    <svg class="w-3.5 h-3.5 text-[#1d8102]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    <span>Multi-Tier Hybrid Vault • PostgreSQL L3 Master • Redis L1 Guard</span>
                 </div>
             </div>
 
         </div>
     </main>
 
-    <!-- Footer -->
-    <footer class="p-6 text-center text-xs text-gray-500 font-mono">
-        &copy; 2026 AetherOps Cloud Platform • Master Security Protocol
+    <!-- Standard AWS Console Footer -->
+    <footer class="bg-[#161e2e] border-t border-[#2d3748] py-4 px-6 text-center text-xs text-[#9ba7b6] flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="flex items-center space-x-4">
+            <a href="#" class="hover:text-white transition">Terms of Use</a>
+            <a href="#" class="hover:text-white transition">Privacy Notice</a>
+            <a href="#" class="hover:text-white transition">Documentation</a>
+            <a href="#" class="hover:text-white transition">Support</a>
+        </div>
+        <div>
+            &copy; 2026 Amazon Web Services / AetherOps Cloud AI. All rights reserved.
+        </div>
     </footer>
 
     <script>
@@ -175,13 +221,10 @@ def get_login_page_html(redirect: str = "/admin") -> str:
 
         function togglePasswordVisibility() {{
             const pwd = document.getElementById('password');
-            const icon = document.getElementById('eye-icon');
             if (pwd.type === 'password') {{
                 pwd.type = 'text';
-                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"></path>';
             }} else {{
                 pwd.type = 'password';
-                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>';
             }}
         }}
 
@@ -210,7 +253,7 @@ def get_login_page_html(redirect: str = "/admin") -> str:
 
             errBanner.classList.add('hidden');
             successBanner.classList.add('hidden');
-            btnText.innerText = "Verifying Vault...";
+            btnText.innerText = "Signing in...";
             btnArrow.classList.add('hidden');
             btnSpinner.classList.remove('hidden');
             submitBtn.disabled = true;
@@ -238,7 +281,7 @@ def get_login_page_html(redirect: str = "/admin") -> str:
                 }}
 
                 successBanner.classList.remove('hidden');
-                btnText.innerText = "Access Granted";
+                btnText.innerText = "Redirecting...";
 
                 setTimeout(() => {{
                     window.location.href = targetRedirect || '/admin';
@@ -247,7 +290,7 @@ def get_login_page_html(redirect: str = "/admin") -> str:
             }} catch (err) {{
                 errText.innerText = err.message;
                 errBanner.classList.remove('hidden');
-                btnText.innerText = "Authenticate & Enter Console";
+                btnText.innerText = "Sign In to AWS Console";
                 btnArrow.classList.remove('hidden');
                 btnSpinner.classList.add('hidden');
                 submitBtn.disabled = false;
