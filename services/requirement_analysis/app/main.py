@@ -130,8 +130,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.staticfiles import StaticFiles
+
 app.include_router(admin_router)
 app.include_router(requirements_router)
+
+static_dir = os.path.join(BASE_DIR, "static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 
 @app.exception_handler(ValidationError)
 async def pydantic_validation_exception_handler(request, exc: ValidationError):
