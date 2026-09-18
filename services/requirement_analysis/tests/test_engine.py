@@ -7,7 +7,7 @@ from app.schemas import RequirementInput
 from app.database import Base, engine, AsyncSessionLocal
 from app.seed import init_db, seed_catalog
 
-client = TestClient(app)
+client = TestClient(app, headers={"X-Admin-Key": "aetherops-secret-admin-key"})
 
 @pytest.fixture(scope="module")
 def anyio_backend():

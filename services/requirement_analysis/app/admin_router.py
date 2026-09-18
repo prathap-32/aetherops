@@ -35,6 +35,7 @@ from app.sync_helper import (
 )
 from app.security import verify_admin_key, validate_region_code
 from app.login_page import get_login_page_html
+import secrets
 from app.auth import (
     verify_password,
     hash_password,
@@ -47,6 +48,7 @@ from app.auth import (
     log_admin_audit,
     get_current_admin,
     SESSION_COOKIE_NAME,
+    MASTER_ADMIN_KEY,
 )
 from app.security_models import AdminUser, AdminAuditLog
 
@@ -377,7 +379,8 @@ async def trigger_bulk_seed_all(
 @admin_router.get("/api/admin/catalog", status_code=status.HTTP_200_OK)
 async def get_current_catalog(
     region: str = "us-east-1",
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    api_key: str = Depends(verify_admin_key)
 ):
     """
     Returns the current active catalog items from Redis cache if available;
@@ -423,7 +426,8 @@ async def lookup_catalog_instance_live(
     service: str,
     instance_type: str,
     region: str = "us-east-1",
-    az: str | None = None
+    az: str | None = None,
+    api_key: str = Depends(verify_admin_key)
 ):
     """
     Dynamically resolves and returns specs/pricing for a specific instance type from AWS pricing.
@@ -450,7 +454,8 @@ async def lookup_catalog_instance_live(
 async def get_categorized_catalog(
     category: str | None = None,
     region: str = "us-east-1",
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    api_key: str = Depends(verify_admin_key)
 ):
     """
     Returns all catalog items from the database grouped by category.
@@ -909,7 +914,7 @@ async def delete_instance(
     return {"status": "success", "message": f"Deleted {instance_type}"}
 
 @admin_router.get("/api/admin/modules", status_code=status.HTTP_200_OK)
-async def get_platform_modules():
+async def get_platform_modules(api_key: str = Depends(verify_admin_key)):
     """
     Returns live health, ports, and catalog dependency mappings for all 8 Aether platform modules.
     """
@@ -1042,14 +1047,43 @@ async def get_platform_modules():
     }
 
 @admin_router.get("/admin", response_class=HTMLResponse)
-async def serve_admin_dashboard():
+async def serve_admin_dashboard(request: Request):
     """
     Serves the master AWS Management Console dashboard for AWS Quick Infra Manager.
-    Features:
-    - AWS Management Console unified navigation bar and services drawer
-    - Real-time Redis L1, PostgreSQL L3, and SQLite L2 live diagnostics probes
-    - 39-Region AWS matrix telemetry
-    - Bulk upload & Live sync controllers
+    Enforces strict authentication:
+    If no valid JWT cookie session ('aether_session'), Bearer token, or master API key is present,
+    redirects immediately to /admin/login.
     """
+    is_authenticated = False
+
+    # Channel 1: Check HttpOnly cookie
+    cookie_token = request.cookies.get(SESSION_COOKIE_NAME)
+    if cookie_token:
+        payload = decode_access_token(cookie_token)
+        if payload:
+            is_authenticated = True
+
+    # Channel 2: Check Authorization: Bearer <token>
+    if not is_authenticated:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+            payload = decode_access_token(token)
+            if payload:
+                is_authenticated = True
+
+    # Channel 3: Check X-Admin-Key header
+    if not is_authenticated:
+        admin_key = request.headers.get("X-Admin-Key")
+        if admin_key and secrets.compare_digest(admin_key.strip(), MASTER_ADMIN_KEY):
+            is_authenticated = True
+
+    if not is_authenticated:
+        return RedirectResponse(
+            url="/admin/login?redirect=/admin",
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT
+        )
+
     from app.dashboard_page import get_dashboard_page_html
     return HTMLResponse(content=get_dashboard_page_html(), status_code=200)
+

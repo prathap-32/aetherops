@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 
-client = TestClient(app)
+client = TestClient(app, headers={"X-Admin-Key": "aetherops-secret-admin-key"})
 
 
 # --- Test 1: GET /api/admin/catalog/regions returns all configured regions ---

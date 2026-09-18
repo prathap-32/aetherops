@@ -106,9 +106,16 @@ if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
+from fastapi import Request
+
 @app.get("/")
-async def root():
-    return RedirectResponse(url="/admin")
+async def root(request: Request):
+    from app.auth import SESSION_COOKIE_NAME, decode_access_token
+    cookie_token = request.cookies.get(SESSION_COOKIE_NAME)
+    if cookie_token and decode_access_token(cookie_token):
+        return RedirectResponse(url="/admin")
+    return RedirectResponse(url="/admin/login?redirect=/admin")
+
 
 
 @app.get("/health", status_code=status.HTTP_200_OK)

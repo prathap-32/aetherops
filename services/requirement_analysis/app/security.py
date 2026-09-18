@@ -19,13 +19,8 @@ _DEFAULT_DEV_KEY = "aetherops-secret-admin-key"
 
 
 def _is_test_context() -> bool:
-    """Check if running in a test context where auth should be bypassed."""
-    import sys
-    return (
-        os.getenv("TESTING") == "true"
-        or os.getenv("PYTEST_CURRENT_TEST") is not None
-        or "pytest" in sys.modules
-    )
+    """Only bypass auth if explicitly configured via environment variable."""
+    return os.getenv("TEST_BYPASS_AUTH", "false").lower() == "true"
 
 
 def get_admin_secret_key() -> str:
@@ -36,7 +31,7 @@ def get_admin_secret_key() -> str:
 async def verify_admin_key(request: Request, api_key: Optional[str] = Depends(api_key_header)):
     """
     FastAPI dependency that enforces multi-channel Admin authentication:
-    1. Test context bypass for automated suites.
+    1. Test context bypass for automated suites (if TEST_BYPASS_AUTH=true).
     2. HttpOnly Cookie: 'aether_session' (JWT signed).
     3. Bearer Token: 'Authorization: Bearer <JWT>'.
     4. Master Key: 'X-Admin-Key' header.
@@ -67,9 +62,10 @@ async def verify_admin_key(request: Request, api_key: Optional[str] = Depends(ap
         return api_key
 
     raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Forbidden: Authentication required via cookie session, Bearer token, or valid X-Admin-Key"
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Unauthorized: Authentication required via cookie session, Bearer token, or valid X-Admin-Key"
     )
+
 
 
 # Region code validation regex: e.g. us-east-1, ap-southeast-3, cn-northwest-1
