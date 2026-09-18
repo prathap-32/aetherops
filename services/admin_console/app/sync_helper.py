@@ -1,0 +1,867 @@
+# services/requirement_analysis/app/sync_helper.py
+import logging
+import httpx
+import asyncio
+import os
+import json
+import time
+import datetime
+from sqlalchemy import delete
+from sqlalchemy.future import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.models import EC2Catalog, RDSCatalog, GenericServiceCatalog, SyncMetadata
+from app.cache import cache_manager, warm_region_cache
+from app.catalog import EC2_CATALOG, RDS_CATALOG
+
+logger = logging.getLogger("requirement-analysis-sync")
+
+GENERIC_SERVICES_ITEMS = {
+    "iam": [
+        "IAM User",
+        "IAM Role",
+        "IAM Policy"
+    ],
+    "vpc": [
+        "NAT Gateway",
+        "VPN Connection",
+        "Transit Gateway",
+        "VPC Peering",
+        "Elastic IP"
+    ],
+    "s3": [
+        "Standard Storage",
+        "Infrequent Access Storage",
+        "One Zone-IA Storage",
+        "Glacier Storage",
+        "Glacier Deep Archive",
+        "Intelligent-Tiering"
+    ],
+    "route53": [
+        "Hosted Zone",
+        "Standard Query",
+        "Latency Query",
+        "Geo Query"
+    ],
+    "ebs": [
+        "gp3 Volume",
+        "gp2 Volume",
+        "io2 Volume",
+        "st1 Volume",
+        "sc1 Volume"
+    ],
+    "efs": [
+        "Standard Storage",
+        "Infrequent Access",
+        "Archive Storage"
+    ],
+    "eks": [
+        "EKS Cluster",
+        "Fargate Pod",
+        "Fargate Memory"
+    ],
+    "ecs": [
+        "Fargate vCPU",
+        "Fargate Memory",
+        "Fargate Spot vCPU",
+        "Fargate Spot Memory"
+    ],
+    "ecr": [
+        "Registry Storage",
+        "Data Transfer Out"
+    ],
+    "waf": [
+        "Web ACL",
+        "Rule",
+        "Request"
+    ],
+    "cloudwatch": [
+        "Metric",
+        "Alarms",
+        "Dashboard",
+        "Log Ingestion"
+    ],
+    "cloudfront": [
+        "Data Transfer Out",
+        "HTTP Requests",
+        "HTTPS Requests"
+    ],
+    "cloudtrail": [
+        "Paid Events",
+        "Insights"
+    ]
+}
+
+def load_aws_regions_reference() -> dict:
+    paths_to_check = [
+        "aws_regions_reference.json",
+        "scratch/aws_regions_reference.json",
+        "../aws_regions_reference.json",
+        "/home/prathap32/GP/devops-lab/projects/aether-cloud/services/requirement_analysis/aws_regions_reference.json"
+    ]
+    for path in paths_to_check:
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                return json.load(f)
+    raise FileNotFoundError("aws_regions_reference.json could not be found.")
+
+async def sync_catalog_from_aws(db: AsyncSession, region: str = "us-east-1", force_live_fetch: bool = True, include_generic_services: bool = True) -> dict:
+    """
+    Fetches the latest EC2 and RDS pricing from live AWS and community APIs,
+    updates the database tables (replacing existing records), and invalidates the Redis Cache.
+    Supports isolated single-region execution with telemetry tracking.
+    """
+    region = region.lower().strip()
+    start_time = time.monotonic()
+
+    # Mark IN_PROGRESS in SyncMetadata
+    try:
+        meta_res = await db.execute(select(SyncMetadata).where(SyncMetadata.region_code == region))
+        meta_row = meta_res.scalar_one_or_none()
+        if meta_row:
+            meta_row.status = "IN_PROGRESS"
+            meta_row.last_sync_timestamp = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+            meta_row.error_message = None
+        else:
+            meta_row = SyncMetadata(
+                region_code=region,
+                last_sync_timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
+                status="IN_PROGRESS",
+                records_synced=0,
+                ec2_count=0,
+                rds_count=0,
+                generic_count=0,
+                duration_ms=0,
+            )
+            db.add(meta_row)
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"Could not set IN_PROGRESS metadata for {region}: {e}")
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+    
+    ref_data = None
+    try:
+        ref_data = load_aws_regions_reference()
+    except Exception as e:
+        logger.warning(f"Could not load aws_regions_reference.json: {e}")
+        
+    region_data = None
+    if ref_data:
+        region_data = next((r for r in ref_data["regions"] if r["region_code"] == region), None)
+
+    # 1. Fetch EC2 pricing from ec2.shop
+    logger.info(f"Fetching EC2 pricing from ec2.shop for region {region}...")
+    ec2_url = f"https://ec2.shop?region={region}"
+    headers = {"Accept": "application/json"}
+    
+    ec2_data = []
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            res = await client.get(ec2_url, headers=headers)
+            if not hasattr(res, "status_code") or res.status_code == 200:
+                ec2_raw = res.json()
+                if isinstance(ec2_raw, dict):
+                    ec2_data = ec2_raw.get("Prices", [])
+                else:
+                    ec2_data = ec2_raw
+            else:
+                res.raise_for_status()
+    except Exception as e:
+        logger.warning(f"Failed to fetch live EC2 pricing for {region}: {e}. Using fallback compute baseline.")
+
+    # 2. Fetch RDS pricing from AWS Price List Bulk API
+    logger.info(f"Fetching RDS pricing from AWS Price List Bulk API for region {region}...")
+    rds_url = f"https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/{region}/index.json"
+    
+    rds_data = {}
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            res = await client.get(rds_url)
+            if not hasattr(res, "status_code") or res.status_code == 200:
+                rds_data = res.json()
+            else:
+                res.raise_for_status()
+    except Exception as e:
+        logger.warning(f"Failed to fetch live RDS pricing for {region}: {e}. Using fallback database baseline.")
+
+    # 3. Parse EC2 data
+    ec2_db_items = {}
+    for item in ec2_data:
+        try:
+            instance_type = item.get("InstanceType")
+            if not instance_type:
+                continue
+            
+            # Parse RAM
+            mem_str = item.get("Memory", "0 GiB")
+            ram_gb = 0.0
+            if "GiB" in mem_str:
+                ram_gb = float(mem_str.replace("GiB", "").strip())
+            
+            vcpus = int(item.get("VCPUS", 0))
+            
+            # Handle Price
+            cost_val = item.get("Cost")
+            if cost_val is None or str(cost_val).upper() == "NA":
+                price_per_hour = 0.0
+            else:
+                price_per_hour = float(cost_val)
+                
+            network_performance = item.get("Network", "Up to 10 Gbps")
+            category = _categorize_ec2(instance_type)
+
+            if price_per_hour <= 0.0 or vcpus <= 0 or ram_gb <= 0.0:
+                continue
+
+            new_item = EC2Catalog(
+                instance_type=instance_type,
+                vcpus=vcpus,
+                ram_gb=ram_gb,
+                price_per_hour=price_per_hour,
+                network_performance=network_performance,
+                category=category
+            )
+            if instance_type not in ec2_db_items or price_per_hour < ec2_db_items[instance_type].price_per_hour:
+                ec2_db_items[instance_type] = new_item
+        except Exception as e:
+            logger.warning(f"Error parsing EC2 item {item}: {e}")
+            continue
+
+    # Fallback for EC2 if API returned empty
+    if not ec2_db_items and region_data:
+        compute_catalog = region_data["service_catalog"].get("compute_baseline_hourly", {})
+        for inst_type, price in compute_catalog.items():
+            spec = next((item for item in EC2_CATALOG if item.instance_type == inst_type), None)
+            ec2_db_items[inst_type] = EC2Catalog(
+                instance_type=inst_type,
+                vcpus=spec.vcpus if spec else 2,
+                ram_gb=spec.ram_gb if spec else 4.0,
+                price_per_hour=float(price),
+                network_performance=spec.network_performance if spec else "Up to 5 Gbps",
+                category=spec.category if spec else "burstable"
+            )
+
+    # 4. Parse RDS data
+    rds_db_items = {}
+    products = rds_data.get("products", {})
+    terms = rds_data.get("terms", {}).get("OnDemand", {})
+
+    for sku, product in products.items():
+        try:
+            family = product.get("productFamily")
+            if family != "Database Instance":
+                continue
+            
+            attrs = product.get("attributes", {})
+            engine = attrs.get("databaseEngine")
+            if attrs.get("deploymentOption") != "Single-AZ":
+                continue
+            if engine not in ["MySQL", "PostgreSQL"]:
+                continue
+                
+            instance_type = attrs.get("instanceType")
+            if not instance_type:
+                continue
+                
+            vcpus = int(attrs.get("vcpu", 0))
+            
+            # Parse RAM
+            mem_str = attrs.get("memory", "0 GiB")
+            ram_gb = 0.0
+            if "GiB" in mem_str:
+                ram_gb = float(mem_str.replace("GiB", "").strip())
+                
+            # Get On-Demand price
+            sku_terms = terms.get(sku, {})
+            price_per_hour = 0.0
+            for term_id, term_details in sku_terms.items():
+                price_dimensions = term_details.get("priceDimensions", {})
+                for rate_code, rate_details in price_dimensions.items():
+                    unit = rate_details.get("unit")
+                    if unit == "Hrs":
+                        price_str = rate_details.get("pricePerUnit", {}).get("USD", "0.0")
+                        price_per_hour = float(price_str)
+                        break
+            
+            # Skip instances with zero price or invalid vcpus/ram
+            if price_per_hour <= 0.0 or vcpus <= 0 or ram_gb <= 0.0:
+                continue
+
+            category = _categorize_rds(instance_type)
+
+            new_item = RDSCatalog(
+                instance_type=instance_type,
+                vcpus=vcpus,
+                ram_gb=ram_gb,
+                price_per_hour=price_per_hour,
+                category=category
+            )
+            if instance_type not in rds_db_items or price_per_hour < rds_db_items[instance_type].price_per_hour:
+                rds_db_items[instance_type] = new_item
+        except Exception as e:
+            logger.warning(f"Error parsing RDS product {sku}: {e}")
+            continue
+
+    # Fallback for RDS if API returned empty
+    if not rds_db_items and region_data:
+        rds_catalog = region_data["service_catalog"].get("database_baseline_hourly", {})
+        for inst_type, price in rds_catalog.items():
+            spec = next((item for item in RDS_CATALOG if item.instance_type == inst_type), None)
+            rds_db_items[inst_type] = RDSCatalog(
+                instance_type=inst_type,
+                vcpus=spec.vcpus if spec else 2,
+                ram_gb=spec.ram_gb if spec else 4.0,
+                price_per_hour=float(price),
+                category=spec.category if spec else "burstable"
+            )
+
+    if not ec2_db_items or not rds_db_items:
+        raise ValueError(f"Sync generated empty results (EC2 count: {len(ec2_db_items)}, RDS count: {len(rds_db_items)})")
+
+    # 4.5. Resolve Generic Services Catalog Items
+    logger.info("Syncing generic AWS services items...")
+    generic_db_items = []
+    http_cache = {}
+    http_cache_tasks = {}
+    
+    items_to_lookup = []
+    for service_name, item_types in GENERIC_SERVICES_ITEMS.items():
+        for item_type in item_types:
+            items_to_lookup.append((service_name, item_type))
+            
+    async def run_lookup(svc, item_t):
+        try:
+            res_spec = await lookup_generic_aws_service(svc, item_t, region=region, cache=http_cache, cache_tasks=http_cache_tasks)
+            db_item = GenericServiceCatalog(
+                service=svc,
+                instance_type=res_spec["instance_type"],
+                vcpus=res_spec["vcpus"],
+                ram_gb=res_spec["ram_gb"],
+                price_per_hour=res_spec["price_per_hour"],
+                unit=res_spec["unit"],
+                category=res_spec["category"],
+                region=res_spec["region"],
+                details=res_spec["details"]
+            )
+            return db_item
+        except Exception as ex:
+            logger.warning(f"Error during async lookup of {svc} - {item_t}: {ex}")
+            fallback_item = get_generic_fallback_pricing(svc, item_t, region=region)
+            return GenericServiceCatalog(
+                service=svc,
+                instance_type=fallback_item["instance_type"],
+                vcpus=fallback_item["vcpus"],
+                ram_gb=fallback_item["ram_gb"],
+                price_per_hour=fallback_item["price_per_hour"],
+                unit=fallback_item["unit"],
+                category=fallback_item["category"],
+                region=fallback_item["region"],
+                details=fallback_item["details"]
+            )
+
+    lookup_tasks = [run_lookup(svc, item_t) for svc, item_t in items_to_lookup]
+    generic_db_items = await asyncio.gather(*lookup_tasks)
+
+    # 5. Overwrite the tables inside a single database transaction
+    logger.info(f"Writing {len(ec2_db_items)} EC2, {len(rds_db_items)} RDS, and {len(generic_db_items)} generic service items to database...")
+    await db.execute(delete(EC2Catalog))
+    await db.execute(delete(RDSCatalog))
+    await db.execute(delete(GenericServiceCatalog))
+    
+    db.add_all(ec2_db_items.values())
+    db.add_all(rds_db_items.values())
+    db.add_all(generic_db_items)
+
+    # Record sync telemetry
+    duration_ms = int((time.monotonic() - start_time) * 1000)
+    total_records = len(ec2_db_items) + len(rds_db_items) + len(generic_db_items)
+    try:
+        meta_res = await db.execute(select(SyncMetadata).where(SyncMetadata.region_code == region))
+        meta_row = meta_res.scalar_one_or_none()
+        if meta_row:
+            meta_row.status = "SUCCESS"
+            meta_row.last_sync_timestamp = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+            meta_row.records_synced = total_records
+            meta_row.ec2_count = len(ec2_db_items)
+            meta_row.rds_count = len(rds_db_items)
+            meta_row.generic_count = len(generic_db_items)
+            meta_row.duration_ms = duration_ms
+            meta_row.error_message = None
+        else:
+            db.add(SyncMetadata(
+                region_code=region,
+                last_sync_timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
+                status="SUCCESS",
+                records_synced=total_records,
+                ec2_count=len(ec2_db_items),
+                rds_count=len(rds_db_items),
+                generic_count=len(generic_db_items),
+                duration_ms=duration_ms,
+            ))
+    except Exception as e:
+        logger.warning(f"Could not write SyncMetadata for {region}: {e}")
+
+    await db.commit()
+
+    # 5.5 Dual-Write Replication to PostgreSQL container master if reachable
+    from app.database import get_postgres_sessionmaker, IS_TESTING
+    if not IS_TESTING:
+        try:
+            pg_sf = get_postgres_sessionmaker(region)
+            async with pg_sf() as pg_session:
+                await pg_session.execute(delete(EC2Catalog))
+                await pg_session.execute(delete(RDSCatalog))
+                await pg_session.execute(delete(GenericServiceCatalog))
+                
+                # Re-create model objects for PG session
+                for item in ec2_db_items.values():
+                    pg_session.add(EC2Catalog(
+                        instance_type=item.instance_type, vcpus=item.vcpus, ram_gb=item.ram_gb,
+                        price_per_hour=item.price_per_hour, network_performance=item.network_performance, category=item.category
+                    ))
+                for item in rds_db_items.values():
+                    pg_session.add(RDSCatalog(
+                        instance_type=item.instance_type, vcpus=item.vcpus, ram_gb=item.ram_gb,
+                        price_per_hour=item.price_per_hour, category=item.category
+                    ))
+                for item in generic_db_items:
+                    pg_session.add(GenericServiceCatalog(
+                        service=item.service, instance_type=item.instance_type, vcpus=item.vcpus, ram_gb=item.ram_gb,
+                        price_per_hour=item.price_per_hour, unit=item.unit, category=item.category, region=item.region, details=item.details
+                    ))
+                
+                pg_meta_res = await pg_session.execute(select(SyncMetadata).where(SyncMetadata.region_code == region))
+                pg_meta = pg_meta_res.scalar_one_or_none()
+                if pg_meta:
+                    pg_meta.status = "SUCCESS"
+                    pg_meta.last_sync_timestamp = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+                    pg_meta.records_synced = total_records
+                    pg_meta.ec2_count = len(ec2_db_items)
+                    pg_meta.rds_count = len(rds_db_items)
+                    pg_meta.generic_count = len(generic_db_items)
+                    pg_meta.duration_ms = duration_ms
+                    pg_meta.error_message = None
+                else:
+                    pg_session.add(SyncMetadata(
+                        region_code=region, last_sync_timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
+                        status="SUCCESS", records_synced=total_records, ec2_count=len(ec2_db_items),
+                        rds_count=len(rds_db_items), generic_count=len(generic_db_items), duration_ms=duration_ms
+                    ))
+                await pg_session.commit()
+                logger.info(f"Replicated live sync dataset for region '{region}' to PostgreSQL container master.")
+        except Exception as pg_err:
+            logger.warning(f"Could not replicate live sync data to PostgreSQL container for region '{region}': {pg_err}")
+
+    # 6. Targeted Redis Cache Invalidation & Re-warming for this region only
+    await cache_manager.invalidate_region_cache(region)
+
+    ec2_dicts = [item.to_dict() if hasattr(item, 'to_dict') else {} for item in ec2_db_items.values()]
+    rds_dicts = [item.to_dict() if hasattr(item, 'to_dict') else {} for item in rds_db_items.values()]
+    generic_dicts = [item.to_dict() if hasattr(item, 'to_dict') else {} for item in generic_db_items]
+    await warm_region_cache(region, ec2_dicts, rds_dicts, generic_dicts, {
+        "az_count": region_data.get("az_count", 3) if region_data else 3,
+        "launch_year": region_data.get("launch_year", 2016) if region_data else 2016,
+        "pricing_tier_multiplier": region_data.get("pricing_tier_multiplier", 1.0) if region_data else 1.0,
+        "records_count": total_records
+    })
+
+    logger.info(f"Database synced successfully for region '{region}'. Duration: {duration_ms}ms, Records: {total_records}")
+    return {
+        "status": "success",
+        "region": region,
+        "added_ec2": len(ec2_db_items),
+        "added_rds": len(rds_db_items),
+        "added_generic": len(generic_db_items),
+        "total_records": total_records,
+        "duration_ms": duration_ms,
+        "cache_warmed": True
+    }
+
+
+def _categorize_ec2(instance_type: str) -> str:
+    """Classify an EC2 instance type into a category based on its prefix."""
+    instance_lower = instance_type.lower()
+    if instance_lower.startswith(("t2.", "t3.", "t4g.", "t3a.", "t1.")):
+        return "burstable"
+    elif instance_lower.startswith(("c4.", "c5.", "c6.", "c7.", "c8.")):
+        return "compute"
+    elif instance_lower.startswith(("r4.", "r5.", "r6.", "r7.", "r8.")):
+        return "memory"
+    elif instance_lower.startswith(("g4.", "g5.", "g6.", "p3.", "p4.", "p5.")):
+        return "gpu"
+    elif instance_lower.startswith(("m4.", "m5.", "m6.", "m7.", "m8.", "a1.")):
+        return "general"
+    else:
+        prefix = instance_lower.split(".")[0]
+        if "t" in prefix:
+            return "burstable"
+        elif "c" in prefix:
+            return "compute"
+        elif "r" in prefix:
+            return "memory"
+        elif "g" in prefix or "p" in prefix:
+            return "gpu"
+        return "general"
+
+
+def _categorize_rds(instance_type: str) -> str:
+    """Classify an RDS instance type into a category based on its prefix."""
+    instance_lower = instance_type.lower()
+    if "db.t" in instance_lower:
+        return "burstable"
+    elif "db.r" in instance_lower or "db.x" in instance_lower:
+        return "memory"
+    return "standard"
+
+
+def _get_region_from_az_and_region(region: str = None, az: str = None) -> str:
+    if region:
+        return region
+    if az:
+        if len(az) > 1 and az[-1].isalpha() and az[-2].isdigit():
+            return az[:-1]
+        return az
+    return "us-east-1"
+
+
+async def lookup_ec2_instance(instance_type: str, region: str = "us-east-1", az: str = None) -> dict:
+    """
+    Fetches live specs for a single EC2 instance type from ec2.shop.
+    Returns a dict with vcpus, ram_gb, price_per_hour, network_performance, category.
+    Raises ValueError if not found.
+    """
+    target_region = _get_region_from_az_and_region(region, az)
+    logger.info(f"Looking up EC2 instance '{instance_type}' from ec2.shop for region {target_region}...")
+    ec2_url = f"https://ec2.shop?region={target_region}&filter={instance_type}"
+    headers = {"Accept": "application/json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            res = await client.get(ec2_url, headers=headers)
+            res.raise_for_status()
+            ec2_raw = res.json()
+            prices = ec2_raw.get("Prices", []) if isinstance(ec2_raw, dict) else ec2_raw
+    except Exception as e:
+        logger.error(f"ec2.shop lookup failed: {e}")
+        raise RuntimeError(f"EC2 lookup failed: {str(e)}")
+
+    # Find exact match
+    for item in prices:
+        if item.get("InstanceType", "").lower() == instance_type.lower():
+            mem_str = item.get("Memory", "0 GiB")
+            ram_gb = float(mem_str.replace("GiB", "").strip()) if "GiB" in mem_str else 0.0
+            vcpus = int(item.get("VCPUS", 0))
+            cost_val = item.get("Cost")
+            price = float(cost_val) if cost_val and str(cost_val).upper() != "NA" else 0.0
+            network = item.get("Network", "Up to 10 Gbps")
+            category = _categorize_ec2(instance_type)
+
+            if vcpus <= 0 or ram_gb <= 0.0 or price <= 0.0:
+                raise ValueError(f"Invalid specs for '{instance_type}': vCPUs={vcpus}, RAM={ram_gb}, Price={price}")
+
+            return {
+                "instance_type": item.get("InstanceType"),
+                "vcpus": vcpus,
+                "ram_gb": ram_gb,
+                "price_per_hour": price,
+                "network_performance": network,
+                "category": category
+            }
+
+    raise ValueError(f"EC2 instance type '{instance_type}' not found in ec2.shop {target_region} pricing data.")
+
+
+async def lookup_rds_instance(instance_type: str, region: str = "us-east-1", az: str = None) -> dict:
+    """
+    Fetches live specs for a single RDS instance type from the AWS Bulk Pricing API.
+    Returns a dict with vcpus, ram_gb, price_per_hour, category.
+    Raises ValueError if not found.
+    """
+    target_region = _get_region_from_az_and_region(region, az)
+    logger.info(f"Looking up RDS instance '{instance_type}' from AWS Pricing API for region {target_region}...")
+    rds_url = f"https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/{target_region}/index.json"
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            res = await client.get(rds_url)
+            res.raise_for_status()
+            rds_data = res.json()
+    except Exception as e:
+        logger.error(f"AWS RDS pricing lookup failed: {e}")
+        raise RuntimeError(f"RDS lookup failed: {str(e)}")
+
+    products = rds_data.get("products", {})
+    terms = rds_data.get("terms", {}).get("OnDemand", {})
+
+    best_match = None
+    best_price = float("inf")
+
+    for sku, product in products.items():
+        if product.get("productFamily") != "Database Instance":
+            continue
+        attrs = product.get("attributes", {})
+        if attrs.get("deploymentOption") != "Single-AZ":
+            continue
+        if attrs.get("databaseEngine") not in ["MySQL", "PostgreSQL"]:
+            continue
+        if attrs.get("instanceType", "").lower() != instance_type.lower():
+            continue
+
+        vcpus = int(attrs.get("vcpu", 0))
+        mem_str = attrs.get("memory", "0 GiB")
+        ram_gb = float(mem_str.replace("GiB", "").strip()) if "GiB" in mem_str else 0.0
+
+        # Extract price
+        sku_terms = terms.get(sku, {})
+        price_per_hour = 0.0
+        for term_id, term_details in sku_terms.items():
+            for rate_code, rate_details in term_details.get("priceDimensions", {}).items():
+                if rate_details.get("unit") == "Hrs":
+                    price_per_hour = float(rate_details.get("pricePerUnit", {}).get("USD", "0.0"))
+                    break
+
+        if price_per_hour <= 0.0 or vcpus <= 0 or ram_gb <= 0.0:
+            continue
+
+        # Keep cheapest match
+        if price_per_hour < best_price:
+            best_price = price_per_hour
+            best_match = {
+                "instance_type": attrs.get("instanceType"),
+                "vcpus": vcpus,
+                "ram_gb": ram_gb,
+                "price_per_hour": price_per_hour,
+                "category": _categorize_rds(instance_type)
+            }
+
+    if not best_match:
+        raise ValueError(f"RDS instance type '{instance_type}' not found in AWS Pricing API (MySQL/PostgreSQL, Single-AZ, {target_region}).")
+
+    return best_match
+
+
+SERVICE_OFFER_CODES = {
+    "s3": "AmazonS3",
+    "efs": "AmazonEFS",
+    "route53": "AmazonRoute53",
+    "route 53": "AmazonRoute53",
+    "cloudwatch": "AmazonCloudWatch",
+    "cloudfront": "AmazonCloudFront",
+    "cloudtrail": "AWSCloudTrail",
+    "eks": "AmazonEKS",
+    "ecs": "AmazonECS",
+    "ecr": "AmazonECR",
+    "waf": "awswaf",
+    "ebs": "AmazonEC2",
+    "vpc": "AmazonEC2",
+}
+
+
+def get_generic_fallback_pricing(service: str, item_type: str, region: str = "us-east-1") -> dict:
+    service = service.lower()
+    item_type_lower = item_type.lower() if item_type else ""
+    
+    price = 0.0
+    unit = "Hrs"
+    category = "general"
+    details = f"Static price for {service} {item_type}"
+    
+    if service == "s3":
+        category = "storage"
+        unit = "GB-Month"
+        if "glacier" in item_type_lower:
+            price = 0.0036
+        else:
+            price = 0.023
+    elif service == "ebs":
+        category = "storage"
+        unit = "GB-Month"
+        if "gp3" in item_type_lower:
+            price = 0.08
+        else:
+            price = 0.10
+    elif service == "efs":
+        category = "storage"
+        unit = "GB-Month"
+        price = 0.30
+    elif service == "vpc":
+        category = "networking"
+        if "nat" in item_type_lower:
+            price = 0.045
+        else:
+            price = 0.05
+    elif service in ["route53", "route 53"]:
+        category = "networking"
+        unit = "HostedZone-Month"
+        price = 0.50
+    elif service == "eks":
+        category = "compute"
+        price = 0.10
+    elif service == "ecs":
+        category = "compute"
+        price = 0.01
+    elif service == "ecr":
+        category = "storage"
+        unit = "GB-Month"
+        price = 0.10
+    elif service == "waf":
+        category = "security"
+        price = 0.008
+    elif service == "cloudwatch":
+        category = "monitoring"
+        price = 0.30
+    elif service == "cloudfront":
+        category = "networking"
+        unit = "GB-Month"
+        price = 0.085
+    elif service == "cloudtrail":
+        category = "monitoring"
+        price = 0.0
+        
+    return {
+        "instance_type": item_type,
+        "vcpus": 0,
+        "ram_gb": 0.0,
+        "price_per_hour": price,
+        "unit": unit,
+        "category": category,
+        "service": service,
+        "region": region,
+        "details": details
+    }
+
+
+async def lookup_generic_aws_service(service: str, item_type: str, region: str = "us-east-1", cache: dict = None, cache_tasks: dict = None) -> dict:
+    service_lower = service.lower()
+    
+    if service_lower == "iam":
+        return {
+            "instance_type": item_type or "IAM User/Role/Policy",
+            "vcpus": 0,
+            "ram_gb": 0.0,
+            "price_per_hour": 0.0,
+            "unit": "Hrs",
+            "category": "security",
+            "service": "iam",
+            "region": region,
+            "details": "IAM identity management is free of charge"
+        }
+        
+    offer_code = SERVICE_OFFER_CODES.get(service_lower)
+    if not offer_code:
+        return get_generic_fallback_pricing(service_lower, item_type, region)
+        
+    url = f"https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/{offer_code}/current/{region}/index.json"
+    
+    data = None
+    if cache is not None and url in cache:
+        data = cache[url]
+    elif cache_tasks is not None and url in cache_tasks:
+        data = await cache_tasks[url]
+    else:
+        logger.info(f"Looking up '{item_type}' under '{offer_code}' for region '{region}'...")
+        try:
+            if cache_tasks is not None:
+                async def fetch_and_cache():
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        res = await client.get(url)
+                        res.raise_for_status()
+                        d = res.json()
+                        if cache is not None:
+                            cache[url] = d
+                        return d
+                task = asyncio.create_task(fetch_and_cache())
+                cache_tasks[url] = task
+                data = await task
+            else:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    res = await client.get(url)
+                    res.raise_for_status()
+                    data = res.json()
+                    if cache is not None:
+                        cache[url] = data
+        except Exception as e:
+            logger.warning(f"AWS lookup failed for {service} ({offer_code}), using fallback: {e}")
+            return get_generic_fallback_pricing(service_lower, item_type, region)
+        
+    products = data.get("products", {})
+    terms = data.get("terms", {}).get("OnDemand", {})
+    
+    best_price = float("inf")
+    best_match = None
+    
+    for sku, product in products.items():
+        attrs = product.get("attributes", {})
+        
+        match = False
+        if service_lower == "s3":
+            if item_type.lower() in attrs.get("volumeType", "").lower() or item_type.lower() in attrs.get("storageClass", "").lower():
+                match = True
+            elif item_type.lower() in attrs.get("usagetype", "").lower():
+                match = True
+        elif service_lower == "ebs":
+            if item_type.lower() in attrs.get("volumeApiName", "").lower() or item_type.lower() in attrs.get("volumeType", "").lower():
+                match = True
+        elif service_lower == "efs":
+            if item_type.lower() in attrs.get("storageClass", "").lower():
+                match = True
+        elif service_lower in ["route53", "route 53"]:
+            if item_type.lower() in attrs.get("usagetype", "").lower() or item_type.lower() in attrs.get("servicecode", "").lower():
+                match = True
+        elif service_lower == "vpc":
+            if item_type.lower() in attrs.get("usagetype", "").lower() or item_type.lower() in attrs.get("operation", "").lower():
+                match = True
+        else:
+            attr_vals = [str(v).lower() for v in attrs.values()]
+            if any(item_type.lower() in v for v in attr_vals):
+                match = True
+                
+        if not match:
+            continue
+            
+        sku_terms = terms.get(sku, {})
+        price = 0.0
+        unit = "Hrs"
+        for term_id, term_details in sku_terms.items():
+            for rate_code, rate_details in term_details.get("priceDimensions", {}).items():
+                price_str = rate_details.get("pricePerUnit", {}).get("USD", "0.0")
+                price = float(price_str)
+                unit = rate_details.get("unit", "Hrs")
+                break
+                
+        if price <= 0.0:
+            continue
+            
+        if price < best_price:
+            best_price = price
+            
+            category = "general"
+            if service_lower in ["s3", "ebs", "efs", "ecr"]:
+                category = "storage"
+            elif service_lower in ["vpc", "route53", "route 53", "cloudfront"]:
+                category = "networking"
+            elif service_lower in ["eks", "ecs"]:
+                category = "compute"
+            elif service_lower in ["waf", "iam"]:
+                category = "security"
+            elif service_lower in ["cloudwatch", "cloudtrail"]:
+                category = "monitoring"
+                
+            best_match = {
+                "instance_type": item_type,
+                "vcpus": 0,
+                "ram_gb": 0.0,
+                "price_per_hour": price,
+                "unit": unit,
+                "category": category,
+                "service": service_lower,
+                "region": region,
+                "details": f"Dynamically matched product sku: {sku}"
+            }
+            
+    if not best_match:
+        return get_generic_fallback_pricing(service_lower, item_type, region)
+        
+    return best_match

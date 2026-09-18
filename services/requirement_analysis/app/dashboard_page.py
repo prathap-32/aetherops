@@ -301,9 +301,15 @@ def get_dashboard_page_html() -> str:
                     </button>
                 </div>
 
-                <!-- Right: Region Selector, Cluster Pill, User Badge & Logout -->
+                <!-- Right: Module 1 Link, Region Selector, Cluster Pill, User Badge & Logout -->
                 <div class="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
                     
+                    <!-- Quick Link: Module 1 Sizing Console -->
+                    <a href="/app" class="px-2.5 py-1 rounded bg-[#ec7211] hover:bg-[#eb5f07] text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm" title="Launch Module 1: Requirement Sizing Engine">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        <span class="hidden md:inline">Module 1 (Sizing)</span>
+                    </a>
+
                     <!-- AWS Region Selector -->
                     <div class="flex items-center space-x-1.5 bg-[#0f141c] border border-[#2d3748] rounded px-2.5 py-1 shrink-0">
                         <svg class="w-3.5 h-3.5 text-[#ff9900] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>

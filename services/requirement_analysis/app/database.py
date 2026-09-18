@@ -207,3 +207,64 @@ async def get_db_session(request: Request = None) -> AsyncSession:
 # Default engine and sessionmaker for general imports
 engine = get_sqlite_engine("us-east-1")
 AsyncSessionLocal = get_sqlite_sessionmaker("us-east-1")
+
+# Module 1 Dedicated Requirements Database (SQLite + Redis Architecture)
+_requirements_engine = None
+_requirements_sessionmaker = None
+
+def get_requirements_db_url() -> str:
+    if IS_TESTING:
+        return "sqlite+aiosqlite:///test_requirements.db"
+    return "sqlite+aiosqlite:///requirements.db"
+
+def get_requirements_engine():
+    global _requirements_engine
+    if _requirements_engine is None:
+        url = get_requirements_db_url()
+        _requirements_engine = create_async_engine(
+            url,
+            echo=ECHO_SQL,
+            future=True,
+            connect_args={"check_same_thread": False}
+        )
+        @event.listens_for(_requirements_engine.sync_engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode = WAL;")
+            cursor.execute("PRAGMA synchronous = NORMAL;")
+            cursor.execute("PRAGMA cache_size = -64000;")
+            cursor.execute("PRAGMA busy_timeout = 5000;")
+            cursor.close()
+    return _requirements_engine
+
+def get_requirements_sessionmaker():
+    global _requirements_sessionmaker
+    if _requirements_sessionmaker is None:
+        eng = get_requirements_engine()
+        _requirements_sessionmaker = async_sessionmaker(
+            bind=eng,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autocommit=False,
+            autoflush=False
+        )
+    return _requirements_sessionmaker
+
+async def init_requirements_db():
+    eng = get_requirements_engine()
+    async with eng.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+async def get_requirements_db() -> AsyncSession:
+    await init_requirements_db()
+    sf = get_requirements_sessionmaker()
+    async with sf() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+

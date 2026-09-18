@@ -14,8 +14,9 @@ from app.schemas import RequirementInput, RequirementProfileOutput, Recommendati
 from app.engine import analyze_requirements, recommend_infrastructure
 from app.database import get_db_session, AsyncSessionLocal, SUPPORTED_REGIONS, get_sessionmaker_for_region, init_db_for_region
 from app.cache import cache_manager, get_region_catalog
-from app.seed import init_db, seed_catalog
+from app.seed import init_db, seed_catalog, seed_sample_requirements
 from app.admin_router import admin_router
+from app.requirements_router import requirements_router
 from app.sync_helper import sync_catalog_from_aws
 from app.terminal_ui import print_banner, run_startup_diagnostics, render_catalog_dashboard, print_shutdown_banner
 from rich.logging import RichHandler
@@ -95,6 +96,7 @@ async def lifespan(app: FastAPI):
         await init_db()
         from app.auth import init_admin_security
         await init_admin_security()
+        await seed_sample_requirements()
     except Exception as e:
         logger.error(f"Failed to initialize default database: {e}", exc_info=True)
         
@@ -129,6 +131,7 @@ app.add_middleware(
 )
 
 app.include_router(admin_router)
+app.include_router(requirements_router)
 
 @app.exception_handler(ValidationError)
 async def pydantic_validation_exception_handler(request, exc: ValidationError):
@@ -158,8 +161,11 @@ async def root():
         "service": "AetherOps AI - Requirement Analysis Service (Module 1)",
         "version": "1.0.0",
         "endpoints": {
+            "app_console": "/app",
+            "admin_console": "/admin",
             "health": "/health",
             "analyze": "/api/v1/analyze",
+            "requirements_api": "/api/v1/requirements",
             "catalog": "/api/v1/catalog/{region}",
             "recommendation": "/api/v1/recommendation",
             "docs": "/docs"

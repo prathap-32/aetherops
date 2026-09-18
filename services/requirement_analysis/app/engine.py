@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import EC2Catalog, RDSCatalog, GenericServiceCatalog
 from app.cache import cache_manager
 from app.catalog import STORAGE_PRICING, NETWORK_PRICING
+from app.ai_advisor import generate_ai_architecture_advice
 from app.schemas import (
     RequirementInput,
     RequirementProfileOutput,
@@ -726,4 +727,251 @@ async def recommend_infrastructure(inputs: RecommendationInput, session: AsyncSe
         cost_breakdown=cost_breakdown,
         recommended_resources=recommended_resources
     )
+
+
+def generate_service_rationales(inputs: RequirementInput, profile: RequirementProfileOutput) -> dict:
+    """
+    Synthesizes deep architectural justification ('Why That Service') for each recommended AWS service.
+    """
+    comp = profile.components
+    compute = comp.compute
+    db = comp.database
+    net = comp.networking
+    storage = comp.storage
+    sec = comp.security
+    ops = comp.operations
+    mon = comp.monitoring
+
+    # 1. Compute Rationale
+    inst_type = compute.instance_type
+    is_arm = "t4g" in inst_type or "c7g" in inst_type or "m7g" in inst_type or "g5g" in inst_type
+    arch_note = "ARM64 Graviton architecture selected for 40% superior price-performance ratio over legacy x86." if is_arm else "Standard x86 compute node selected to support broad binary compatibility."
+    
+    if inputs.traffic_scale == "hobby_dev":
+        traffic_exp = f"Burstable instance ({inst_type}) ideal for dev/hobby traffic (1 RPS baseline), leveraging accumulated CPU credits for intermittent bursts without paying for idle capacity."
+    elif inputs.traffic_scale == "growth":
+        traffic_exp = f"Right-sized for mid-scale growth (30-45 RPS) with {compute.min_instances} instances to guarantee zero-downtime rolling deployments."
+    else:
+        traffic_exp = f"High-capacity production fleet ({compute.min_instances}-{compute.max_instances} instances) with automated horizontal scaling triggered when CPU utilization crosses {compute.target_cpu_utilization}%."
+
+    compute_why = (
+        f"Selected Amazon EC2 {inst_type} ({compute.vcpus} vCPU, {compute.ram_gb} GB RAM). {arch_note} "
+        f"{traffic_exp} Redundancy: Min {compute.min_instances} nodes spread across multiple Availability Zones."
+    )
+
+    # 2. Database Rationale
+    if inputs.technology.database != "none":
+        db_engine = "PostgreSQL" if inputs.technology.database == "postgresql" else "MySQL"
+        ha_exp = (
+            f"Multi-AZ synchronous replication enabled to ensure instant automated failover within 60s without data loss."
+            if db.multi_az else
+            "Single-AZ deployment selected to minimize monthly spend for non-mission-critical workloads."
+        )
+        db_why = (
+            f"Provisioned Amazon RDS {db_engine} on {db.instance_type} ({db.vcpus} vCPU, {db.ram_gb} GB RAM, {db.storage_gb} GB {db.storage_type}). "
+            f"{ha_exp} Automated daily backups retained for {db.backup_retention_days} days to support point-in-time recovery (PITR)."
+        )
+    else:
+        db_why = "No dedicated relational database requested in tech stack. Stateless or external storage assumed."
+
+    # 3. Networking Rationale
+    alb_exp = (
+        "Application Load Balancer (ALB) terminates public SSL/TLS HTTPS certificates and dynamically balances traffic across healthy EC2 targets."
+        if net.has_alb else
+        "Direct elastic IP assignment without load balancer to preserve budget."
+    )
+    nat_exp = (
+        f"{net.nat_gateway_count} NAT Gateway(s) deployed to give private subnets secure egress access for patching and third-party APIs while blocking inbound threats."
+        if net.nat_gateway_count > 0 else
+        "Instances co-located with public interfaces under security group perimeter."
+    )
+    cf_exp = " Amazon CloudFront CDN added to cache static assets globally at edge locations." if net.has_cloudfront else ""
+    net_why = f"Amazon VPC configured with public and private subnet isolation. {alb_exp} {nat_exp}{cf_exp}"
+
+    # 4. Storage Rationale
+    s3_exp = f"Amazon S3 ({storage.s3_gb} GB {storage.s3_class}) provides 11 9's durability for backups, media, and unstructured assets." if storage.s3_gb > 0 else ""
+    ebs_exp = f"Amazon EBS gp3 ({storage.ebs_gb_per_instance} GB/instance) delivers baseline 3,000 IOPS and 125 MB/s throughput independently of volume size, cutting EBS spend by 20% compared to gp2."
+    storage_why = f"{ebs_exp} {s3_exp}".strip()
+
+    # 5. Security Rationale
+    waf_exp = "AWS WAF integrated at the ALB perimeter to guard against SQL injection, cross-site scripting (XSS), and bot scrapers." if sec.waf_enabled else "Security Groups enforce network-level port whitelisting."
+    kms_exp = "AWS KMS Customer Master Keys (CMK) enforce hardware-backed AES-256 encryption at rest." if sec.encryption_enabled else "Standard AWS-managed encryption applied."
+    comp_exp = f" Compliance framework applied: {', '.join(profile.compliance_applied)}." if profile.compliance_applied else ""
+    sec_why = f"{kms_exp} {waf_exp}{comp_exp}"
+
+    # 6. DevOps & Monitoring Rationale
+    ops_why = (
+        f"Orchestration via {ops.orchestration_tool.upper()} with Infrastructure as Code via {ops.iac_tool.title()}. "
+        f"Deterministic, auditable deployments managed through {ops.ci_cd_tool.replace('_', ' ').title()}."
+    )
+    mon_why = (
+        f"Amazon CloudWatch ({mon.level.title()} level) tracks CPU, memory saturation, and p95 request latency. "
+        f"Alert notifications routed to {mon.alerting_channel.replace('_', ' ').title()}."
+    )
+
+    return {
+        "compute": {
+            "service_name": f"Amazon EC2 ({inst_type})",
+            "category": "Compute & Capacity",
+            "specs": f"{compute.vcpus} vCPUs • {compute.ram_gb} GB RAM • {compute.min_instances} Instances",
+            "monthly_cost": compute.monthly_cost,
+            "why": compute_why
+        },
+        "database": {
+            "service_name": f"Amazon RDS ({db.instance_type})",
+            "category": "Managed Relational Database",
+            "specs": f"{db.vcpus} vCPUs • {db.ram_gb} GB RAM • {db.storage_gb} GB {db.storage_type} • Multi-AZ: {db.multi_az}",
+            "monthly_cost": db.monthly_cost,
+            "why": db_why
+        },
+        "networking": {
+            "service_name": "Amazon VPC + ALB + NAT Gateway",
+            "category": "Network Topology & Ingress",
+            "specs": f"ALB: {net.has_alb} • NAT Gateways: {net.nat_gateway_count} • CloudFront: {net.has_cloudfront}",
+            "monthly_cost": net.monthly_cost,
+            "why": net_why
+        },
+        "storage": {
+            "service_name": "Amazon EBS gp3 + Amazon S3",
+            "category": "Persistent Block & Object Storage",
+            "specs": f"EBS: {storage.ebs_gb_per_instance} GB/node • S3: {storage.s3_gb} GB ({storage.s3_class})",
+            "monthly_cost": storage.monthly_cost,
+            "why": storage_why
+        },
+        "security": {
+            "service_name": "AWS IAM + AWS KMS + AWS WAF",
+            "category": "Identity, Perimeter & Data Protection",
+            "specs": f"WAF: {sec.waf_enabled} • KMS Rotation: {sec.kms_key_rotation} • Compliance: {', '.join(profile.compliance_applied) or 'Standard'}",
+            "monthly_cost": 0.0 if not sec.waf_enabled else 25.0,
+            "why": sec_why
+        },
+        "operations_monitoring": {
+            "service_name": f"{ops.orchestration_tool.upper()} + Amazon CloudWatch",
+            "category": "DevOps, IaC & Observability",
+            "specs": f"IaC: {ops.iac_tool} • CI/CD: {ops.ci_cd_tool} • Alerts: {mon.alerting_channel}",
+            "monthly_cost": 15.0 if mon.level == "advanced" else 0.0,
+            "why": f"{ops_why} {mon_why}"
+        }
+    }
+
+
+def generate_cost_optimizations(inputs: RequirementInput, profile: RequirementProfileOutput) -> list:
+    """
+    Generates tailored, actionable FinOps cost optimization opportunities based on the requirement profile.
+    """
+    optimizations = []
+    comp = profile.components
+    compute_cost = comp.compute.monthly_cost
+    rds_cost = comp.database.monthly_cost
+    nat_cost = comp.networking.nat_gateway_count * 32.85
+
+    # 1. Savings Plans / Reserved Instances
+    if compute_cost > 30.0:
+        sp_savings = round(compute_cost * 0.34, 2)
+        optimizations.append({
+            "title": "Adopt 1-Year Compute Savings Plan",
+            "category": "Compute FinOps",
+            "estimated_monthly_savings": sp_savings,
+            "savings_percentage": "34% Savings",
+            "impact": "High",
+            "recommendation": f"Commit to consistent compute baseline consumption on a 1-year term to reduce EC2 spend from ${compute_cost:.2f}/mo to ~${(compute_cost - sp_savings):.2f}/mo while keeping flexibility across instance types."
+        })
+
+    # 2. ARM Graviton Adoption
+    inst = comp.compute.instance_type
+    if "t3" in inst or "c5" in inst or "m5" in inst:
+        graviton_savings = round(compute_cost * 0.20, 2)
+        optimizations.append({
+            "title": "Migrate from x86 to AWS Graviton (ARM64)",
+            "category": "Architecture Modernization",
+            "estimated_monthly_savings": graviton_savings,
+            "savings_percentage": "20% Savings",
+            "impact": "Medium",
+            "recommendation": f"Transition workloads to ARM-based Graviton3 instances (e.g., replace {inst} with t4g/c7g equivalents) to lower hourly compute charges by 20% and improve energy efficiency."
+        })
+
+    # 3. Off-Hours Scheduling for Development
+    if inputs.reliability == "dev_testing" or inputs.stream == "dev_sandbox":
+        off_hours_savings = round((compute_cost + rds_cost) * 0.65, 2)
+        optimizations.append({
+            "title": "Implement Off-Hours Automated Shutdown",
+            "category": "Governance & Scheduling",
+            "estimated_monthly_savings": off_hours_savings,
+            "savings_percentage": "65% Savings",
+            "impact": "High",
+            "recommendation": "Configure AWS Instance Scheduler or EventBridge + Lambda to power down dev/test EC2 and RDS instances outside 09:00 - 18:00 on weekdays and all weekend."
+        })
+
+    # 4. NAT Gateway Consolidation
+    if comp.networking.nat_gateway_count > 1 and inputs.reliability != "mission_critical":
+        nat_savings = round((comp.networking.nat_gateway_count - 1) * 32.85, 2)
+        optimizations.append({
+            "title": "Consolidate Multi-AZ NAT Gateways to Single NAT",
+            "category": "Network Optimization",
+            "estimated_monthly_savings": nat_savings,
+            "savings_percentage": "Egress Reduction",
+            "impact": "Medium",
+            "recommendation": f"Consolidate {comp.networking.nat_gateway_count} NAT Gateways into 1 shared NAT Gateway for non-mission-critical environments to immediately eliminate redundant baseline gateway hourly fees."
+        })
+
+    # 5. S3 Intelligent-Tiering
+    if comp.storage.s3_gb >= 50:
+        s3_savings = round(comp.storage.s3_gb * 0.023 * 0.50, 2)
+        optimizations.append({
+            "title": "Enable S3 Intelligent-Tiering Storage Class",
+            "category": "Storage Optimization",
+            "estimated_monthly_savings": max(2.5, s3_savings),
+            "savings_percentage": "Up to 68% Storage Savings",
+            "impact": "Low",
+            "recommendation": "Activate S3 Intelligent-Tiering to automatically transition rarely accessed objects to lower-cost access tiers without monitoring or retrieval fees."
+        })
+
+    # 6. Spot Instances for Worker Queues
+    if inputs.stream in ["ai_ml", "devops_tooling"] or inputs.traffic_scale == "production":
+        spot_savings = round(compute_cost * 0.60, 2)
+        optimizations.append({
+            "title": "Leverage EC2 Spot Instances for Background Tasks",
+            "category": "Compute Spot Pricing",
+            "estimated_monthly_savings": spot_savings,
+            "savings_percentage": "Up to 70% Savings",
+            "impact": "High",
+            "recommendation": "Use EC2 Spot instances for background worker processes, asynchronous message queues, and CI build agents to save up to 70-90% compared to On-Demand rates."
+        })
+
+    return optimizations
+
+
+async def analyze_and_explain_requirements(inputs: RequirementInput, session: AsyncSession) -> dict:
+    """
+    Executes end-to-end sizing analysis and augments output with 'Why That Service' rationales
+    and FinOps cost optimizations.
+    """
+    profile = await analyze_requirements(inputs, session)
+    rationales = generate_service_rationales(inputs, profile)
+    optimizations = generate_cost_optimizations(inputs, profile)
+
+    cost_breakdown = {
+        "compute": round(profile.components.compute.monthly_cost, 2),
+        "database": round(profile.components.database.monthly_cost, 2),
+        "networking": round(profile.components.networking.monthly_cost, 2),
+        "storage": round(profile.components.storage.monthly_cost, 2),
+        "security": 25.0 if profile.components.security.waf_enabled else 0.0,
+        "operations_monitoring": 15.0 if profile.components.monitoring.level == "advanced" else 0.0,
+        "total": round(profile.total_estimated_cost, 2)
+    }
+
+    ai_advice = await generate_ai_architecture_advice(inputs, profile)
+
+    return {
+        "profile": profile.model_dump(),
+        "service_rationales": rationales,
+        "cost_optimizations": optimizations,
+        "ai_advice": ai_advice,
+        "cost_breakdown": cost_breakdown,
+        "architecture_tier": profile.architecture_tier,
+        "total_estimated_cost": profile.total_estimated_cost,
+        "target_region": "us-east-1"
+    }
+
+
 

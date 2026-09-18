@@ -64,10 +64,12 @@ class CacheManager:
                 return None
         return None
 
-    async def set(self, key: str, value: str, expire_seconds: int = 3600) -> bool:
+    async def set(self, key: str, value: str, expire_seconds: int = 3600, ttl: Optional[int] = None) -> bool:
         """
         Sets a key-value pair in Redis with an optional TTL.
         """
+        if ttl is not None:
+            expire_seconds = ttl
         if not self._is_connected or not self.redis_client:
             return False
         try:
@@ -77,12 +79,12 @@ class CacheManager:
             logger.warning(f"Error setting key '{key}' in Redis cache: {e}")
             return False
 
-    async def set_json(self, key: str, value: Any, expire_seconds: int = 3600) -> bool:
+    async def set_json(self, key: str, value: Any, expire_seconds: int = 3600, ttl: Optional[int] = None) -> bool:
         """
         Serializes and sets an object as JSON in Redis.
         """
         try:
-            return await self.set(key, json.dumps(value), expire_seconds)
+            return await self.set(key, json.dumps(value), expire_seconds=expire_seconds, ttl=ttl)
         except Exception as e:
             logger.warning(f"Failed to serialize JSON for key '{key}': {e}")
             return False
@@ -99,6 +101,10 @@ class CacheManager:
         except Exception as e:
             logger.warning(f"Error invalidating key '{key}' in Redis: {e}")
             return False
+
+    async def delete(self, key: str) -> bool:
+        """Alias for invalidate."""
+        return await self.invalidate(key)
 
     async def clear_catalog_cache(self) -> bool:
         """

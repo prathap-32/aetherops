@@ -2,10 +2,18 @@ import os
 import json
 import logging
 import datetime
+import uuid
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.database import Base, engine
-from app.models import EC2Catalog, RDSCatalog, GenericServiceCatalog, SyncMetadata
+from app.database import (
+    Base, engine, get_sqlite_sessionmaker,
+    get_requirements_sessionmaker, init_requirements_db
+)
+from app.models import EC2Catalog, RDSCatalog, GenericServiceCatalog, SyncMetadata, RequirementProject
+from app.schemas import (
+    RequirementInput, TechnologyStack, OperationsPreference,
+    MonitoringPreference, CloudStream, TrafficScale, ReliabilityLevel, SecurityNeed
+)
 from app.catalog import EC2_CATALOG, RDS_CATALOG
 
 logger = logging.getLogger("requirement-analysis-seeder")
@@ -203,3 +211,127 @@ async def seed_all_regions(force: bool = True):
             pass
             
     logger.info("Bulk catalog upload for all 39 regions completed.")
+
+
+async def seed_sample_requirements():
+    """
+    Seeds initial sample workload requirement profiles in SQLite requirements.db if empty.
+    """
+    await init_requirements_db()
+    sf = get_requirements_sessionmaker()
+    async with sf() as session:
+        try:
+            existing = await session.execute(select(RequirementProject).limit(1))
+            if existing.scalar_one_or_none() is not None:
+                logger.info("requirements.db already contains projects. Skipping sample seeding.")
+                return
+
+            from app.engine import analyze_and_explain_requirements
+
+            sample_1 = RequirementInput(
+                project_name="fintech-payment-engine",
+                stream=CloudStream.web_application,
+                technology=TechnologyStack(
+                    frontend="react_vue_angular",
+                    backend="python_fastapi_django",
+                    database="postgresql"
+                ),
+                operations=OperationsPreference(
+                    container_orchestration="kubernetes",
+                    infrastructure_as_code="terraform",
+                    ci_cd_pipeline="github_actions"
+                ),
+                monitoring=MonitoringPreference(
+                    level="advanced",
+                    alerting_channel="slack_webhook"
+                ),
+                traffic_scale=TrafficScale.growth,
+                reliability=ReliabilityLevel.production_safe,
+                data_storage_gb=80.0,
+                security_need=SecurityNeed.payment_processing,
+                monthly_budget=600.0
+            )
+
+            sample_2 = RequirementInput(
+                project_name="cloud-saas-starter",
+                stream=CloudStream.web_application,
+                technology=TechnologyStack(
+                    frontend="simple_html_css",
+                    backend="nodejs_express",
+                    database="postgresql"
+                ),
+                operations=OperationsPreference(
+                    container_orchestration="docker_compose",
+                    infrastructure_as_code="terraform",
+                    ci_cd_pipeline="github_actions"
+                ),
+                monitoring=MonitoringPreference(
+                    level="basic",
+                    alerting_channel="email"
+                ),
+                traffic_scale=TrafficScale.hobby_dev,
+                reliability=ReliabilityLevel.dev_testing,
+                data_storage_gb=15.0,
+                security_need=SecurityNeed.standard,
+                monthly_budget=100.0
+            )
+
+            # Analyze using default session (us-east-1)
+            default_sf = get_sqlite_sessionmaker("us-east-1")
+            async with default_sf() as cat_session:
+                res1 = await analyze_and_explain_requirements(sample_1, cat_session)
+                res2 = await analyze_and_explain_requirements(sample_2, cat_session)
+
+            proj1 = RequirementProject(
+                id=str(uuid.uuid4()),
+                project_name=sample_1.project_name,
+                description="High-throughput payment gateway with PCI-DSS compliance and Multi-AZ PostgreSQL failover.",
+                stream=sample_1.stream.value,
+                target_region="us-east-1",
+                traffic_scale=sample_1.traffic_scale.value,
+                reliability=sample_1.reliability.value,
+                security_need=sample_1.security_need.value,
+                data_storage_gb=sample_1.data_storage_gb,
+                monthly_budget=sample_1.monthly_budget,
+                tech_stack=json.dumps(sample_1.technology.model_dump()),
+                operations=json.dumps(sample_1.operations.model_dump()),
+                monitoring=json.dumps(sample_1.monitoring.model_dump()),
+                architecture_tier=res1["architecture_tier"],
+                estimated_monthly_cost=res1["total_estimated_cost"],
+                cost_breakdown=json.dumps(res1["cost_breakdown"]),
+                service_rationales=json.dumps(res1["service_rationales"]),
+                cost_optimizations=json.dumps(res1["cost_optimizations"]),
+                profile_output=json.dumps(res1["profile"]),
+                status="ANALYZED"
+            )
+
+            proj2 = RequirementProject(
+                id=str(uuid.uuid4()),
+                project_name=sample_2.project_name,
+                description="Developer prototype environment with Docker Compose and single-instance burstable compute.",
+                stream=sample_2.stream.value,
+                target_region="us-east-1",
+                traffic_scale=sample_2.traffic_scale.value,
+                reliability=sample_2.reliability.value,
+                security_need=sample_2.security_need.value,
+                data_storage_gb=sample_2.data_storage_gb,
+                monthly_budget=sample_2.monthly_budget,
+                tech_stack=json.dumps(sample_2.technology.model_dump()),
+                operations=json.dumps(sample_2.operations.model_dump()),
+                monitoring=json.dumps(sample_2.monitoring.model_dump()),
+                architecture_tier=res2["architecture_tier"],
+                estimated_monthly_cost=res2["total_estimated_cost"],
+                cost_breakdown=json.dumps(res2["cost_breakdown"]),
+                service_rationales=json.dumps(res2["service_rationales"]),
+                cost_optimizations=json.dumps(res2["cost_optimizations"]),
+                profile_output=json.dumps(res2["profile"]),
+                status="ANALYZED"
+            )
+
+            session.add(proj1)
+            session.add(proj2)
+            await session.commit()
+            logger.info("Successfully seeded initial sample projects into requirements.db.")
+        except Exception as e:
+            logger.warning(f"Seeding sample requirements skipped: {e}", exc_info=True)
+
