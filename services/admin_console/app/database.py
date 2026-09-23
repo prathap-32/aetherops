@@ -141,6 +141,7 @@ async def init_db_for_region(region: str):
     """
     Initializes database tables for the given region in local SQLite and PostgreSQL (if reachable).
     """
+    import app.models  # Register all ORM models onto Base.metadata
     region_raw = region.lower().strip()
     region_pg = region_raw.replace("-", "_")
     

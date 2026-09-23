@@ -1227,7 +1227,8 @@ def get_dashboard_page_html() -> str:
                 const unitDisp = item.unit || 'Hrs';
                 const netOrDetailDisp = item.network_performance || item.details || '-';
                 const hourlyPrice = item.price_per_hour || 0.0;
-                const monthlyPrice = (hourlyPrice * 730).toFixed(2);
+                const isMonthlyUnit = (item.unit && (item.unit.includes('Month') || item.unit.includes('month') || item.unit.includes('mo')));
+                const monthlyPrice = isMonthlyUnit ? hourlyPrice.toFixed(2) : (hourlyPrice * 730).toFixed(2);
                 
                 tableRows.innerHTML += `
                     <tr class="hover:bg-[#232f3e]/60 transition border-b border-[#263244]">
@@ -1241,12 +1242,10 @@ def get_dashboard_page_html() -> str:
                         <td class="p-3 text-gray-300 text-xs">${netOrDetailDisp}</td>
                         <td class="p-3 text-right font-mono font-bold text-[#1d8102]">$${hourlyPrice.toFixed(4)}</td>
                         <td class="p-3 text-right font-mono font-semibold text-gray-300">$${monthlyPrice}</td>
-                        <td class="p-3 text-center space-x-1.5">
-                            <button onclick="inspectItemByIndex(${idx})" class="p-1 px-2 text-[10px] font-semibold bg-[#232f3e] hover:bg-[#2a384c] text-gray-200 rounded border border-[#414d5c] transition">
-                                View
-                            </button>
-                            <button onclick="deleteSku('${currentService}', '${item.instance_type}')" class="p-1 px-2 text-[10px] font-semibold bg-[#3d1314] hover:bg-[#521819] text-[#ff9492] rounded border border-[#d13212]/50 transition">
-                                Delete
+                        <td class="p-3 text-center">
+                            <button onclick="inspectItemByIndex(${idx})" class="p-1 px-2.5 text-[10px] font-semibold bg-[#232f3e] hover:bg-[#2a384c] text-gray-200 rounded border border-[#414d5c] transition inline-flex items-center gap-1 cursor-pointer" title="View SKU Specifications">
+                                <svg class="w-3 h-3 text-[#ff9900]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                <span>View</span>
                             </button>
                         </td>
                     </tr>

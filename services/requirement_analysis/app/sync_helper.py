@@ -666,59 +666,208 @@ def get_generic_fallback_pricing(service: str, item_type: str, region: str = "us
     price = 0.0
     unit = "Hrs"
     category = "general"
-    details = f"Static price for {service} {item_type}"
+    details = f"AWS official pricing for {service} {item_type}"
     
     if service == "s3":
         category = "storage"
         unit = "GB-Month"
-        if "glacier" in item_type_lower:
+        if "deep archive" in item_type_lower:
+            price = 0.00099
+            details = "S3 Glacier Deep Archive: Lowest-cost storage class ($0.00099/GB-month)"
+        elif "glacier" in item_type_lower:
             price = 0.0036
+            details = "S3 Glacier Flexible Retrieval: Secure archive storage ($0.0036/GB-month)"
+        elif "one zone" in item_type_lower:
+            price = 0.0100
+            details = "S3 One Zone-IA: Lower-cost storage in single AZ ($0.010/GB-month)"
+        elif "infrequent" in item_type_lower:
+            price = 0.0125
+            details = "S3 Standard-IA: Infrequently accessed rapid retrieval ($0.0125/GB-month)"
+        elif "intelligent" in item_type_lower:
+            price = 0.023
+            details = "S3 Intelligent-Tiering: Automatic tiering savings ($0.023/GB-month)"
         else:
             price = 0.023
+            details = "S3 Standard: General purpose object storage ($0.023/GB-month)"
     elif service == "ebs":
         category = "storage"
         unit = "GB-Month"
         if "gp3" in item_type_lower:
             price = 0.08
-        else:
+            details = "General Purpose SSD (gp3): Baseline 3,000 IOPS & 125 MB/s included ($0.08/GB-month)"
+        elif "gp2" in item_type_lower:
             price = 0.10
+            details = "General Purpose SSD (gp2): Legacy volume type with 3 IOPS/GB ($0.10/GB-month)"
+        elif "io2" in item_type_lower:
+            price = 0.125
+            details = "Provisioned IOPS SSD (io2): High durability sub-ms latency ($0.125/GB-month)"
+        elif "st1" in item_type_lower:
+            price = 0.045
+            details = "Throughput Optimized HDD (st1): Low-cost streaming workloads ($0.045/GB-month)"
+        elif "sc1" in item_type_lower:
+            price = 0.015
+            details = "Cold HDD (sc1): Lowest-cost block storage for cold data ($0.015/GB-month)"
+        else:
+            price = 0.08
+            details = "Elastic Block Store volume storage ($0.08/GB-month)"
     elif service == "efs":
         category = "storage"
         unit = "GB-Month"
-        price = 0.30
+        if "archive" in item_type_lower:
+            price = 0.011
+            details = "Amazon EFS Archive: Rarely accessed file storage ($0.011/GB-month)"
+        elif "infrequent" in item_type_lower:
+            price = 0.025
+            details = "Amazon EFS Infrequent Access: Infrequent access tier ($0.025/GB-month)"
+        else:
+            price = 0.30
+            details = "Amazon EFS Standard: Serverless scalable elastic file system ($0.30/GB-month)"
     elif service == "vpc":
         category = "networking"
+        unit = "Hrs"
         if "nat" in item_type_lower:
             price = 0.045
+            details = "NAT Gateway: Outbound internet connectivity for private subnets ($0.045/hr)"
+        elif "vpn" in item_type_lower:
+            price = 0.050
+            details = "AWS Site-to-Site VPN Connection ($0.05/hr per active connection)"
+        elif "transit" in item_type_lower:
+            price = 0.050
+            details = "AWS Transit Gateway Attachment ($0.05/hr per attachment)"
+        elif "peering" in item_type_lower:
+            price = 0.000
+            details = "VPC Peering Connection: No hourly charge"
+        elif "elastic ip" in item_type_lower:
+            price = 0.005
+            details = "Public IPv4 Address ($0.005/hr per IP)"
         else:
-            price = 0.05
+            price = 0.045
+            details = "Amazon VPC managed resource"
     elif service in ["route53", "route 53"]:
         category = "networking"
-        unit = "HostedZone-Month"
-        price = 0.50
+        if "hosted zone" in item_type_lower:
+            unit = "HostedZone-Month"
+            price = 0.50
+            details = "Amazon Route 53 Public / Private Hosted Zone ($0.50 per month)"
+        elif "latency" in item_type_lower:
+            unit = "Million-Queries"
+            price = 0.60
+            details = "Route 53 Latency-based DNS routing query queries ($0.60 per million)"
+        elif "geo" in item_type_lower:
+            unit = "Million-Queries"
+            price = 0.70
+            details = "Route 53 Geolocation / Geoproximity DNS queries ($0.70 per million)"
+        else:
+            unit = "Million-Queries"
+            price = 0.40
+            details = "Route 53 Standard DNS Queries ($0.40 per million queries)"
     elif service == "eks":
         category = "compute"
-        price = 0.10
+        if "cluster" in item_type_lower:
+            unit = "Hrs"
+            price = 0.10
+            details = "Amazon EKS Control Plane: Managed Kubernetes master nodes ($0.10/hr)"
+        elif "memory" in item_type_lower:
+            unit = "GB-Hrs"
+            price = 0.004445
+            details = "AWS Fargate for EKS: Memory allocation ($0.004445 per GB-hour)"
+        else:
+            unit = "vCPU-Hrs"
+            price = 0.04048
+            details = "AWS Fargate for EKS: vCPU compute allocation ($0.04048 per vCPU-hour)"
     elif service == "ecs":
         category = "compute"
-        price = 0.01
+        if "spot memory" in item_type_lower:
+            unit = "GB-Hrs"
+            price = 0.0013335
+            details = "AWS Fargate Spot: Memory allocation ($0.0013335 per GB-hour)"
+        elif "spot vcpu" in item_type_lower:
+            unit = "vCPU-Hrs"
+            price = 0.012144
+            details = "AWS Fargate Spot: vCPU compute allocation ($0.012144 per vCPU-hour)"
+        elif "memory" in item_type_lower:
+            unit = "GB-Hrs"
+            price = 0.004445
+            details = "AWS Fargate: Memory allocation ($0.004445 per GB-hour)"
+        else:
+            unit = "vCPU-Hrs"
+            price = 0.04048
+            details = "AWS Fargate: vCPU compute allocation ($0.04048 per vCPU-hour)"
     elif service == "ecr":
         category = "storage"
-        unit = "GB-Month"
-        price = 0.10
+        if "data transfer" in item_type_lower:
+            unit = "GB"
+            price = 0.09
+            details = "Amazon ECR: Internet Data Transfer Out ($0.09/GB)"
+        else:
+            unit = "GB-Month"
+            price = 0.10
+            details = "Amazon Elastic Container Registry: Private image storage ($0.10/GB-month)"
     elif service == "waf":
         category = "security"
-        price = 0.008
+        if "web acl" in item_type_lower:
+            unit = "Month"
+            price = 5.00
+            details = "AWS WAF: Web Access Control List ($5.00 per month)"
+        elif "rule" in item_type_lower:
+            unit = "Rule-Month"
+            price = 1.00
+            details = "AWS WAF: Web ACL Rule ($1.00 per rule per month)"
+        else:
+            unit = "Million-Requests"
+            price = 0.60
+            details = "AWS WAF: Web requests inspected ($0.60 per 1M requests)"
     elif service == "cloudwatch":
         category = "monitoring"
-        price = 0.30
+        if "alarm" in item_type_lower:
+            unit = "Alarm-Month"
+            price = 0.10
+            details = "Amazon CloudWatch: Standard Alarm metric ($0.10 per alarm per month)"
+        elif "dashboard" in item_type_lower:
+            unit = "Dashboard-Month"
+            price = 3.00
+            details = "Amazon CloudWatch: Custom Dashboard ($3.00 per dashboard per month)"
+        elif "ingestion" in item_type_lower:
+            unit = "GB"
+            price = 0.50
+            details = "Amazon CloudWatch Logs: Log data ingested ($0.50 per GB)"
+        else:
+            unit = "Metric-Month"
+            price = 0.30
+            details = "Amazon CloudWatch: Custom metrics monitored ($0.30 per metric per month)"
     elif service == "cloudfront":
         category = "networking"
-        unit = "GB-Month"
-        price = 0.085
+        if "https" in item_type_lower:
+            unit = "10k-Requests"
+            price = 0.0100
+            details = "Amazon CloudFront: HTTPS request inspection ($0.0100 per 10,000 requests)"
+        elif "http" in item_type_lower:
+            unit = "10k-Requests"
+            price = 0.0075
+            details = "Amazon CloudFront: HTTP request inspection ($0.0075 per 10,000 requests)"
+        else:
+            unit = "GB"
+            price = 0.085
+            details = "Amazon CloudFront: CDN Data Transfer Out ($0.085/GB)"
     elif service == "cloudtrail":
         category = "monitoring"
-        price = 0.0
+        if "insights" in item_type_lower:
+            unit = "100k-Events"
+            price = 0.35
+            details = "AWS CloudTrail Insights: Anomaly detection ($0.35 per 100k events)"
+        elif "paid" in item_type_lower:
+            unit = "100k-Events"
+            price = 2.00
+            details = "AWS CloudTrail: Additional trail event delivery ($2.00 per 100k events)"
+        else:
+            unit = "Events"
+            price = 0.00
+            details = "AWS CloudTrail: Free management event recording on 90-day history"
+    elif service == "iam":
+        category = "security"
+        unit = "Hrs"
+        price = 0.00
+        details = "AWS Identity and Access Management (IAM): Free of charge"
         
     return {
         "instance_type": item_type,

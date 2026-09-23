@@ -66,58 +66,45 @@ async def seed_catalog(session: AsyncSession, region: str = "us-east-1", force: 
     if ref_data:
         region_data = next((r for r in ref_data["regions"] if r["region_code"] == region), None)
         
-    if region_data:
-        compute_catalog = region_data["service_catalog"].get("compute_baseline_hourly", {})
-        for inst_type, price in compute_catalog.items():
-            spec = next((item for item in EC2_CATALOG if item.instance_type == inst_type), None)
-            session.add(EC2Catalog(
-                instance_type=inst_type,
-                vcpus=spec.vcpus if spec else 2,
-                ram_gb=spec.ram_gb if spec else 4.0,
-                price_per_hour=float(price),
-                network_performance=spec.network_performance if spec else "Up to 5 Gbps",
-                category=spec.category if spec else "burstable"
-            ))
-            
-        rds_catalog = region_data["service_catalog"].get("database_baseline_hourly", {})
-        for inst_type, price in rds_catalog.items():
-            spec = next((item for item in RDS_CATALOG if item.instance_type == inst_type), None)
-            session.add(RDSCatalog(
-                instance_type=inst_type,
-                vcpus=spec.vcpus if spec else 2,
-                ram_gb=spec.ram_gb if spec else 4.0,
-                price_per_hour=float(price),
-                category=spec.category if spec else "burstable"
-            ))
-    else:
-        for item in EC2_CATALOG:
-            session.add(EC2Catalog(
-                instance_type=item.instance_type,
-                vcpus=item.vcpus,
-                ram_gb=item.ram_gb,
-                price_per_hour=item.price_per_hour,
-                network_performance=item.network_performance,
-                category=item.category
-            ))
-        for item in RDS_CATALOG:
-            session.add(RDSCatalog(
-                instance_type=item.instance_type,
-                vcpus=item.vcpus,
-                ram_gb=item.ram_gb,
-                price_per_hour=item.price_per_hour,
-                category=item.category
-            ))
+    multiplier = 1.0
+    if region_data and "pricing_tier_multiplier" in region_data:
+        try:
+            multiplier = float(region_data["pricing_tier_multiplier"])
+        except Exception:
+            multiplier = 1.0
+
+    for item in EC2_CATALOG:
+        price = round(item.price_per_hour * multiplier, 4)
+        session.add(EC2Catalog(
+            instance_type=item.instance_type,
+            vcpus=item.vcpus,
+            ram_gb=item.ram_gb,
+            price_per_hour=price,
+            network_performance=item.network_performance,
+            category=item.category
+        ))
+
+    for item in RDS_CATALOG:
+        price = round(item.price_per_hour * multiplier, 4)
+        session.add(RDSCatalog(
+            instance_type=item.instance_type,
+            vcpus=item.vcpus,
+            ram_gb=item.ram_gb,
+            price_per_hour=price,
+            category=item.category
+        ))
             
     from app.sync_helper import GENERIC_SERVICES_ITEMS, get_generic_fallback_pricing
     for service_name, item_types in GENERIC_SERVICES_ITEMS.items():
         for item_type in item_types:
             fallback = get_generic_fallback_pricing(service_name, item_type, region=region)
+            price = round(fallback["price_per_hour"] * multiplier, 4)
             session.add(GenericServiceCatalog(
                 service=service_name,
                 instance_type=fallback["instance_type"],
                 vcpus=fallback["vcpus"],
                 ram_gb=fallback["ram_gb"],
-                price_per_hour=fallback["price_per_hour"],
+                price_per_hour=price,
                 unit=fallback["unit"],
                 category=fallback["category"],
                 region=fallback["region"],
@@ -126,12 +113,8 @@ async def seed_catalog(session: AsyncSession, region: str = "us-east-1", force: 
 
     meta_res = await session.execute(select(SyncMetadata).where(SyncMetadata.region_code == region))
     meta_row = meta_res.scalar_one_or_none()
-    if region_data:
-        ec2_cnt = len(region_data["service_catalog"].get("compute_baseline_hourly", {}))
-        rds_cnt = len(region_data["service_catalog"].get("database_baseline_hourly", {}))
-    else:
-        ec2_cnt = len(EC2_CATALOG)
-        rds_cnt = len(RDS_CATALOG)
+    ec2_cnt = len(EC2_CATALOG)
+    rds_cnt = len(RDS_CATALOG)
     gen_cnt = sum(len(items) for items in GENERIC_SERVICES_ITEMS.values())
     tot_cnt = ec2_cnt + rds_cnt + gen_cnt
     if meta_row:
