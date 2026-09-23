@@ -1,7 +1,7 @@
 # services/requirement_analysis/app/module1_page.py
 
 def get_module1_page_html() -> str:
-    return """<!DOCTYPE html>
+    return r"""<!DOCTYPE html>
 <html lang="en" class="light">
 <head>
     <meta charset="UTF-8">
@@ -55,6 +55,9 @@ def get_module1_page_html() -> str:
             --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.03);
             --tab-active-col: #ea580c;
             --tab-inactive-col: #64748b;
+            --bg-header: #ffffff;
+            --border-header: #e2e8f0;
+            --header-text: #0f172a;
         }
 
         html.dark {
@@ -77,28 +80,42 @@ def get_module1_page_html() -> str:
             --card-shadow: none;
             --tab-active-col: #ff9900;
             --tab-inactive-col: #9ba7b6;
+            --bg-header: #161e2e;
+            --border-header: #2d3748;
+            --header-text: #ffffff;
         }
 
         body { background-color: var(--bg-page); color: var(--text-body); transition: background-color 0.15s ease, color 0.15s ease; }
-        .aws-card { background-color: var(--bg-card); border: 1px solid var(--border-card); box-shadow: var(--card-shadow); border-radius: 6px; }
+        .app-header { background-color: var(--bg-header); border-bottom: 1px solid var(--border-header); }
+        .aws-card { background-color: var(--bg-card); border: 1px solid var(--border-card); box-shadow: var(--card-shadow); border-radius: 8px; }
         .aws-btn-primary { background-color: #ec7211; color: #ffffff; font-weight: 700; transition: all 0.15s ease-in-out; }
         .aws-btn-primary:hover { background-color: #eb5f07; }
         .aws-btn-secondary { background-color: var(--btn-sec-bg); border: 1px solid var(--btn-sec-border); color: var(--btn-sec-text); transition: all 0.15s ease-in-out; }
         .aws-btn-secondary:hover { background-color: var(--btn-sec-hover); border-color: #ec7211; }
-        .aws-input { background-color: var(--input-bg); border: 1px solid var(--input-border); color: var(--input-text); transition: border-color 0.15s; }
-        .aws-input:focus { border-color: #ec7211; outline: none; box-shadow: 0 0 0 1px #ec7211; }
+        .aws-input { background-color: var(--input-bg); border: 1px solid var(--input-border); color: var(--input-text); transition: border-color 0.15s, box-shadow 0.15s; }
+        .aws-input:focus { border-color: #ec7211; outline: none; box-shadow: 0 0 0 2px rgba(236, 114, 17, 0.2); }
         .tab-active { border-bottom: 2px solid #ec7211; color: var(--tab-active-col); font-weight: 700; }
         .tab-inactive { color: var(--tab-inactive-col); }
         .tab-inactive:hover { color: var(--text-title); }
         .box-subtle { background-color: var(--bg-subtle-card); border: 1px solid var(--border-card); }
         .text-title { color: var(--text-title); }
         .text-muted-custom { color: var(--text-muted); }
+
+        /* Light mode specific header element adjustments */
+        html:not(.dark) .app-header .text-white { color: #0f172a !important; }
+        html:not(.dark) .app-header .text-gray-300,
+        html:not(.dark) .app-header .text-gray-200 { color: #334155 !important; }
+        html:not(.dark) .app-header .text-gray-500 { color: #94a3b8 !important; }
+        html:not(.dark) .app-header .bg-\[\#0f141c\],
+        html:not(.dark) .app-header .bg-\[\#232f3e\] { background-color: #f1f5f9 !important; border-color: #cbd5e1 !important; color: #334155 !important; }
+        html:not(.dark) .app-header .border-\[\#2d3748\],
+        html:not(.dark) .app-header .border-\[\#414d5c\] { border-color: #e2e8f0 !important; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col font-sans selection:bg-[#ec7211]/30 selection:text-[#ff9900]">
 
     <!-- Top Navigation Header -->
-    <header class="bg-[#161e2e] border-b border-[#2d3748] px-4 sm:px-6 py-2.5 flex items-center justify-between sticky top-0 z-40 shadow-sm">
+    <header class="app-header px-4 sm:px-6 py-2.5 flex items-center justify-between sticky top-0 z-40 shadow-xs transition-colors duration-150">
         
         <!-- Left: Branding & Breadcrumb -->
         <div class="flex items-center space-x-3">
@@ -170,224 +187,261 @@ def get_module1_page_html() -> str:
         <!-- Two-Column Primary Layout -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             
-            <!-- LEFT COLUMN: Requirements Intake Form (5 Cols) -->
-            <div class="lg:col-span-5 space-y-5">
+            <!-- LEFT COLUMN: Modern Unified Workload Intake Console (5 Cols) -->
+            <div class="lg:col-span-5 space-y-4">
                 
-                <!-- AI Natural Language Prompt Card -->
-                <div class="aws-card p-5 space-y-3.5 border-t-2 border-t-[#ec7211]">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center space-x-2">
-                            <span class="text-xs font-bold text-title flex items-center gap-1.5">
-                                <svg class="w-4 h-4 text-[#ec7211]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                                AI Natural Language Requirement Intake
-                            </span>
-                        </div>
-                        <span class="text-[10px] font-mono text-[#ea580c] dark:text-[#ff9900] px-2 py-0.5 rounded bg-[#ec7211]/15 border border-[#ec7211]/30">Zero Hallucination</span>
-                    </div>
-                    <p class="text-[11px] text-muted-custom">
-                        Describe your workload in plain English. The AI parser extracts technical parameters, sizes infrastructure against regional SQLite databases & Redis, and computes FinOps savings.
-                    </p>
-                    <textarea id="ai-prompt-input" rows="3" placeholder="e.g. Deploy a high-throughput healthcare API using Python FastAPI and PostgreSQL. Requires HIPAA compliance, multi-AZ HA, 50 GB storage, and budget under $300/mo."
-                        class="aws-input w-full p-2.5 rounded text-xs leading-relaxed resize-none"></textarea>
+                <div class="aws-card p-5 space-y-4 border-t-2 border-t-[#ec7211]">
                     
-                    <!-- Quick Prompt Scenario Chips -->
-                    <div class="space-y-1.5">
-                        <div class="text-[10px] font-bold text-muted-custom uppercase tracking-wider font-mono">Quick Scenarios:</div>
-                        <div class="flex flex-wrap gap-1.5 text-[10px]">
-                            <button type="button" onclick="setPromptAndAnalyze('Fintech payment engine on FastAPI and PostgreSQL, PCI-DSS compliance, multi-AZ HA, 300 RPS, budget under $450/mo.')" 
-                                class="px-2 py-1 rounded box-subtle text-muted-custom hover:text-title font-mono transition">
-                                🏦 Fintech PCI-DSS
-                            </button>
-                            <button type="button" onclick="setPromptAndAnalyze('Enterprise healthcare portal with Python FastAPI and PostgreSQL, HIPAA security, multi-AZ, 100 GB storage under $500/mo.')" 
-                                class="px-2 py-1 rounded box-subtle text-muted-custom hover:text-title font-mono transition">
-                                🏥 Healthcare HIPAA
-                            </button>
-                            <button type="button" onclick="setPromptAndAnalyze('AI machine learning inference pipeline on FastAPI with EKS, high traffic 500 RPS, CloudFront CDN, budget $600.')" 
-                                class="px-2 py-1 rounded box-subtle text-muted-custom hover:text-title font-mono transition">
-                                🤖 AI/ML Inference
-                            </button>
-                            <button type="button" onclick="setPromptAndAnalyze('Lightweight internal dev sandbox for testing prototypes on React and Node.js, single-AZ, budget under $40.')" 
-                                class="px-2 py-1 rounded box-subtle text-muted-custom hover:text-title font-mono transition">
-                                🧪 Dev Sandbox &lt;$40
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="flex gap-2 pt-1">
-                        <button type="button" id="btn-ai-autofill" onclick="handleAiAutoFill()" class="flex-1 aws-btn-secondary py-2 rounded text-xs font-semibold flex items-center justify-center gap-1.5">
-                            <svg class="w-3.5 h-3.5 text-[#ec7211]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                            <span>AI Auto-Fill Form</span>
-                        </button>
-                        <button type="button" id="btn-ai-analyze" onclick="handleAiAnalyzeDirect()" class="flex-1 aws-btn-primary py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                            <span>AI Sizing & Analysis</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="aws-card p-5 space-y-4">
-                    
-                    <div class="border-b border-[var(--border-card)] pb-3 flex items-center justify-between">
+                    <!-- Header with Mode Switcher -->
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-[var(--border-card)]">
                         <div class="flex items-center space-x-2">
                             <span class="h-2.5 w-2.5 rounded-full bg-[#ec7211]"></span>
-                            <h2 class="text-sm font-bold text-title uppercase tracking-wider">Workload Parameters</h2>
+                            <h2 class="text-sm font-bold text-title uppercase tracking-wider">Workload Parameters & Sizing Intake</h2>
                         </div>
-                        <span class="text-[10px] text-muted-custom font-mono">SQLite Input</span>
+                        
+                        <!-- Modern Intake Mode Switcher -->
+                        <div class="flex items-center p-1 rounded-lg bg-gray-100 dark:bg-[#0f141c] border border-gray-200 dark:border-[#2d3748] text-xs">
+                            <button type="button" onclick="switchIntakeMode('prompt')" id="tab-intake-prompt" 
+                                class="px-2.5 py-1 text-xs font-bold rounded-md bg-[#ec7211] text-white shadow-xs transition flex items-center gap-1 cursor-pointer">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                <span>Prompt Sizing</span>
+                            </button>
+                            <button type="button" onclick="switchIntakeMode('form')" id="tab-intake-form" 
+                                class="px-2.5 py-1 text-xs font-semibold rounded-md text-muted-custom hover:text-title transition flex items-center gap-1 cursor-pointer">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+                                <span>Manual Specs</span>
+                            </button>
+                        </div>
                     </div>
 
-                    <form id="requirements-form" onsubmit="handleAnalyzeSubmit(event)" class="space-y-4 text-xs">
-                        
-                        <!-- Project Identity -->
-                        <div class="space-y-3">
-                            <div>
-                                <label class="block text-muted-custom font-semibold mb-1">Project Name</label>
-                                <input type="text" id="req-project-name" required placeholder="e.g., payment-gateway-core" value="fintech-payment-engine"
-                                    class="aws-input w-full p-2 rounded text-xs font-mono">
+                    <!-- MODE 1: PROMPT-BASED SIZING (Default) -->
+                    <div id="intake-mode-prompt" class="space-y-4">
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between">
+                                <label class="block text-xs font-bold text-title">
+                                    Describe your architecture in plain English:
+                                </label>
+                                <span class="text-[10px] font-mono text-[#ea580c] dark:text-[#ff9900] px-2 py-0.5 rounded bg-[#ec7211]/15 border border-[#ec7211]/30">Zero Hallucination</span>
                             </div>
-                            
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-muted-custom font-semibold mb-1">Cloud Stream</label>
-                                    <select id="req-stream" class="aws-input w-full p-2 rounded text-xs">
-                                        <option value="web_application" selected>Web Application</option>
-                                        <option value="ai_ml">AI / Machine Learning</option>
-                                        <option value="iot">IoT Ingestion Hub</option>
-                                        <option value="devops_tooling">DevOps Tooling / CI</option>
-                                        <option value="dev_sandbox">Developer Sandbox</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-muted-custom font-semibold mb-1">Target Region</label>
-                                    <select id="req-region" class="aws-input w-full p-2 rounded text-xs font-mono">
-                                        <option value="us-east-1" selected>us-east-1 (N. Virginia)</option>
-                                        <option value="us-east-2">us-east-2 (Ohio)</option>
-                                        <option value="us-west-2">us-west-2 (Oregon)</option>
-                                        <option value="ap-south-1">ap-south-1 (Mumbai)</option>
-                                        <option value="eu-west-1">eu-west-1 (Ireland)</option>
-                                        <option value="eu-central-1">eu-central-1 (Frankfurt)</option>
-                                        <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
-                                        <option value="ca-central-1">ca-central-1 (Central)</option>
-                                    </select>
-                                </div>
+                            <p class="text-[11px] text-muted-custom leading-relaxed">
+                                Our autonomous NLP parser extracts computing streams, technologies, traffic scale, and compliance parameters with exact pricing grounding.
+                            </p>
+                        </div>
+
+                        <!-- Prompt Input Area with Modern Focus State -->
+                        <div class="relative">
+                            <textarea id="ai-prompt-input" rows="4" 
+                                placeholder="e.g. Architect a scalable Fintech payment gateway with Python FastAPI and PostgreSQL. Requires PCI-DSS compliance, multi-AZ HA, Redis caching, handling ~300 RPS under $400/month in us-east-1."
+                                class="aws-input w-full p-3 rounded-lg text-xs leading-relaxed resize-none font-sans border-2 border-gray-200 dark:border-gray-700 focus:border-[#ec7211] shadow-xs"></textarea>
+                        </div>
+
+                        <!-- Quick Template Pills -->
+                        <div class="space-y-1.5">
+                            <div class="text-[10px] font-bold text-muted-custom uppercase tracking-wider font-mono">
+                                Quick Workload Scenarios:
+                            </div>
+                            <div class="flex flex-wrap gap-1.5 text-[10px]">
+                                <button type="button" onclick="setPromptAndAnalyze('Fintech payment engine on FastAPI and PostgreSQL, PCI-DSS compliance, multi-AZ HA, 300 RPS, budget under $450/mo in us-east-1.')" 
+                                    class="px-2.5 py-1 rounded-full box-subtle text-muted-custom hover:text-title hover:border-[#ec7211] font-mono transition cursor-pointer">
+                                    🏦 Fintech PCI-DSS
+                                </button>
+                                <button type="button" onclick="setPromptAndAnalyze('Enterprise healthcare portal with Python FastAPI and PostgreSQL, HIPAA security, multi-AZ, 100 GB storage under $500/mo.')" 
+                                    class="px-2.5 py-1 rounded-full box-subtle text-muted-custom hover:text-title hover:border-[#ec7211] font-mono transition cursor-pointer">
+                                    🏥 Healthcare HIPAA
+                                </button>
+                                <button type="button" onclick="setPromptAndAnalyze('High-traffic E-commerce store with Node.js, React, Redis caching, MySQL, CloudFront CDN, 400 RPS under $600/mo.')" 
+                                    class="px-2.5 py-1 rounded-full box-subtle text-muted-custom hover:text-title hover:border-[#ec7211] font-mono transition cursor-pointer">
+                                    🛒 E-Commerce
+                                </button>
+                                <button type="button" onclick="setPromptAndAnalyze('AI machine learning inference pipeline on FastAPI with EKS, high traffic 500 RPS, CloudFront CDN, budget $600.')" 
+                                    class="px-2.5 py-1 rounded-full box-subtle text-muted-custom hover:text-title hover:border-[#ec7211] font-mono transition cursor-pointer">
+                                    🤖 AI Inference
+                                </button>
+                                <button type="button" onclick="setPromptAndAnalyze('Lightweight internal dev sandbox for testing prototypes on React and Node.js, single-AZ, budget under $40.')" 
+                                    class="px-2.5 py-1 rounded-full box-subtle text-muted-custom hover:text-title hover:border-[#ec7211] font-mono transition cursor-pointer">
+                                    🧪 Dev Sandbox &lt;$40
+                                </button>
                             </div>
                         </div>
 
-                        <!-- Technology Stack -->
-                        <div class="pt-2 border-t border-[var(--border-card)]">
-                            <div class="text-[10px] font-bold text-muted-custom uppercase tracking-wider mb-2">Software Stack</div>
-                            <div class="grid grid-cols-3 gap-2">
-                                <div>
-                                    <label class="block text-[10px] text-muted-custom mb-1">Frontend</label>
-                                    <select id="req-frontend" class="aws-input w-full p-1.5 rounded text-[11px]">
-                                        <option value="react_vue_angular" selected>React / Vue</option>
-                                        <option value="simple_html_css">HTML / CSS</option>
-                                        <option value="none">None (API only)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] text-muted-custom mb-1">Backend</label>
-                                    <select id="req-backend" class="aws-input w-full p-1.5 rounded text-[11px]">
-                                        <option value="python_fastapi_django" selected>Python / FastAPI</option>
-                                        <option value="nodejs_express">Node.js Express</option>
-                                        <option value="java_spring">Java Spring</option>
-                                        <option value="none">None</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] text-muted-custom mb-1">Database</label>
-                                    <select id="req-database" class="aws-input w-full p-1.5 rounded text-[11px]">
-                                        <option value="postgresql" selected>PostgreSQL</option>
-                                        <option value="mysql">MySQL</option>
-                                        <option value="none">None</option>
-                                    </select>
-                                </div>
-                            </div>
+                        <!-- Real-time Extracted Profile Badges -->
+                        <div id="extracted-profile-preview" class="hidden">
+                            <!-- Populated dynamically via JS -->
                         </div>
 
-                        <!-- Traffic & Reliability -->
-                        <div class="pt-2 border-t border-[var(--border-card)]">
-                            <div class="text-[10px] font-bold text-muted-custom uppercase tracking-wider mb-2">Scale & Reliability</div>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-[10px] text-muted-custom mb-1">Traffic Scale</label>
-                                    <select id="req-traffic" class="aws-input w-full p-2 rounded text-xs">
-                                        <option value="hobby_dev">Hobby / Dev (1 RPS)</option>
-                                        <option value="growth" selected>Growth (30-45 RPS)</option>
-                                        <option value="production">Production (200-400 RPS)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] text-muted-custom mb-1">Reliability Tier</label>
-                                    <select id="req-reliability" class="aws-input w-full p-2 rounded text-xs">
-                                        <option value="dev_testing">Dev/Test (95% SLA)</option>
-                                        <option value="production_safe" selected>Prod-Safe (Multi-AZ 99.9%)</option>
-                                        <option value="mission_critical">Mission-Critical (99.99%)</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Storage, Security & Budget -->
-                        <div class="pt-2 border-t border-[var(--border-card)]">
-                            <div class="text-[10px] font-bold text-muted-custom uppercase tracking-wider mb-2">Governance & Budget</div>
-                            <div class="grid grid-cols-3 gap-2">
-                                <div>
-                                    <label class="block text-[10px] text-muted-custom mb-1">Storage (GB)</label>
-                                    <input type="number" id="req-storage" min="0" value="80" class="aws-input w-full p-1.5 rounded text-xs font-mono">
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] text-muted-custom mb-1">Compliance</label>
-                                    <select id="req-security" class="aws-input w-full p-1.5 rounded text-[11px]">
-                                        <option value="standard">Standard</option>
-                                        <option value="payment_processing" selected>PCI-DSS / Finance</option>
-                                        <option value="healthcare">HIPAA Healthcare</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] text-muted-custom mb-1">Max Budget ($/mo)</label>
-                                    <input type="number" id="req-budget" min="0" placeholder="Optional" value="600" class="aws-input w-full p-1.5 rounded text-xs font-mono">
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- DevOps / Orchestration Preferences -->
-                        <div class="pt-2 border-t border-[var(--border-card)]">
-                            <div class="text-[10px] font-bold text-muted-custom uppercase tracking-wider mb-2">DevOps Tooling</div>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-[10px] text-muted-custom mb-1">Orchestration</label>
-                                    <select id="req-orchestration" class="aws-input w-full p-2 rounded text-xs">
-                                        <option value="kubernetes" selected>Kubernetes (K8s / EKS)</option>
-                                        <option value="ecs_fargate">AWS ECS Fargate</option>
-                                        <option value="docker_compose">Docker Compose</option>
-                                        <option value="none">None (VM Bare)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] text-muted-custom mb-1">Monitoring</label>
-                                    <select id="req-monitoring" class="aws-input w-full p-2 rounded text-xs">
-                                        <option value="comprehensive_prom_grafana" selected>Prometheus + Grafana</option>
-                                        <option value="cloudwatch_native">AWS CloudWatch Native</option>
-                                        <option value="basic_health_only">Basic Health Only</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Submit CTA Buttons -->
-                        <div class="pt-3 flex items-center gap-3">
-                            <button type="submit" id="btn-analyze" class="aws-btn-primary flex-1 py-2.5 px-4 rounded text-xs font-bold shadow flex items-center justify-center gap-2 cursor-pointer">
+                        <!-- Action Buttons -->
+                        <div class="flex flex-col sm:flex-row gap-2 pt-1">
+                            <button type="button" id="btn-ai-analyze" onclick="handleAiAnalyzeDirect()" 
+                                class="flex-1 aws-btn-primary py-2.5 px-4 rounded-lg text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-sm">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                                <span>Analyze & Size Workload</span>
+                                <span>Identify & Analyze Workload</span>
                             </button>
-                            <button type="button" onclick="saveCurrentProject()" class="aws-btn-secondary py-2.5 px-4 rounded text-xs font-bold flex items-center gap-1.5 cursor-pointer">
-                                <svg class="w-4 h-4 text-[#ec7211]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
-                                <span>Save</span>
+                            <button type="button" onclick="handleAiAutoFillAndSwitch()" 
+                                class="aws-btn-secondary py-2.5 px-3.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer">
+                                <svg class="w-3.5 h-3.5 text-[#ec7211]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                <span>Edit in Form</span>
                             </button>
                         </div>
+                    </div>
 
-                    </form>
+                    <!-- MODE 2: DETAILED PARAMETERS FORM (Hidden by default, cleanly toggled) -->
+                    <div id="intake-mode-form" class="space-y-4 hidden">
+                        <form id="requirements-form" onsubmit="handleAnalyzeSubmit(event)" class="space-y-3 text-xs">
+                            
+                            <!-- Group 1: Project Identity & Region -->
+                            <div class="box-subtle p-3 rounded-lg space-y-2">
+                                <div class="text-[10px] font-bold text-muted-custom uppercase tracking-wider font-mono">1. Project & Region</div>
+                                <div>
+                                    <label class="block text-muted-custom font-semibold mb-1">Project Name</label>
+                                    <input type="text" id="req-project-name" required placeholder="e.g., payment-gateway-core" value="fintech-payment-engine"
+                                        class="aws-input w-full p-2 rounded text-xs font-mono">
+                                </div>
+                                <div class="grid grid-cols-2 gap-2.5">
+                                    <div>
+                                        <label class="block text-muted-custom font-semibold mb-1">Cloud Stream</label>
+                                        <select id="req-stream" class="aws-input w-full p-2 rounded text-xs">
+                                            <option value="web_application" selected>Web Application</option>
+                                            <option value="ai_ml">AI / Machine Learning</option>
+                                            <option value="iot">IoT Ingestion Hub</option>
+                                            <option value="devops_tooling">DevOps Tooling / CI</option>
+                                            <option value="dev_sandbox">Developer Sandbox</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-muted-custom font-semibold mb-1">Target Region</label>
+                                        <select id="req-region" class="aws-input w-full p-2 rounded text-xs font-mono">
+                                            <option value="us-east-1" selected>us-east-1 (N. Virginia)</option>
+                                            <option value="us-east-2">us-east-2 (Ohio)</option>
+                                            <option value="us-west-2">us-west-2 (Oregon)</option>
+                                            <option value="ap-south-1">ap-south-1 (Mumbai)</option>
+                                            <option value="eu-west-1">eu-west-1 (Ireland)</option>
+                                            <option value="eu-central-1">eu-central-1 (Frankfurt)</option>
+                                            <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
+                                            <option value="ca-central-1">ca-central-1 (Central)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Group 2: Software Technology Stack -->
+                            <div class="box-subtle p-3 rounded-lg space-y-2">
+                                <div class="text-[10px] font-bold text-muted-custom uppercase tracking-wider font-mono">2. Technology Stack</div>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <div>
+                                        <label class="block text-[10px] text-muted-custom mb-1">Frontend</label>
+                                        <select id="req-frontend" class="aws-input w-full p-1.5 rounded text-[11px]">
+                                            <option value="react_vue_angular" selected>React / Vue</option>
+                                            <option value="simple_html_css">HTML / CSS</option>
+                                            <option value="none">None (API only)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] text-muted-custom mb-1">Backend</label>
+                                        <select id="req-backend" class="aws-input w-full p-1.5 rounded text-[11px]">
+                                            <option value="python_fastapi_django" selected>Python / FastAPI</option>
+                                            <option value="nodejs_express">Node.js Express</option>
+                                            <option value="java_spring">Java Spring</option>
+                                            <option value="none">None</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] text-muted-custom mb-1">Database</label>
+                                        <select id="req-database" class="aws-input w-full p-1.5 rounded text-[11px]">
+                                            <option value="postgresql" selected>PostgreSQL</option>
+                                            <option value="mysql">MySQL</option>
+                                            <option value="none">None</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Group 3: Scale & Reliability SLA -->
+                            <div class="box-subtle p-3 rounded-lg space-y-2">
+                                <div class="text-[10px] font-bold text-muted-custom uppercase tracking-wider font-mono">3. Scale & High Availability</div>
+                                <div class="grid grid-cols-2 gap-2.5">
+                                    <div>
+                                        <label class="block text-[10px] text-muted-custom mb-1">Traffic Scale</label>
+                                        <select id="req-traffic" class="aws-input w-full p-2 rounded text-xs">
+                                            <option value="hobby_dev">Hobby / Dev (1 RPS)</option>
+                                            <option value="growth" selected>Growth (30-45 RPS)</option>
+                                            <option value="production">Production (200-400 RPS)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] text-muted-custom mb-1">Reliability Tier</label>
+                                        <select id="req-reliability" class="aws-input w-full p-2 rounded text-xs">
+                                            <option value="dev_testing">Dev/Test (95% SLA)</option>
+                                            <option value="production_safe" selected>Prod-Safe (Multi-AZ 99.9%)</option>
+                                            <option value="mission_critical">Mission-Critical (99.99%)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Group 4: Storage, Governance & Budget -->
+                            <div class="box-subtle p-3 rounded-lg space-y-2">
+                                <div class="text-[10px] font-bold text-muted-custom uppercase tracking-wider font-mono">4. Storage, Governance & Budget</div>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <div>
+                                        <label class="block text-[10px] text-muted-custom mb-1">Storage (GB)</label>
+                                        <input type="number" id="req-storage" min="0" value="80" class="aws-input w-full p-1.5 rounded text-xs font-mono">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] text-muted-custom mb-1">Compliance</label>
+                                        <select id="req-security" class="aws-input w-full p-1.5 rounded text-[11px]">
+                                            <option value="standard">Standard</option>
+                                            <option value="payment_processing" selected>PCI-DSS / Finance</option>
+                                            <option value="healthcare">HIPAA Healthcare</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] text-muted-custom mb-1">Budget ($/mo)</label>
+                                        <input type="number" id="req-budget" min="0" placeholder="Optional" value="600" class="aws-input w-full p-1.5 rounded text-xs font-mono">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Group 5: DevOps Tooling -->
+                            <div class="box-subtle p-3 rounded-lg space-y-2">
+                                <div class="text-[10px] font-bold text-muted-custom uppercase tracking-wider font-mono">5. DevOps & Orchestration</div>
+                                <div class="grid grid-cols-2 gap-2.5">
+                                    <div>
+                                        <label class="block text-[10px] text-muted-custom mb-1">Orchestration</label>
+                                        <select id="req-orchestration" class="aws-input w-full p-2 rounded text-xs">
+                                            <option value="kubernetes" selected>Kubernetes (K8s / EKS)</option>
+                                            <option value="ecs_fargate">AWS ECS Fargate</option>
+                                            <option value="docker_compose">Docker Compose</option>
+                                            <option value="none">None (VM Bare)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] text-muted-custom mb-1">Monitoring</label>
+                                        <select id="req-monitoring" class="aws-input w-full p-2 rounded text-xs">
+                                            <option value="comprehensive_prom_grafana" selected>Prometheus + Grafana</option>
+                                            <option value="cloudwatch_native">AWS CloudWatch Native</option>
+                                            <option value="basic_health_only">Basic Health Only</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Submit Buttons -->
+                            <div class="pt-2 flex items-center gap-2">
+                                <button type="submit" id="btn-analyze" class="aws-btn-primary flex-1 py-2.5 px-4 rounded-lg text-xs font-bold shadow flex items-center justify-center gap-2 cursor-pointer">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                    <span>Analyze & Size Workload</span>
+                                </button>
+                                <button type="button" onclick="saveCurrentProject()" class="aws-btn-secondary py-2.5 px-3.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer">
+                                    <svg class="w-4 h-4 text-[#ec7211]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                                    <span>Save</span>
+                                </button>
+                            </div>
+
+                        </form>
+                    </div>
+
                 </div>
+
             </div>
 
             <!-- RIGHT COLUMN: Sizing Breakdown & Rationales (7 Cols) -->
@@ -629,15 +683,15 @@ def get_module1_page_html() -> str:
     </main>
 
     <!-- Footer -->
-    <footer class="bg-[#161e2e] border-t border-[#2d3748] py-4 px-6 text-center text-xs text-gray-400 flex flex-col sm:flex-row items-center justify-between gap-3 mt-12">
+    <footer class="app-header py-4 px-6 text-center text-xs text-muted-custom flex flex-col sm:flex-row items-center justify-between gap-3 mt-12 transition-colors">
         <div class="flex items-center space-x-4">
-            <span>AetherOps CloudOps Platform</span>
+            <span class="font-bold text-title">AetherOps Cloud</span>
             <span>•</span>
-            <span>Module 1: Autonomous Sizing</span>
+            <span>Module 1: Autonomous Workload Profiler</span>
             <span>•</span>
-            <span class="text-gray-500">Port :8001</span>
+            <span class="font-mono text-muted-custom">Port :8001</span>
         </div>
-        <div class="font-mono text-[11px] text-gray-400">
+        <div class="font-mono text-[11px] text-muted-custom">
             &copy; 2026 AetherOps Cloud • Orchestrated by Kubernetes (K8s)
         </div>
     </footer>
@@ -646,7 +700,21 @@ def get_module1_page_html() -> str:
     <script>
         let currentProjectId = null;
 
-        // Theme Support
+        // Cross-Application Theme Synchronization
+        function getCrossAppTheme() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlTheme = urlParams.get('theme');
+            if (urlTheme === 'light' || urlTheme === 'dark') return urlTheme;
+
+            const match = document.cookie.match(/(?:^|;\s*)aether_theme=([^;]+)/);
+            if (match && (match[1] === 'light' || match[1] === 'dark')) return match[1];
+
+            const stored = localStorage.getItem('aether_theme');
+            if (stored === 'light' || stored === 'dark') return stored;
+
+            return 'light';
+        }
+
         function applyTheme(theme) {
             const btnIcon = document.getElementById('theme-toggle-icon');
             const btnText = document.getElementById('theme-toggle-text');
@@ -662,6 +730,17 @@ def get_module1_page_html() -> str:
                 if (btnText) btnText.innerText = 'Light';
             }
             localStorage.setItem('aether_theme', theme);
+            document.cookie = "aether_theme=" + theme + "; path=/; max-age=31536000; SameSite=Lax";
+
+            // Update links to Admin Console to pass current theme
+            const adminLinks = document.querySelectorAll('a[href*=":8000"], a[href^="/admin"]');
+            adminLinks.forEach(a => {
+                try {
+                    const u = new URL(a.href, window.location.origin);
+                    u.searchParams.set('theme', theme);
+                    a.href = u.toString();
+                } catch(e) {}
+            });
         }
 
         function toggleTheme() {
@@ -669,8 +748,17 @@ def get_module1_page_html() -> str:
             applyTheme(isDark ? 'light' : 'dark');
         }
 
-        const initialTheme = localStorage.getItem('aether_theme') || 'light';
-        applyTheme(initialTheme);
+        // Initialize cross-app theme
+        applyTheme(getCrossAppTheme());
+
+        window.addEventListener('focus', () => {
+            const current = getCrossAppTheme();
+            const isDark = document.documentElement.classList.contains('dark');
+            const shouldBeDark = (current === 'dark');
+            if (isDark !== shouldBeDark) {
+                applyTheme(current);
+            }
+        });
 
         const samplePresets = {
             fintech: {
@@ -724,8 +812,61 @@ def get_module1_page_html() -> str:
             triggerAnalyze();
         }
 
+        function switchIntakeMode(mode) {
+            const promptView = document.getElementById('intake-mode-prompt');
+            const formView = document.getElementById('intake-mode-form');
+            const tabPrompt = document.getElementById('tab-intake-prompt');
+            const tabForm = document.getElementById('tab-intake-form');
+
+            if (mode === 'prompt') {
+                if (promptView) promptView.classList.remove('hidden');
+                if (formView) formView.classList.add('hidden');
+                if (tabPrompt) tabPrompt.className = 'px-2.5 py-1 text-xs font-bold rounded-md bg-[#ec7211] text-white shadow-xs transition flex items-center gap-1 cursor-pointer';
+                if (tabForm) tabForm.className = 'px-2.5 py-1 text-xs font-semibold rounded-md text-muted-custom hover:text-title transition flex items-center gap-1 cursor-pointer';
+            } else {
+                if (promptView) promptView.classList.add('hidden');
+                if (formView) formView.classList.remove('hidden');
+                if (tabForm) tabForm.className = 'px-2.5 py-1 text-xs font-bold rounded-md bg-[#ec7211] text-white shadow-xs transition flex items-center gap-1 cursor-pointer';
+                if (tabPrompt) tabPrompt.className = 'px-2.5 py-1 text-xs font-semibold rounded-md text-muted-custom hover:text-title transition flex items-center gap-1 cursor-pointer';
+            }
+        }
+
+        async function handleAiAutoFillAndSwitch() {
+            await handleAiAutoFill();
+            switchIntakeMode('form');
+        }
+
+        function renderExtractedProfileBadges(p, conf, engine) {
+            const container = document.getElementById('extracted-profile-preview');
+            if (!container) return;
+            container.classList.remove('hidden');
+            const confPercent = conf ? Math.round(conf * 100) : 98;
+            container.innerHTML = `
+                <div class="p-3 rounded-lg box-subtle space-y-2 border border-[#ec7211]/30 bg-orange-50/60 dark:bg-orange-950/20">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="font-bold text-title flex items-center gap-1.5 font-mono">
+                            <span class="h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
+                            AI Identified Architecture Profile
+                        </span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
+                            ${confPercent}% Match Confidence
+                        </span>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 text-[11px] font-mono">
+                        <span class="px-2 py-0.5 rounded bg-white dark:bg-[#1b2533] border border-gray-200 dark:border-gray-700 text-title">🏢 Stream: <strong>${p.stream || 'web_application'}</strong></span>
+                        <span class="px-2 py-0.5 rounded bg-white dark:bg-[#1b2533] border border-gray-200 dark:border-gray-700 text-title">🐍 Backend: <strong>${p.technology?.backend || 'fastapi'}</strong></span>
+                        <span class="px-2 py-0.5 rounded bg-white dark:bg-[#1b2533] border border-gray-200 dark:border-gray-700 text-title">🐘 Database: <strong>${p.technology?.database || 'postgresql'}</strong></span>
+                        <span class="px-2 py-0.5 rounded bg-white dark:bg-[#1b2533] border border-gray-200 dark:border-gray-700 text-title">📈 Scale: <strong>${p.traffic_scale || 'growth'}</strong></span>
+                        <span class="px-2 py-0.5 rounded bg-white dark:bg-[#1b2533] border border-gray-200 dark:border-gray-700 text-title">🛡️ Security: <strong>${p.security_need || 'standard'}</strong></span>
+                        <span class="px-2 py-0.5 rounded bg-white dark:bg-[#1b2533] border border-gray-200 dark:border-gray-700 text-title">💰 Budget: <strong>$${p.monthly_budget || 400}/mo</strong></span>
+                    </div>
+                </div>
+            `;
+        }
+
         function setPromptAndAnalyze(promptText) {
             document.getElementById('ai-prompt-input').value = promptText;
+            switchIntakeMode('prompt');
             handleAiAnalyzeDirect();
         }
 
@@ -864,14 +1005,16 @@ def get_module1_page_html() -> str:
                         if (p.data_storage_gb) document.getElementById('req-storage').value = p.data_storage_gb;
                         if (p.security_need) document.getElementById('req-security').value = p.security_need;
                         if (p.monthly_budget) document.getElementById('req-budget').value = p.monthly_budget;
+                        renderExtractedProfileBadges(p, data.confidence_score, data.engine_used);
                     }
-                    renderAnalysisResults(data.sizing_result);
+                    const sizingRes = data.data || data.sizing_result || data;
+                    renderAnalysisResults(sizingRes);
                     loadSavedProjects();
                 }
             } catch (err) {
                 alert("AI Sizing failed: " + err.message);
             } finally {
-                btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg><span>AI Sizing & Analysis</span>`;
+                btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg><span>Identify & Analyze Workload</span>`;
                 btn.disabled = false;
             }
         }

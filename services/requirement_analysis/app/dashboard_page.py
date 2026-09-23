@@ -160,7 +160,71 @@ def get_dashboard_page_html() -> str:
             border-radius: 3px;
         }
 
-        /* Light mode specific element adjustments */
+        /* Complete Light Theme Overrides for whole application */
+        html:not(.dark) header {
+            background-color: #ffffff !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+        }
+        html:not(.dark) header .text-white {
+            color: #0f172a !important;
+        }
+        html:not(.dark) header .text-gray-300,
+        html:not(.dark) header .text-gray-200 {
+            color: #334155 !important;
+        }
+        html:not(.dark) header .text-gray-400,
+        html:not(.dark) header .text-gray-500 {
+            color: #64748b !important;
+        }
+        html:not(.dark) header .bg-\[\#0f141c\],
+        html:not(.dark) header .bg-\[\#232f3e\] {
+            background-color: #f1f5f9 !important;
+            border-color: #cbd5e1 !important;
+            color: #334155 !important;
+        }
+        html:not(.dark) header .border-\[\#2d3748\],
+        html:not(.dark) header .border-\[\#414d5c\] {
+            border-color: #e2e8f0 !important;
+        }
+
+        html:not(.dark) #sidebar {
+            background-color: #ffffff !important;
+            border-right: 1px solid #e2e8f0 !important;
+        }
+        html:not(.dark) #sidebar .bg-\[\#161e2e\] {
+            background-color: #ffffff !important;
+            border-color: #e2e8f0 !important;
+        }
+        html:not(.dark) #sidebar .bg-\[\#0f141c\] {
+            background-color: #f8fafc !important;
+            border-color: #e2e8f0 !important;
+        }
+        html:not(.dark) #sidebar .text-white {
+            color: #0f172a !important;
+        }
+        html:not(.dark) #sidebar .text-\[\#9ba7b6\],
+        html:not(.dark) #sidebar .text-gray-400 {
+            color: #64748b !important;
+        }
+        html:not(.dark) #sidebar .text-gray-300 {
+            color: #334155 !important;
+        }
+        html:not(.dark) #sidebar .border-\[\#2d3748\],
+        html:not(.dark) #sidebar .border-\[\#414d5c\] {
+            border-color: #e2e8f0 !important;
+        }
+        html:not(.dark) #sidebar .aws-nav-active {
+            background-color: #fff7ed !important;
+            color: #ea580c !important;
+            border-left: 3px solid #ec7211 !important;
+        }
+        html:not(.dark) #sidebar button:hover,
+        html:not(.dark) #sidebar div.cursor-pointer:hover {
+            background-color: #f1f5f9 !important;
+            color: #0f172a !important;
+        }
+
         html:not(.dark) main .aws-card {
             background-color: #ffffff !important;
             border-color: #e2e8f0 !important;
@@ -235,6 +299,18 @@ def get_dashboard_page_html() -> str:
         html:not(.dark) .cat-chip-inactive:hover {
             background-color: #f1f5f9 !important;
             color: #0f172a !important;
+        }
+
+        html:not(.dark) footer {
+            background-color: #ffffff !important;
+            border-color: #e2e8f0 !important;
+            color: #64748b !important;
+        }
+        html:not(.dark) footer .text-gray-300 {
+            color: #334155 !important;
+        }
+        html:not(.dark) footer .text-\[\#9ba7b6\] {
+            color: #64748b !important;
         }
         #sidebar {
             transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease;
@@ -941,6 +1017,21 @@ def get_dashboard_page_html() -> str:
     </div>
 
     <script>
+        // Cross-Application Theme Synchronization
+        function getCrossAppTheme() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlTheme = urlParams.get('theme');
+            if (urlTheme === 'light' || urlTheme === 'dark') return urlTheme;
+
+            const match = document.cookie.match(/(?:^|;\s*)aether_theme=([^;]+)/);
+            if (match && (match[1] === 'light' || match[1] === 'dark')) return match[1];
+
+            const stored = localStorage.getItem('aether_theme');
+            if (stored === 'light' || stored === 'dark') return stored;
+
+            return 'light';
+        }
+
         function applyTheme(theme) {
             const btnIcon = document.getElementById('theme-toggle-icon');
             const btnText = document.getElementById('theme-toggle-text');
@@ -956,6 +1047,17 @@ def get_dashboard_page_html() -> str:
                 if (btnText) btnText.innerText = 'Light';
             }
             localStorage.setItem('aether_theme', theme);
+            document.cookie = "aether_theme=" + theme + "; path=/; max-age=31536000; SameSite=Lax";
+
+            // Update cross-service links to Module 1 to pass theme
+            const m1Links = document.querySelectorAll('a[href*=":8001"], a#header-module1-link');
+            m1Links.forEach(a => {
+                try {
+                    const u = new URL(a.href, window.location.origin);
+                    u.searchParams.set('theme', theme);
+                    a.href = u.toString();
+                } catch(e) {}
+            });
         }
 
         function toggleTheme() {
@@ -963,8 +1065,17 @@ def get_dashboard_page_html() -> str:
             applyTheme(isDark ? 'light' : 'dark');
         }
 
-        const initialTheme = localStorage.getItem('aether_theme') || 'light';
-        applyTheme(initialTheme);
+        // Initialize cross-app theme
+        applyTheme(getCrossAppTheme());
+
+        window.addEventListener('focus', () => {
+            const current = getCrossAppTheme();
+            const isDark = document.documentElement.classList.contains('dark');
+            const shouldBeDark = (current === 'dark');
+            if (isDark !== shouldBeDark) {
+                applyTheme(current);
+            }
+        });
 
         let regionsList = [];
         let currentService = 'ec2';
