@@ -25,6 +25,8 @@ from app.database import (
     IS_TESTING
 )
 from app.models import EC2Catalog, RDSCatalog, GenericServiceCatalog, SyncMetadata
+from app.catalog import EC2_CATALOG, RDS_CATALOG
+from app.instance_finder import InstanceFinderInput, InstanceFinderOutput, evaluate_decision_matrix
 from app.cache import cache_manager, load_aws_regions_reference_in_cache, warm_region_cache
 from app.sync_helper import (
     sync_catalog_from_aws,
@@ -1057,6 +1059,85 @@ async def get_platform_modules(api_key: str = Depends(verify_admin_key)):
         "online_count": sum(1 for m in modules if m["status"] == "ONLINE"),
         "modules": modules
     }
+
+@admin_router.post("/api/admin/instance-finder/evaluate", response_model=InstanceFinderOutput, status_code=status.HTTP_200_OK)
+@admin_router.post("/api/v1/instance-finder/evaluate", response_model=InstanceFinderOutput, status_code=status.HTTP_200_OK)
+async def evaluate_instance_type_finder_admin(payload: InstanceFinderInput):
+    """
+    Evaluates candidate instances using Core Math Decision Matrix (TOPSIS)
+    and Probabilistic SLA Headroom Modeling (Gaussian Error Function erf).
+    """
+    target_reg = payload.region or "us-east-1"
+    candidates = []
+
+    # 1. Attempt to query regional SQLite catalog
+    try:
+        sessionmaker = get_sessionmaker_for_region(target_reg)
+        async with sessionmaker() as session:
+            if payload.service_type.lower() == "rds":
+                stmt = select(RDSCatalog).where(
+                    RDSCatalog.vcpus >= payload.min_vcpus,
+                    RDSCatalog.ram_gb >= payload.min_ram_gb
+                )
+                if payload.max_vcpus:
+                    stmt = stmt.where(RDSCatalog.vcpus <= payload.max_vcpus)
+                if payload.max_ram_gb:
+                    stmt = stmt.where(RDSCatalog.ram_gb <= payload.max_ram_gb)
+                res = await session.execute(stmt)
+                db_items = res.scalars().all()
+                candidates = [it.to_dict() for it in db_items]
+            else:
+                stmt = select(EC2Catalog).where(
+                    EC2Catalog.vcpus >= payload.min_vcpus,
+                    EC2Catalog.ram_gb >= payload.min_ram_gb
+                )
+                if payload.max_vcpus:
+                    stmt = stmt.where(EC2Catalog.vcpus <= payload.max_vcpus)
+                if payload.max_ram_gb:
+                    stmt = stmt.where(EC2Catalog.ram_gb <= payload.max_ram_gb)
+                res = await session.execute(stmt)
+                db_items = res.scalars().all()
+                candidates = [it.to_dict() for it in db_items]
+    except Exception as e:
+        logger.warning(f"Could not load instances from SQLite catalog for {target_reg}: {e}")
+        candidates = []
+
+    # 2. In-memory baseline fallback if SQLite is empty or unseeded
+    if not candidates:
+        if payload.service_type.lower() == "rds":
+            for spec in RDS_CATALOG:
+                if spec.vcpus >= payload.min_vcpus and spec.ram_gb >= payload.min_ram_gb:
+                    if payload.max_vcpus and spec.vcpus > payload.max_vcpus:
+                        continue
+                    if payload.max_ram_gb and spec.ram_gb > payload.max_ram_gb:
+                        continue
+                    candidates.append({
+                        "instance_type": spec.instance_type,
+                        "vcpus": spec.vcpus,
+                        "ram_gb": spec.ram_gb,
+                        "price_per_hour": spec.price_per_hour,
+                        "category": spec.category,
+                        "network_performance": "Up to 10 Gbps"
+                    })
+        else:
+            for spec in EC2_CATALOG:
+                if spec.vcpus >= payload.min_vcpus and spec.ram_gb >= payload.min_ram_gb:
+                    if payload.max_vcpus and spec.vcpus > payload.max_vcpus:
+                        continue
+                    if payload.max_ram_gb and spec.ram_gb > payload.max_ram_gb:
+                        continue
+                    candidates.append({
+                        "instance_type": spec.instance_type,
+                        "vcpus": spec.vcpus,
+                        "ram_gb": spec.ram_gb,
+                        "price_per_hour": spec.price_per_hour,
+                        "category": spec.category,
+                        "network_performance": spec.network_performance
+                    })
+
+    # 3. Evaluate Decision Matrix
+    return evaluate_decision_matrix(candidates, payload)
+
 
 @admin_router.get("/admin", response_class=HTMLResponse)
 async def serve_admin_dashboard(request: Request):

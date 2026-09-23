@@ -387,6 +387,10 @@ def get_module1_page_html() -> str:
                             <svg class="w-3.5 h-3.5 text-[#1d8102]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                             <span>AI Well-Architected Advisor</span>
                         </button>
+                        <button onclick="switchResultTab('finder')" id="tab-btn-finder" class="pb-2.5 tab-inactive flex items-center gap-1.5 cursor-pointer">
+                            <svg class="w-3.5 h-3.5 text-[#ff9900]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                            <span>Instance Type Finder (Math / TOPSIS)</span>
+                        </button>
                     </div>
 
                     <!-- TAB 1: Sizing Specifications Cards -->
@@ -423,6 +427,99 @@ def get_module1_page_html() -> str:
                         </div>
                         <div class="space-y-3" id="ai-advisor-container">
                             <!-- Populated dynamically via JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- TAB 5: AWS Instance Type Finder (Decision Matrix & Core Math) -->
+                    <div id="tab-content-finder" class="space-y-4 hidden">
+                        <div class="bg-[#0f141c] border border-[#2d3748] rounded p-4 space-y-4">
+                            <div class="flex items-center justify-between border-b border-[#2d3748] pb-3">
+                                <div>
+                                    <div class="text-xs font-bold text-white flex items-center gap-1.5">
+                                        <svg class="w-4 h-4 text-[#ff9900]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                                        <span>AWS Instance Type Finder & Decision Matrix</span>
+                                    </div>
+                                    <p class="text-[11px] text-[#9ba7b6] mt-0.5">
+                                        Ranks instances via TOPSIS vector normalization ($A^+, A^-$) and Gaussian erf probabilistic SLA headroom.
+                                    </p>
+                                </div>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-[#ec7211]/20 text-[#ff9900] border border-[#ec7211]/30">TOPSIS + Gaussian erf</span>
+                            </div>
+
+                            <!-- Input Grid -->
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                <div>
+                                    <label class="block text-[11px] text-[#9ba7b6] mb-1 font-semibold">Min vCPUs</label>
+                                    <input type="number" id="finder-min-vcpus" value="2" min="1" max="128" class="aws-input w-full p-2 rounded text-xs font-mono">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-[#9ba7b6] mb-1 font-semibold">Min RAM (GiB)</label>
+                                    <input type="number" id="finder-min-ram" value="4.0" step="0.5" min="0.5" class="aws-input w-full p-2 rounded text-xs font-mono">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-[#9ba7b6] mb-1 font-semibold">RAM:vCPU Ratio</label>
+                                    <select id="finder-target-ratio" class="aws-input w-full p-2 rounded text-xs font-mono">
+                                        <option value="4.0" selected>4:1 (General)</option>
+                                        <option value="2.0">2:1 (Compute)</option>
+                                        <option value="8.0">8:1 (Memory)</option>
+                                        <option value="1.0">1:1 (Batch)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-[#9ba7b6] mb-1 font-semibold">Optimization Goal</label>
+                                    <select id="finder-opt-goal" class="aws-input w-full p-2 rounded text-xs">
+                                        <option value="balanced" selected>Balanced (Cost + SLA)</option>
+                                        <option value="lowest_cost">Lowest Cost</option>
+                                        <option value="performance">Performance Headroom</option>
+                                        <option value="high_availability">High Availability</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Workload Concurrency & Architecture Row -->
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-1">
+                                <div>
+                                    <label class="block text-[11px] text-[#9ba7b6] mb-1 font-semibold">Target RPS</label>
+                                    <input type="number" id="finder-target-rps" value="250" min="1" class="aws-input w-full p-2 rounded text-xs font-mono">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-[#9ba7b6] mb-1 font-semibold">Avg Latency (ms)</label>
+                                    <input type="number" id="finder-avg-lat" value="120" min="1" class="aws-input w-full p-2 rounded text-xs font-mono">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-[#9ba7b6] mb-1 font-semibold">Architecture</label>
+                                    <select id="finder-arch" class="aws-input w-full p-2 rounded text-xs">
+                                        <option value="any" selected>Any Architecture</option>
+                                        <option value="arm64">AWS Graviton (arm64)</option>
+                                        <option value="x86_64">Intel / AMD (x86_64)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-[#9ba7b6] mb-1 font-semibold">Service Type</label>
+                                    <select id="finder-service" class="aws-input w-full p-2 rounded text-xs font-mono">
+                                        <option value="ec2" selected>Amazon EC2</option>
+                                        <option value="rds">Amazon RDS</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Action button -->
+                            <div class="flex items-center justify-between pt-2">
+                                <div class="text-[11px] text-gray-400 font-mono" id="finder-math-formula-hint">
+                                    Formula: <span class="text-[#ff9900]">C* = D⁻ / (D⁺ + D⁻)</span> &nbsp;|&nbsp; <span class="text-[#1d8102]">P(SLA) = Φ((C_safe - μ)/σ)</span>
+                                </div>
+                                <button type="button" onclick="runInstanceFinderEvaluation()" id="btn-run-finder" class="aws-btn-primary px-4 py-2 rounded text-xs font-bold flex items-center gap-1.5 shadow">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                    <span>Run Decision Matrix</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Results Container -->
+                        <div id="finder-results-container" class="space-y-3">
+                            <div class="text-center py-8 text-xs text-gray-400 font-mono">
+                                Adjust parameters above and click "Run Decision Matrix" to rank instances by TOPSIS closeness and probabilistic SLA confidence.
+                            </div>
                         </div>
                     </div>
 
@@ -922,14 +1019,145 @@ def get_module1_page_html() -> str:
         }
 
         function switchResultTab(tab) {
-            const tabs = ['specs', 'why', 'finops', 'ai'];
+            const tabs = ['specs', 'why', 'finops', 'ai', 'finder'];
             tabs.forEach(t => {
-                document.getElementById('tab-content-' + t).classList.add('hidden');
-                document.getElementById('tab-btn-' + t).className = 'pb-2.5 tab-inactive flex items-center gap-1.5 cursor-pointer';
+                const el = document.getElementById('tab-content-' + t);
+                const btn = document.getElementById('tab-btn-' + t);
+                if (el) el.classList.add('hidden');
+                if (btn) btn.className = 'pb-2.5 tab-inactive flex items-center gap-1.5 cursor-pointer';
             });
-            document.getElementById('tab-content-' + tab).classList.remove('hidden');
-            document.getElementById('tab-btn-' + tab).className = 'pb-2.5 tab-active flex items-center gap-1.5 cursor-pointer';
+            const activeEl = document.getElementById('tab-content-' + tab);
+            const activeBtn = document.getElementById('tab-btn-' + tab);
+            if (activeEl) activeEl.classList.remove('hidden');
+            if (activeBtn) activeBtn.className = 'pb-2.5 tab-active flex items-center gap-1.5 cursor-pointer';
+            if (tab === 'finder') {
+                const resultsCont = document.getElementById('finder-results-container');
+                if (resultsCont && resultsCont.innerHTML.includes('Adjust parameters above')) {
+                    runInstanceFinderEvaluation();
+                }
+            }
         }
+
+        async function runInstanceFinderEvaluation() {
+            const btn = document.getElementById('btn-run-finder');
+            const container = document.getElementById('finder-results-container');
+            if (!container) return;
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<span>Evaluating...</span>`;
+            }
+            
+            const payload = {
+                min_vcpus: parseInt(document.getElementById('finder-min-vcpus')?.value) || 2,
+                min_ram_gb: parseFloat(document.getElementById('finder-min-ram')?.value) || 4.0,
+                target_ratio: parseFloat(document.getElementById('finder-target-ratio')?.value) || 4.0,
+                optimization_goal: document.getElementById('finder-opt-goal')?.value || 'balanced',
+                target_rps: parseInt(document.getElementById('finder-target-rps')?.value) || 250,
+                avg_latency_ms: parseFloat(document.getElementById('finder-avg-lat')?.value) || 120.0,
+                architecture_preference: document.getElementById('finder-arch')?.value || 'any',
+                service_type: document.getElementById('finder-service')?.value || 'ec2',
+                region: document.getElementById('req-region') ? document.getElementById('req-region').value : 'us-east-1',
+                top_n: 6
+            };
+
+            try {
+                const res = await fetch('/api/v1/instance-finder/evaluate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                
+                if (data.status === 'EMPTY' || data.status === 'NO_MATCH' || !data.ranked_instances || data.ranked_instances.length === 0) {
+                    container.innerHTML = `<div class="p-4 rounded bg-[#0f141c] border border-red-800/40 text-red-400 text-xs font-mono">No instance candidates matched your constraints. Try reducing minimum vCPU/RAM or relaxing architecture filters.</div>`;
+                    return;
+                }
+
+                let html = `
+                    <div class="bg-[#161e2e] p-3.5 rounded border border-[#2d3748] flex flex-wrap items-center justify-between gap-3 text-xs">
+                        <div class="space-y-0.5">
+                            <div class="font-bold text-white flex items-center gap-2">
+                                <span>Evaluated ${data.total_candidates_evaluated} Candidates</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded bg-[#1d8102]/20 text-[#1d8102] font-mono font-bold">Goal: ${data.optimization_goal.toUpperCase()}</span>
+                            </div>
+                            <div class="text-[11px] text-gray-400 font-mono">
+                                Little's Law Concurrency: <span class="text-[#ff9900] font-bold">${data.workload_demand_concurrency} threads</span> | Target Ratio: <span class="text-white">${data.mathematical_summary.target_ratio}:1</span>
+                            </div>
+                        </div>
+                        <div class="text-[10px] text-gray-400 font-mono">
+                            Weights: Cost ${(data.weights_applied.cost*100).toFixed(0)}% | Headroom ${(data.weights_applied.headroom*100).toFixed(0)}% | Ratio ${(data.weights_applied.ratio*100).toFixed(0)}% | Net ${(data.weights_applied.net*100).toFixed(0)}%
+                        </div>
+                    </div>
+                    <div class="space-y-2.5">
+                `;
+
+                data.ranked_instances.forEach(inst => {
+                    const isTop = inst.rank === 1;
+                    const borderCol = isTop ? 'border-[#ec7211]' : 'border-[#2d3748]';
+                    const badgeBg = isTop ? 'bg-[#ec7211]/20 text-[#ff9900] border-[#ec7211]/40' : 'bg-[#232f3e] text-gray-300 border-[#414d5c]';
+                    const slaPercent = (inst.sla_probability * 100).toFixed(1);
+                    const slaColor = inst.sla_probability >= 0.95 ? 'text-[#1d8102]' : (inst.sla_probability >= 0.8 ? 'text-[#ff9900]' : 'text-red-400');
+                    
+                    html += `
+                        <div class="aws-card p-4 rounded border ${borderCol} hover:border-[#ec7211]/60 transition space-y-2.5">
+                            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                <div class="flex items-center space-x-2">
+                                    <span class="px-2 py-0.5 rounded text-[11px] font-mono font-extrabold ${badgeBg} border">
+                                        #${inst.rank} ${inst.fit_label}
+                                    </span>
+                                    <span class="text-sm font-bold text-white font-mono">${inst.instance_type}</span>
+                                    <span class="text-[10px] px-2 py-0.5 rounded bg-[#0f141c] text-gray-300 font-mono border border-[#2d3748]">${inst.architecture}</span>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-base font-extrabold text-white font-mono">$${inst.price_per_hour.toFixed(4)}/hr</span>
+                                    <span class="text-[11px] text-gray-400 font-mono ml-1.5">($${inst.monthly_price.toFixed(2)}/mo)</span>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs pt-1 border-t border-[#2d3748]/60">
+                                <div class="bg-[#0f141c] p-2 rounded border border-[#2d3748]/40">
+                                    <div class="text-[10px] text-gray-400">Compute & Memory</div>
+                                    <div class="text-white font-mono font-bold">${inst.vcpus} vCPU / ${inst.ram_gb} GiB</div>
+                                    <div class="text-[10px] text-gray-400 font-mono">Ratio: ${inst.ratio}:1 (Δ ${inst.ratio_divergence})</div>
+                                </div>
+                                <div class="bg-[#0f141c] p-2 rounded border border-[#2d3748]/40">
+                                    <div class="text-[10px] text-gray-400">TOPSIS Relative Closeness</div>
+                                    <div class="text-[#ff9900] font-mono font-bold">${(inst.topsis_score * 100).toFixed(1)}%</div>
+                                    <div class="text-[10px] text-gray-400 font-mono">Score: ${inst.topsis_score.toFixed(4)}</div>
+                                </div>
+                                <div class="bg-[#0f141c] p-2 rounded border border-[#2d3748]/40">
+                                    <div class="text-[10px] text-gray-400">Probabilistic SLA Headroom</div>
+                                    <div class="${slaColor} font-mono font-bold">${slaPercent}%</div>
+                                    <div class="text-[10px] text-gray-400 font-mono">Gaussian erf confidence</div>
+                                </div>
+                                <div class="bg-[#0f141c] p-2 rounded border border-[#2d3748]/40">
+                                    <div class="text-[10px] text-gray-400">Composite Match Score</div>
+                                    <div class="text-white font-mono font-bold text-sm">${inst.composite_score.toFixed(1)}%</div>
+                                    <div class="text-[10px] text-gray-400 font-mono">Network: ${inst.network_performance}</div>
+                                </div>
+                            </div>
+
+                            <div class="text-[11px] text-gray-300 bg-[#0f141c]/60 p-2 rounded border border-[#2d3748]/40 flex items-start gap-1.5">
+                                <svg class="w-3.5 h-3.5 text-[#ff9900] mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <span>${inst.decision_rationale}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `</div>`;
+                container.innerHTML = html;
+
+            } catch (err) {
+                container.innerHTML = `<div class="p-4 rounded bg-[#0f141c] border border-red-800 text-red-400 text-xs font-mono">Error evaluating decision matrix: ${err.message}</div>`;
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg><span>Run Decision Matrix</span>`;
+                }
+            }
+        }
+
 
 
         async function dispatchToModule2() {

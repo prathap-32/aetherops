@@ -310,6 +310,12 @@ def get_dashboard_page_html() -> str:
                         <span class="hidden md:inline">Module 1 (Sizing)</span>
                     </a>
 
+                    <!-- Quick Link: Instance Type Finder (Decision Matrix) -->
+                    <a href="http://localhost:8001/app" target="_blank" class="px-2.5 py-1 rounded bg-[#232f3e] hover:bg-[#2a384c] border border-[#ff9900]/40 text-[#ff9900] text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm" title="Launch Core Math Instance Type Finder & Decision Matrix">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                        <span class="hidden lg:inline">Instance Finder</span>
+                    </a>
+
                     <!-- AWS Region Selector -->
                     <div class="flex items-center space-x-1.5 bg-[#0f141c] border border-[#2d3748] rounded px-2.5 py-1 shrink-0">
                         <svg class="w-3.5 h-3.5 text-[#ff9900] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>

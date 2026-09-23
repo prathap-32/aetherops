@@ -305,9 +305,15 @@ def get_dashboard_page_html() -> str:
                 <div class="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
                     
                     <!-- Quick Link: Module 1 Sizing Console -->
-                    <a href="/app" class="px-2.5 py-1 rounded bg-[#ec7211] hover:bg-[#eb5f07] text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm" title="Launch Module 1: Requirement Sizing Engine">
+                    <a id="header-module1-link" href="http://localhost:8001/app" target="_blank" class="px-2.5 py-1 rounded bg-[#ec7211] hover:bg-[#eb5f07] text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm" title="Launch Module 1: Requirement Sizing Engine">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                         <span class="hidden md:inline">Module 1 (Sizing)</span>
+                    </a>
+
+                    <!-- Quick Link: Instance Type Finder (Decision Matrix) -->
+                    <a href="http://localhost:8001/app" target="_blank" class="px-2.5 py-1 rounded bg-[#232f3e] hover:bg-[#2a384c] border border-[#ff9900]/40 text-[#ff9900] text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm" title="Launch Core Math Instance Type Finder & Decision Matrix">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                        <span class="hidden lg:inline">Instance Finder</span>
                     </a>
 
                     <!-- AWS Region Selector -->
@@ -1464,6 +1470,17 @@ def get_dashboard_page_html() -> str:
                         </div>
                     `;
 
+                    const moduleTargetUrl = mod.ui_url ? mod.ui_url.replace('localhost', window.location.hostname) : (mod.port ? `http://${window.location.hostname}:${mod.port}${mod.ui_path || '/health'}` : null);
+                    const launchBtnHtml = moduleTargetUrl ? `
+                        <div class="pt-2 flex justify-between items-center">
+                            <a href="${moduleTargetUrl}" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-[#232f3e] hover:bg-[#2d3748] border border-[#414d5c] text-xs font-semibold text-white transition">
+                                <span>Launch ${mod.ui_path ? 'Console' : 'Health API'}</span>
+                                <svg class="w-3.5 h-3.5 text-[#ff9900]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                            </a>
+                            <span class="text-[10px] text-gray-400 font-mono">Port :${mod.port}</span>
+                        </div>
+                    ` : '';
+
                     // Module Card in Hub
                     cardsContainer.innerHTML += `
                         <div id="module-card-${mod.code}" class="aws-card p-4 space-y-2.5 transition">
@@ -1487,6 +1504,7 @@ def get_dashboard_page_html() -> str:
                                     ${mod.catalog_dependencies.map(dep => `<span class="px-2 py-0.5 rounded bg-[#0f141c] text-[10px] text-[#ff9900] font-mono border border-[#2d3748]">${dep}</span>`).join('')}
                                 </div>
                             </div>
+                            ${launchBtnHtml}
                         </div>
                     `;
                 });
@@ -1580,6 +1598,10 @@ def get_dashboard_page_html() -> str:
         }
 
         window.addEventListener('load', async () => {
+            const m1Link = document.getElementById('header-module1-link');
+            if (m1Link) {
+                m1Link.href = 'http://' + window.location.hostname + ':8001/app';
+            }
             await checkAuthStatus();
             try {
                 const res = await fetch('/api/admin/catalog/regions', {
