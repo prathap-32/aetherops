@@ -202,3 +202,115 @@ def test_requirements_dispatch_to_module2_mocked():
 
     # Cleanup
     client.delete(f"/api/v1/requirements/{project_id}")
+
+
+def test_natural_language_parser_offline():
+    """Verify that offline deterministic semantic parser accurately extracts requirements with $0 cost."""
+    from app.ai_advisor import parse_natural_language_requirements
+
+    # Case 1: Healthcare HIPAA scenario
+    prompt1 = "We are deploying a healthcare patient portal called care-sync-api using Python FastAPI and PostgreSQL. Requires HIPAA compliance, 50 GB storage, high traffic 250 RPS, under $350/mo."
+    res1 = parse_natural_language_requirements(prompt1)
+    assert res1.project_name == "care-sync-api"
+    assert res1.technology.backend == "python_fastapi_django"
+    assert res1.technology.database == "postgresql"
+    assert res1.security_need.value == "healthcare"
+    assert res1.traffic_scale.value == "production"
+    assert res1.data_storage_gb == 50.0
+    assert res1.monthly_budget == 350.0
+
+    # Case 2: Fintech PCI-DSS scenario
+    prompt2 = "A payment processing engine named fintech-core on Node.js and MySQL, PCI-DSS compliance, mission-critical zero downtime, with Terraform and Slack alerts."
+    res2 = parse_natural_language_requirements(prompt2)
+    assert res2.project_name == "fintech-core"
+    assert res2.technology.backend == "nodejs_express"
+    assert res2.technology.database == "mysql"
+    assert res2.security_need.value == "payment_processing"
+    assert res2.reliability.value == "mission_critical"
+    assert res2.monitoring.alerting_channel == "slack_webhook"
+
+    # Case 3: Developer sandbox
+    prompt3 = "Lightweight internal dev sandbox for testing prototypes on React and Express, budget under $40."
+    res3 = parse_natural_language_requirements(prompt3)
+    assert res3.stream.value == "dev_sandbox"
+    assert res3.technology.frontend == "react_vue_angular"
+    assert res3.technology.backend == "nodejs_express"
+    assert res3.monthly_budget == 40.0
+    assert res3.traffic_scale.value == "hobby_dev"
+
+
+def test_ai_parse_prompt_endpoint():
+    """Verify POST /api/v1/requirements/parse-prompt returns structured parameters with high confidence."""
+    payload = {
+        "prompt": "Build an AI model inference pipeline using Python FastAPI and PostgreSQL under $300 budget."
+    }
+    response = client.post("/api/v1/requirements/parse-prompt", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "SUCCESS"
+    assert "engine_used" in data
+    assert data["confidence_score"] >= 95.0
+    parsed = data["parsed_input"]
+    assert parsed["technology"]["backend"] == "python_fastapi_django"
+    assert parsed["technology"]["database"] == "postgresql"
+    assert parsed["monthly_budget"] == 300.0
+
+
+def test_ai_analyze_endpoint_and_well_architected_evaluation():
+    """Verify POST /api/v1/requirements/ai-analyze generates full architecture, 'Why That Service', and 6-pillar scorecard."""
+    payload = {
+        "prompt": "Need an enterprise healthcare web application with Python FastAPI, PostgreSQL, HIPAA security, multi-AZ high availability, and 100 GB storage under $500/mo.",
+        "target_region": "us-east-1",
+        "auto_save": True
+    }
+    response = client.post("/api/v1/requirements/ai-analyze", json=payload)
+    assert response.status_code == 200
+    res = response.json()
+    assert res["status"] == "SUCCESS"
+    assert "data" in res
+    data = res["data"]
+    
+    # 1. Architecture Sizing
+    assert "profile" in data
+    assert "architecture_tier" in data
+    assert "total_estimated_cost" in data
+
+    # 2. 'Why That Service' Rationales
+    assert "service_rationales" in data
+    rationales = data["service_rationales"]
+    assert "compute" in rationales
+    assert "database" in rationales
+    assert "security" in rationales
+    assert "why" in rationales["compute"]
+    assert "Amazon EC2" in rationales["compute"]["service_name"]
+
+    # 3. FinOps Cost Optimizations
+    assert "cost_optimizations" in data
+    opts = data["cost_optimizations"]
+    assert len(opts) > 0
+    assert any("Savings Plan" in o["title"] for o in opts)
+
+    # 4. AWS Well-Architected 6-Pillar Scorecard
+    assert "ai_advice" in data
+    ai_advice = data["ai_advice"]
+    assert "scorecard" in ai_advice
+    assert "synthesis" in ai_advice
+    scorecard = ai_advice["scorecard"]
+    assert 0 <= scorecard["overall_score"] <= 100
+    assert scorecard["security"]["status"] in ["OPTIMAL", "ACCEPTABLE", "NEEDS_ATTENTION"]
+
+    # 5. Data Provenance from SQLite & Redis
+    assert "data_source" in res
+    assert "catalog_us-east-1.db" in res["data_source"]["sqlite_catalog_partition"]
+    assert res["data_source"]["redis_cache"] == "aether_redis"
+
+    # 6. Auto-Save Verification
+    project_id = res["project_id"]
+    assert project_id is not None
+    get_proj = client.get(f"/api/v1/requirements/{project_id}")
+    assert get_proj.status_code == 200
+    assert get_proj.json()["project"]["security_need"] == "healthcare"
+
+    # Cleanup
+    client.delete(f"/api/v1/requirements/{project_id}")
+

@@ -398,6 +398,16 @@ async def get_current_catalog(
     ec2_result = await db.execute(select(EC2Catalog))
     ec2_items = ec2_result.scalars().all()
     
+    if len(ec2_items) == 0:
+        from app.seed import seed_catalog
+        logger.info(f"Catalog for region '{region_lower}' is empty in database. Auto-seeding catalog...")
+        try:
+            await seed_catalog(db, region=region_lower, force=False)
+            ec2_result = await db.execute(select(EC2Catalog))
+            ec2_items = ec2_result.scalars().all()
+        except Exception as seed_err:
+            logger.warning(f"Auto-seed for region '{region_lower}' deferred: {seed_err}")
+
     rds_result = await db.execute(select(RDSCatalog))
     rds_items = rds_result.scalars().all()
     
@@ -554,7 +564,7 @@ async def clear_redis_cache(api_key: str = Depends(verify_admin_key)):
     return {"status": "success" if cleared else "failed", "cache_connected": cache_manager._is_connected}
 
 class RegionSyncInput(BaseModel):
-    force_live_fetch: bool = Field(default=True, description="Force fetching from live ec2.shop API")
+    force_live_fetch: bool = Field(default=False, description="Force fetching from live ec2.shop API")
     include_generic_services: bool = Field(default=True, description="Include generic AWS services in sync")
 
 @admin_router.get("/api/admin/catalog/regions", status_code=status.HTTP_200_OK)
@@ -927,6 +937,8 @@ async def get_platform_modules(api_key: str = Depends(verify_admin_key)):
             "name": "Requirement Analysis Engine",
             "port": 8001,
             "url": "http://localhost:8001",
+            "ui_url": "http://localhost:8001/app",
+            "ui_path": "/app",
             "health_endpoint": "http://localhost:8001/health",
             "status": "ONLINE",
             "phase": "Phase 1: Analysis & Right-Sizing",

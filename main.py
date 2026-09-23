@@ -4,7 +4,7 @@ AetherOps Cloud - Real-Time Microservices Fleet Orchestrator & Live Telemetry Wa
 
 Features:
 - Spawns, supervises, and maintains continuous 24/7 uptime for all 9 AetherOps microservices:
-  * Admin Console & Control Plane: Port 2470
+  * Admin Console & Control Plane: Port 8000
   * Module 1 (Requirement Analysis): Port 8001
   * Module 2 (Architecture Generator): Port 8002
   * Module 3 (IaC Generator): Port 8003
@@ -69,10 +69,10 @@ FLEET_SPECS: List[ServiceSpec] = [
         id="admin_console",
         code="ADMIN",
         name="Admin Console & Gateway",
-        port=2470,
+        port=8000,
         dir="services/admin_console",
         health_path="/health",
-        ui_url="http://localhost:2470/admin"
+        ui_url="http://localhost:8000/admin"
     ),
     ServiceSpec(
         id="requirement_analysis",

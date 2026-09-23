@@ -125,6 +125,59 @@ def get_module1_page_html() -> str:
             
             <!-- LEFT COLUMN: Requirements Intake Form (5 Cols) -->
             <div class="lg:col-span-5 space-y-5">
+                
+                <!-- AI Natural Language Prompt Card -->
+                <div class="aws-card p-5 space-y-3.5 border-t-2 border-t-[#ec7211]">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                                <svg class="w-4 h-4 text-[#ff9900]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                AI Natural Language Requirement Intake
+                            </span>
+                        </div>
+                        <span class="text-[10px] font-mono text-[#ff9900] px-2 py-0.5 rounded bg-[#ec7211]/20 border border-[#ec7211]/30">Zero Hallucination</span>
+                    </div>
+                    <p class="text-[11px] text-[#9ba7b6]">
+                        Describe your workload in plain English. The AI parser extracts technical parameters, sizes infrastructure against regional SQLite databases & Redis, and computes FinOps savings.
+                    </p>
+                    <textarea id="ai-prompt-input" rows="3" placeholder="e.g. Deploy a high-throughput healthcare API using Python FastAPI and PostgreSQL. Requires HIPAA compliance, multi-AZ HA, 50 GB storage, and budget under $300/mo."
+                        class="aws-input w-full p-2.5 rounded text-xs leading-relaxed resize-none"></textarea>
+                    
+                    <!-- Quick Prompt Scenario Chips -->
+                    <div class="space-y-1.5">
+                        <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider font-mono">Quick Scenarios:</div>
+                        <div class="flex flex-wrap gap-1.5 text-[10px]">
+                            <button type="button" onclick="setPromptAndAnalyze('Fintech payment engine on FastAPI and PostgreSQL, PCI-DSS compliance, multi-AZ HA, 300 RPS, budget under $450/mo.')" 
+                                class="px-2 py-1 rounded bg-[#0f141c] hover:bg-[#232f3e] border border-[#2d3748] text-gray-300 font-mono transition">
+                                🏦 Fintech PCI-DSS
+                            </button>
+                            <button type="button" onclick="setPromptAndAnalyze('Enterprise healthcare portal with Python FastAPI and PostgreSQL, HIPAA security, multi-AZ, 100 GB storage under $500/mo.')" 
+                                class="px-2 py-1 rounded bg-[#0f141c] hover:bg-[#232f3e] border border-[#2d3748] text-gray-300 font-mono transition">
+                                🏥 Healthcare HIPAA
+                            </button>
+                            <button type="button" onclick="setPromptAndAnalyze('AI machine learning inference pipeline on FastAPI with EKS, high traffic 500 RPS, CloudFront CDN, budget $600.')" 
+                                class="px-2 py-1 rounded bg-[#0f141c] hover:bg-[#232f3e] border border-[#2d3748] text-gray-300 font-mono transition">
+                                🤖 AI/ML Inference
+                            </button>
+                            <button type="button" onclick="setPromptAndAnalyze('Lightweight internal dev sandbox for testing prototypes on React and Node.js, single-AZ, budget under $40.')" 
+                                class="px-2 py-1 rounded bg-[#0f141c] hover:bg-[#232f3e] border border-[#2d3748] text-gray-300 font-mono transition">
+                                🧪 Dev Sandbox &lt;$40
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 pt-1">
+                        <button type="button" id="btn-ai-autofill" onclick="handleAiAutoFill()" class="flex-1 aws-btn-secondary py-2 rounded text-xs font-semibold flex items-center justify-center gap-1.5">
+                            <svg class="w-3.5 h-3.5 text-[#ff9900]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                            <span>AI Auto-Fill Form</span>
+                        </button>
+                        <button type="button" id="btn-ai-analyze" onclick="handleAiAnalyzeDirect()" class="flex-1 aws-btn-primary py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            <span>AI Sizing & Analysis</span>
+                        </button>
+                    </div>
+                </div>
+
                 <div class="aws-card p-5 space-y-4">
                     
                     <div class="border-b border-[#2d3748] pb-3 flex items-center justify-between">
@@ -543,6 +596,101 @@ def get_module1_page_html() -> str:
                 security_need: document.getElementById('req-security').value,
                 monthly_budget: parseFloat(document.getElementById('req-budget').value) || null
             };
+        }
+
+        function applyParsedInputToForm(p) {
+            if (!p) return;
+            if (p.project_name) document.getElementById('req-project-name').value = p.project_name;
+            if (p.stream) document.getElementById('req-stream').value = p.stream;
+            if (p.technology) {
+                if (p.technology.frontend) document.getElementById('req-frontend').value = p.technology.frontend;
+                if (p.technology.backend) document.getElementById('req-backend').value = p.technology.backend;
+                if (p.technology.database) document.getElementById('req-database').value = p.technology.database;
+            }
+            if (p.operations && p.operations.container_orchestration) {
+                document.getElementById('req-orchestration').value = p.operations.container_orchestration;
+            }
+            if (p.monitoring && p.monitoring.level) {
+                document.getElementById('req-monitoring').value = p.monitoring.level;
+            }
+            if (p.traffic_scale) document.getElementById('req-traffic').value = p.traffic_scale;
+            if (p.reliability) document.getElementById('req-reliability').value = p.reliability;
+            if (p.security_need) document.getElementById('req-security').value = p.security_need;
+            if (p.data_storage_gb) document.getElementById('req-storage').value = p.data_storage_gb;
+            if (p.monthly_budget) document.getElementById('req-budget').value = p.monthly_budget;
+            
+            // Visual highlight animation
+            const formCard = document.getElementById('requirements-form');
+            formCard.classList.add('ring-2', 'ring-[#ff9900]/50');
+            setTimeout(() => formCard.classList.remove('ring-2', 'ring-[#ff9900]/50'), 1200);
+        }
+
+        function setPromptAndAnalyze(text) {
+            document.getElementById('ai-prompt-input').value = text;
+            handleAiAnalyzeDirect();
+        }
+
+        async function handleAiAutoFill() {
+            const prompt = document.getElementById('ai-prompt-input').value.trim();
+            if (!prompt) {
+                alert("Please enter a natural language requirement prompt first.");
+                return;
+            }
+            const btn = document.getElementById('btn-ai-autofill');
+            btn.innerHTML = `<span>Parsing...</span>`;
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/v1/requirements/parse-prompt', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ prompt: prompt })
+                });
+                const json = await res.json();
+                if (json.status === 'SUCCESS') {
+                    applyParsedInputToForm(json.parsed_input);
+                } else {
+                    alert("Parsing failed: " + (json.detail || "Unknown error"));
+                }
+            } catch(err) {
+                alert("Error parsing prompt: " + err.message);
+            } finally {
+                btn.innerHTML = `<svg class="w-3.5 h-3.5 text-[#ff9900]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg><span>AI Auto-Fill Form</span>`;
+                btn.disabled = false;
+            }
+        }
+
+        async function handleAiAnalyzeDirect() {
+            const prompt = document.getElementById('ai-prompt-input').value.trim();
+            if (!prompt) {
+                alert("Please enter a natural language requirement prompt first.");
+                return;
+            }
+            const region = document.getElementById('req-region').value || "us-east-1";
+            const btn = document.getElementById('btn-ai-analyze');
+            btn.innerHTML = `<span>AI Sizing...</span>`;
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/v1/requirements/ai-analyze', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ prompt: prompt, target_region: region, auto_save: true })
+                });
+                const json = await res.json();
+                if (json.status === 'SUCCESS') {
+                    applyParsedInputToForm(json.parsed_input);
+                    currentAnalysisData = json.data;
+                    currentProjectId = json.project_id;
+                    renderAnalysisResults(json.data);
+                    loadSavedProjects();
+                } else {
+                    alert("AI analysis error: " + (json.detail || "Unknown error"));
+                }
+            } catch(err) {
+                alert("Error in AI analysis: " + err.message);
+            } finally {
+                btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg><span>AI Sizing & Analysis</span>`;
+                btn.disabled = false;
+            }
         }
 
         async function handleAnalyzeSubmit(e) {

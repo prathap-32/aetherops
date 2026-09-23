@@ -12,7 +12,7 @@ def test_admin_console_health():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
-    assert data["port"] == 2470
+    assert data["port"] == 8000
 
 def test_admin_console_unauthenticated_dashboard_redirects():
     """Unauthenticated access to /admin must redirect to /admin/login."""

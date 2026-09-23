@@ -151,40 +151,40 @@ async def sync_catalog_from_aws(db: AsyncSession, region: str = "us-east-1", for
     if ref_data:
         region_data = next((r for r in ref_data["regions"] if r["region_code"] == region), None)
 
-    # 1. Fetch EC2 pricing from ec2.shop
-    logger.info(f"Fetching EC2 pricing from ec2.shop for region {region}...")
-    ec2_url = f"https://ec2.shop?region={region}"
-    headers = {"Accept": "application/json"}
-    
+    # 1. Fetch EC2 pricing from ec2.shop (if live fetch requested)
     ec2_data = []
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            res = await client.get(ec2_url, headers=headers)
-            if not hasattr(res, "status_code") or res.status_code == 200:
-                ec2_raw = res.json()
-                if isinstance(ec2_raw, dict):
-                    ec2_data = ec2_raw.get("Prices", [])
+    if force_live_fetch:
+        logger.info(f"Fetching EC2 pricing from ec2.shop for region {region}...")
+        ec2_url = f"https://ec2.shop?region={region}"
+        headers = {"Accept": "application/json"}
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                res = await client.get(ec2_url, headers=headers)
+                if not hasattr(res, "status_code") or res.status_code == 200:
+                    ec2_raw = res.json()
+                    if isinstance(ec2_raw, dict):
+                        ec2_data = ec2_raw.get("Prices", [])
+                    else:
+                        ec2_data = ec2_raw
                 else:
-                    ec2_data = ec2_raw
-            else:
-                res.raise_for_status()
-    except Exception as e:
-        logger.warning(f"Failed to fetch live EC2 pricing for {region}: {e}. Using fallback compute baseline.")
+                    res.raise_for_status()
+        except Exception as e:
+            logger.warning(f"Failed to fetch live EC2 pricing for {region}: {e}. Using fallback compute baseline.")
 
-    # 2. Fetch RDS pricing from AWS Price List Bulk API
-    logger.info(f"Fetching RDS pricing from AWS Price List Bulk API for region {region}...")
-    rds_url = f"https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/{region}/index.json"
-    
+    # 2. Fetch RDS pricing from AWS Price List Bulk API (if live fetch requested)
     rds_data = {}
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            res = await client.get(rds_url)
-            if not hasattr(res, "status_code") or res.status_code == 200:
-                rds_data = res.json()
-            else:
-                res.raise_for_status()
-    except Exception as e:
-        logger.warning(f"Failed to fetch live RDS pricing for {region}: {e}. Using fallback database baseline.")
+    if force_live_fetch:
+        logger.info(f"Fetching RDS pricing from AWS Price List Bulk API for region {region}...")
+        rds_url = f"https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/{region}/index.json"
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                res = await client.get(rds_url)
+                if not hasattr(res, "status_code") or res.status_code == 200:
+                    rds_data = res.json()
+                else:
+                    res.raise_for_status()
+        except Exception as e:
+            logger.warning(f"Failed to fetch live RDS pricing for {region}: {e}. Using fallback database baseline.")
 
     # 3. Parse EC2 data
     ec2_db_items = {}
@@ -333,7 +333,7 @@ async def sync_catalog_from_aws(db: AsyncSession, region: str = "us-east-1", for
             
     async def run_lookup(svc, item_t):
         try:
-            res_spec = await lookup_generic_aws_service(svc, item_t, region=region, cache=http_cache, cache_tasks=http_cache_tasks)
+            res_spec = await lookup_generic_aws_service(svc, item_t, region=region, cache=http_cache, cache_tasks=http_cache_tasks, force_live_fetch=force_live_fetch)
             db_item = GenericServiceCatalog(
                 service=svc,
                 instance_type=res_spec["instance_type"],
@@ -733,7 +733,7 @@ def get_generic_fallback_pricing(service: str, item_type: str, region: str = "us
     }
 
 
-async def lookup_generic_aws_service(service: str, item_type: str, region: str = "us-east-1", cache: dict = None, cache_tasks: dict = None) -> dict:
+async def lookup_generic_aws_service(service: str, item_type: str, region: str = "us-east-1", cache: dict = None, cache_tasks: dict = None, force_live_fetch: bool = False) -> dict:
     service_lower = service.lower()
     
     if service_lower == "iam":
@@ -748,6 +748,9 @@ async def lookup_generic_aws_service(service: str, item_type: str, region: str =
             "region": region,
             "details": "IAM identity management is free of charge"
         }
+
+    if not force_live_fetch:
+        return get_generic_fallback_pricing(service_lower, item_type, region)
         
     offer_code = SERVICE_OFFER_CODES.get(service_lower)
     if not offer_code:
@@ -765,7 +768,7 @@ async def lookup_generic_aws_service(service: str, item_type: str, region: str =
         try:
             if cache_tasks is not None:
                 async def fetch_and_cache():
-                    async with httpx.AsyncClient(timeout=30.0) as client:
+                    async with httpx.AsyncClient(timeout=3.0) as client:
                         res = await client.get(url)
                         res.raise_for_status()
                         d = res.json()
@@ -776,7 +779,7 @@ async def lookup_generic_aws_service(service: str, item_type: str, region: str =
                 cache_tasks[url] = task
                 data = await task
             else:
-                async with httpx.AsyncClient(timeout=30.0) as client:
+                async with httpx.AsyncClient(timeout=3.0) as client:
                     res = await client.get(url)
                     res.raise_for_status()
                     data = res.json()

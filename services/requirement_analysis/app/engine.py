@@ -866,10 +866,10 @@ def generate_cost_optimizations(inputs: RequirementInput, profile: RequirementPr
     nat_cost = comp.networking.nat_gateway_count * 32.85
 
     # 1. Savings Plans / Reserved Instances
-    if compute_cost > 30.0:
+    if compute_cost >= 15.0:
         sp_savings = round(compute_cost * 0.34, 2)
         optimizations.append({
-            "title": "Adopt 1-Year Compute Savings Plan",
+            "title": "Adopt 1-Year Compute Savings Plans",
             "category": "Compute FinOps",
             "estimated_monthly_savings": sp_savings,
             "savings_percentage": "34% Savings",

@@ -554,7 +554,7 @@ async def clear_redis_cache(api_key: str = Depends(verify_admin_key)):
     return {"status": "success" if cleared else "failed", "cache_connected": cache_manager._is_connected}
 
 class RegionSyncInput(BaseModel):
-    force_live_fetch: bool = Field(default=True, description="Force fetching from live ec2.shop API")
+    force_live_fetch: bool = Field(default=False, description="Force fetching from live ec2.shop API")
     include_generic_services: bool = Field(default=True, description="Include generic AWS services in sync")
 
 @admin_router.get("/api/admin/catalog/regions", status_code=status.HTTP_200_OK)

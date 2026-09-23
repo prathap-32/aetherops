@@ -66,13 +66,25 @@ async def background_catalog_warm():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print_banner()
-    logger.info("Starting up AetherOps Admin Console Control Plane on port 2470...")
+    logger.info("Starting up AetherOps Admin Console Control Plane on port 8000...")
     await cache_manager.connect()
     
     try:
         await init_admin_security()
     except Exception as e:
         logger.error(f"Failed to initialize admin security: {e}", exc_info=True)
+
+    # Pre-seed us-east-1 default catalog so catalog is always loaded immediately on startup
+    try:
+        from app.database import init_db_for_region, get_sessionmaker_for_region
+        from app.seed import seed_catalog
+        await init_db_for_region("us-east-1")
+        sf = get_sessionmaker_for_region("us-east-1")
+        async with sf() as session:
+            await seed_catalog(session, region="us-east-1", force=False)
+            logger.info("Default catalog for us-east-1 verified and seeded.")
+    except Exception as e:
+        logger.warning(f"Default catalog seeding: {e}")
 
     asyncio.create_task(background_catalog_warm())
     yield
@@ -84,7 +96,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="AetherOps AI - Admin Console & Fleet Gateway",
-    description="Central AWS Management Console, Catalog Manager, and Microservices Telemetry Control Plane (Port 2470)",
+    description="Central AWS Management Console, Catalog Manager, and Microservices Telemetry Control Plane (Port 8000)",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -123,6 +135,6 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "admin-console-service",
-        "port": 2470,
+        "port": 8000,
         "timestamp": time.time()
     }

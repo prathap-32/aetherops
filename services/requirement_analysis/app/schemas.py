@@ -83,6 +83,26 @@ class RequirementInput(BaseModel):
         description="Desired monthly cost limit in USD. If None, budget is unlimited.",
         ge=0.0
     )
+    raw_prompt: Optional[str] = Field(
+        default=None,
+        description="Optional natural-language description of system requirements"
+    )
+
+class NaturalLanguagePromptRequest(BaseModel):
+    prompt: str = Field(
+        ...,
+        min_length=3,
+        description="Plain English description of system requirements",
+        examples=["Build a healthcare EHR API with FastAPI and PostgreSQL under $200/mo"]
+    )
+    target_region: Optional[str] = Field(
+        default="us-east-1",
+        description="Target AWS deployment region"
+    )
+    auto_save: bool = Field(
+        default=False,
+        description="Whether to persist analyzed project directly into SQLite requirements.db"
+    )
 
 class ComputeRecommendation(BaseModel):
     instance_type: str
