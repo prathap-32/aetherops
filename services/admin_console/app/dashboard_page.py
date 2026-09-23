@@ -9,8 +9,8 @@ def get_dashboard_page_html() -> str:
     - Clean enterprise card containers (#1b2533) with crisp borders (#2d3748)
     - Professional, authoritative AWS typography and status telemetry
     """
-    return """<!DOCTYPE html>
-<html lang="en">
+    return r"""<!DOCTYPE html>
+<html lang="en" class="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -19,6 +19,7 @@ def get_dashboard_page_html() -> str:
     <script src="/static/js/tailwind.js"></script>
     <script>
         tailwind.config = {
+            darkMode: 'class',
             theme: {
                 extend: {
                     fontFamily: {
@@ -51,15 +52,60 @@ def get_dashboard_page_html() -> str:
         }
     </script>
     <style>
+        :root {
+            --bg-page: #f8fafc;
+            --bg-card: #ffffff;
+            --bg-subtle-card: #f8fafc;
+            --bg-subtle: #f1f5f9;
+            --border-card: #e2e8f0;
+            --border-subtle: #cbd5e1;
+            --text-title: #0f172a;
+            --text-body: #334155;
+            --text-muted: #64748b;
+            --input-bg: #ffffff;
+            --input-border: #cbd5e1;
+            --input-text: #0f172a;
+            --btn-sec-bg: #ffffff;
+            --btn-sec-border: #cbd5e1;
+            --btn-sec-text: #1e293b;
+            --btn-sec-hover: #f1f5f9;
+            --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.03);
+            --tab-active-col: #ea580c;
+            --tab-inactive-col: #64748b;
+        }
+
+        html.dark {
+            --bg-page: #0f141c;
+            --bg-card: #1b2533;
+            --bg-subtle-card: #0f141c;
+            --bg-subtle: #161e2e;
+            --border-card: #2d3748;
+            --border-subtle: #414d5c;
+            --text-title: #ffffff;
+            --text-body: #eaeded;
+            --text-muted: #9ba7b6;
+            --input-bg: #0f141c;
+            --input-border: #3b444b;
+            --input-text: #ffffff;
+            --btn-sec-bg: #232f3e;
+            --btn-sec-border: #414d5c;
+            --btn-sec-text: #ffffff;
+            --btn-sec-hover: #2a384c;
+            --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
+            --tab-active-col: #ff9900;
+            --tab-inactive-col: #9ba7b6;
+        }
+
         body {
-            background-color: #0f141c;
-            color: #eaeded;
+            background-color: var(--bg-page);
+            color: var(--text-body);
+            transition: background-color 0.15s ease, color 0.15s ease;
         }
         .aws-card {
-            background-color: #1b2533;
-            border: 1px solid #2d3748;
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-card);
             border-radius: 6px;
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
+            box-shadow: var(--card-shadow);
         }
         .aws-btn-primary {
             background-color: #ec7211;
@@ -75,20 +121,20 @@ def get_dashboard_page_html() -> str:
             background-color: #dd5706;
         }
         .aws-btn-secondary {
-            background-color: #232f3e;
-            border: 1px solid #414d5c;
-            color: #ffffff;
+            background-color: var(--btn-sec-bg);
+            border: 1px solid var(--btn-sec-border);
+            color: var(--btn-sec-text);
             border-radius: 4px;
             transition: all 0.15s ease-in-out;
         }
         .aws-btn-secondary:hover {
-            background-color: #2a384c;
-            border-color: #68778d;
+            background-color: var(--btn-sec-hover);
+            border-color: #ec7211;
         }
         .aws-input {
-            background-color: #0f141c;
-            border: 1px solid #3b444b;
-            color: #ffffff;
+            background-color: var(--input-bg);
+            border: 1px solid var(--input-border);
+            color: var(--input-text);
             border-radius: 4px;
             transition: border-color 0.15s ease-in-out;
         }
@@ -107,14 +153,88 @@ def get_dashboard_page_html() -> str:
             height: 6px;
         }
         ::-webkit-scrollbar-track {
-            background: #0f141c;
+            background: var(--bg-page);
         }
         ::-webkit-scrollbar-thumb {
-            background: #2d3748;
+            background: var(--border-subtle);
             border-radius: 3px;
         }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #414d5c;
+
+        /* Light mode specific element adjustments */
+        html:not(.dark) main .aws-card {
+            background-color: #ffffff !important;
+            border-color: #e2e8f0 !important;
+        }
+        html:not(.dark) main .text-white {
+            color: #0f172a !important;
+        }
+        html:not(.dark) main .text-\[\#9ba7b6\] {
+            color: #64748b !important;
+        }
+        html:not(.dark) main .text-gray-300,
+        html:not(.dark) main .text-gray-200 {
+            color: #334155 !important;
+        }
+        html:not(.dark) main .text-gray-400 {
+            color: #64748b !important;
+        }
+        html:not(.dark) main .border-\[\#2d3748\] {
+            border-color: #e2e8f0 !important;
+        }
+        html:not(.dark) main .bg-\[\#0f141c\] {
+            background-color: #f1f5f9 !important;
+            border-color: #e2e8f0 !important;
+        }
+        html:not(.dark) main .bg-\[\#161e2e\] {
+            background-color: #f8fafc !important;
+            border-color: #e2e8f0 !important;
+        }
+        html:not(.dark) main .bg-\[\#1b2533\] {
+            background-color: #ffffff !important;
+        }
+        html:not(.dark) #catalog-table thead tr {
+            background-color: #f1f5f9 !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+        }
+        html:not(.dark) #catalog-table thead th {
+            color: #475569 !important;
+        }
+        html:not(.dark) #catalog-table tbody {
+            background-color: #ffffff !important;
+        }
+        html:not(.dark) #catalog-table tbody tr {
+            border-bottom: 1px solid #e2e8f0 !important;
+        }
+        html:not(.dark) #catalog-table tbody tr:hover {
+            background-color: #f8fafc !important;
+        }
+        html:not(.dark) #modal-add-resource .aws-card,
+        html:not(.dark) #modal-inspector .aws-card {
+            background-color: #ffffff !important;
+            border-color: #e2e8f0 !important;
+        }
+        html:not(.dark) #modal-add-resource .text-white,
+        html:not(.dark) #modal-inspector .text-white {
+            color: #0f172a !important;
+        }
+        html:not(.dark) #modal-add-resource .text-\[\#9ba7b6\] {
+            color: #64748b !important;
+        }
+        html:not(.dark) #modal-inspector pre {
+            background-color: #f8fafc !important;
+            color: #0f172a !important;
+            border-color: #e2e8f0 !important;
+        }
+        html:not(.dark) #cat-chip-all.bg-\[\#ec7211\] {
+            background-color: #ec7211 !important;
+            color: #ffffff !important;
+        }
+        html:not(.dark) .cat-chip-inactive {
+            color: #475569 !important;
+        }
+        html:not(.dark) .cat-chip-inactive:hover {
+            background-color: #f1f5f9 !important;
+            color: #0f172a !important;
         }
         #sidebar {
             transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease;
@@ -342,6 +462,12 @@ def get_dashboard_page_html() -> str:
                     <button onclick="promptChangeAdminKey()" class="p-1 px-2 rounded text-xs font-semibold bg-[#232f3e] text-gray-300 border border-[#414d5c] hover:text-white transition flex items-center gap-1 shrink-0 cursor-pointer hidden sm:flex" title="Manage API Secret Key">
                         <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
                         <span class="hidden lg:inline text-[11px]">API Key</span>
+                    </button>
+
+                    <!-- Theme Toggler -->
+                    <button onclick="toggleTheme()" id="theme-toggle-btn" class="px-2.5 py-1 rounded bg-[#232f3e] hover:bg-[#2a384c] border border-[#414d5c] text-yellow-400 transition cursor-pointer flex items-center gap-1.5 text-xs font-semibold" title="Toggle Light / Dark Theme">
+                        <span id="theme-toggle-icon">☀️</span>
+                        <span id="theme-toggle-text" class="text-xs text-gray-200">Light</span>
                     </button>
 
                     <!-- Sign Out Button -->
@@ -815,6 +941,31 @@ def get_dashboard_page_html() -> str:
     </div>
 
     <script>
+        function applyTheme(theme) {
+            const btnIcon = document.getElementById('theme-toggle-icon');
+            const btnText = document.getElementById('theme-toggle-text');
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+                document.documentElement.classList.remove('light');
+                if (btnIcon) btnIcon.innerText = '☀️';
+                if (btnText) btnText.innerText = 'Dark';
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.documentElement.classList.add('light');
+                if (btnIcon) btnIcon.innerText = '🌙';
+                if (btnText) btnText.innerText = 'Light';
+            }
+            localStorage.setItem('aether_theme', theme);
+        }
+
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.contains('dark');
+            applyTheme(isDark ? 'light' : 'dark');
+        }
+
+        const initialTheme = localStorage.getItem('aether_theme') || 'light';
+        applyTheme(initialTheme);
+
         let regionsList = [];
         let currentService = 'ec2';
         let currentRegion = 'us-east-1';

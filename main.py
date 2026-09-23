@@ -179,17 +179,29 @@ class RealTimeFleetOrchestrator:
         except Exception:
             pass
 
+    def get_bind_host(self, port: int) -> str:
+        """Determines if 0.0.0.0 can be bound, else falls back to 127.0.0.1 (e.g. if Tailscale or another interface holds the port)."""
+        import socket
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind(("0.0.0.0", port))
+                return "0.0.0.0"
+        except OSError:
+            return "127.0.0.1"
+
     def start_service(self, spec: ServiceSpec):
         self.free_port_if_occupied(spec.port)
         cwd = os.path.join(ROOT_DIR, spec.dir)
         env = os.environ.copy()
         env["PYTHONPATH"] = cwd
 
+        host = self.get_bind_host(spec.port)
         cmd = [
             PYTHON_EXE,
             "-m", "uvicorn",
             "app.main:app",
-            "--host", "0.0.0.0",
+            "--host", host,
             "--port", str(spec.port),
             "--log-level", "warning"
         ]
@@ -204,7 +216,8 @@ class RealTimeFleetOrchestrator:
         )
         spec.proc = proc
         spec.status = "STARTING"
-        self.log_event(f"Spawned {spec.name} (PID: {proc.pid}) on port :{spec.port}")
+        self.log_event(f"Spawned {spec.name} (PID: {proc.pid}) on {host}:{spec.port}")
+
 
     def probe_single_service(self, spec: ServiceSpec):
         """
@@ -415,6 +428,7 @@ class RealTimeFleetOrchestrator:
                             exit_code = s.proc.returncode
                             s.restarts += 1
                             self.log_event(f"WATCHDOG: '{s.name}' exited (code: {exit_code}). Auto-restarting...")
+                            time.sleep(0.5)
                             self.start_service(s)
 
                     # 3. Update the live terminal view
