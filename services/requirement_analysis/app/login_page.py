@@ -1,6 +1,6 @@
 # services/admin_console/app/login_page.py
 def get_login_page_html(redirect: str = "/admin") -> str:
-    return f"""<!DOCTYPE html>
+    return fr"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -85,34 +85,67 @@ def get_login_page_html(redirect: str = "/admin") -> str:
             color: var(--input-text);
             transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
         }}
-        .console-input:focus {{
+        .aws-btn-secondary {{
+            background-color: var(--input-bg);
+            border: 1px solid var(--border-card);
+            color: var(--text-title);
+            transition: all 0.15s ease-in-out;
+        }}
+        .aws-btn-secondary:hover {{
             border-color: #ec7211;
-            box-shadow: 0 0 0 1px #ec7211;
-            outline: none;
+        }}
+
+        /* Light mode specific header element adjustments */
+        html:not(.dark) header {{
+            background-color: #ffffff !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+        }}
+        html:not(.dark) header .text-white:not(.btn-primary):not(.bg-\[\#ec7211\]) {{
+            color: #0f172a !important;
+        }}
+        html:not(.dark) header .text-gray-300 {{
+            color: #334155 !important;
+        }}
+        html:not(.dark) header .bg-\[\#0f141c\],
+        html:not(.dark) header .bg-\[\#232f3e\] {{
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important;
+            color: #1e293b !important;
+        }}
+        html:not(.dark) .aws-btn-secondary {{
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important;
+            color: #1e293b !important;
+        }}
+        html:not(.dark) .aws-btn-secondary:hover {{
+            background-color: #f8fafc !important;
+            border-color: #ec7211 !important;
+            color: #0f172a !important;
         }}
     </style>
 </head>
 <body class="min-h-screen antialiased flex flex-col justify-between font-sans selection:bg-[#ec7211]/30 selection:text-[#ff9900]">
 
     <!-- Top Navigation Bar -->
-    <header class="bg-[#161e2e] border-b border-[#2d3748] px-6 py-3 flex items-center justify-between shadow-sm">
-        <div class="flex items-center space-x-3">
+    <header class="app-header h-14 bg-white dark:bg-[#161e2e] border-b border-gray-200 dark:border-[#2d3748] px-4 sm:px-6 flex items-center justify-between shadow-xs transition-colors duration-150">
+        <div class="flex items-center space-x-3 shrink-0">
             <div class="flex items-center space-x-2 cursor-pointer">
-                <span class="font-extrabold text-white text-lg tracking-tight">AetherOps</span>
-                <span class="text-[#ff9900] text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-[#232f3e] border border-[#ff9900]/40 font-mono">CLOUD CONSOLE</span>
+                <span class="font-extrabold text-title text-base sm:text-lg tracking-tight">AetherOps</span>
+                <span class="text-[#ea580c] dark:text-[#ff9900] text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-orange-100 dark:bg-[#232f3e] border border-orange-200 dark:border-[#ff9900]/40 font-mono">CLOUD CONSOLE</span>
             </div>
-            <div class="h-4 w-px bg-gray-600 hidden sm:block"></div>
-            <span class="text-xs text-gray-300 hidden sm:inline">Infrastructure Management & Catalog Control Plane</span>
+            <div class="h-4 w-px bg-gray-300 dark:bg-gray-700 hidden sm:block"></div>
+            <span class="text-xs text-muted-custom hidden sm:inline">Infrastructure Management & Catalog Control Plane</span>
         </div>
 
-        <div class="flex items-center space-x-3 text-xs text-gray-400 font-medium">
-            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#0f141c] border border-[#2d3748] text-gray-300 font-mono text-[11px]">
-                <span class="h-2 w-2 rounded-full bg-[#1d8102] animate-pulse"></span>
+        <div class="flex items-center space-x-2 text-xs shrink-0">
+            <span class="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md bg-gray-100 dark:bg-[#0f141c] border border-gray-200 dark:border-[#2d3748] text-gray-700 dark:text-gray-300 font-mono text-[11px]">
+                <span class="h-2 w-2 rounded-full bg-[#16a34a] animate-pulse"></span>
                 <span>Console Gateway :8000</span>
             </span>
-            <button onclick="toggleTheme()" id="theme-toggle-btn" class="px-2.5 py-1 rounded bg-[#232f3e] hover:bg-[#2a384c] border border-[#414d5c] text-yellow-400 transition cursor-pointer flex items-center gap-1.5 text-xs font-semibold" title="Toggle Light / Dark Theme">
+            <button onclick="toggleTheme()" id="theme-toggle-btn" class="h-8 px-2.5 rounded-md aws-btn-secondary text-yellow-500 dark:text-yellow-400 transition cursor-pointer flex items-center gap-1.5 text-xs font-semibold" title="Toggle Light / Dark Theme">
                 <span id="theme-toggle-icon">☀️</span>
-                <span id="theme-toggle-text" class="text-xs text-gray-200">Light</span>
+                <span id="theme-toggle-text" class="text-xs">Light</span>
             </button>
         </div>
     </header>

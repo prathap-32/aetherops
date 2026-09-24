@@ -102,58 +102,111 @@ def get_module1_page_html() -> str:
         .text-muted-custom { color: var(--text-muted); }
 
         /* Light mode specific header element adjustments */
-        html:not(.dark) .app-header .text-white { color: #0f172a !important; }
+        html:not(.dark) .app-header {
+            background-color: #ffffff !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+        }
+        html:not(.dark) .app-header .text-white:not(.aws-btn-primary):not(.bg-\[\#ec7211\]) {
+            color: #0f172a !important;
+        }
         html:not(.dark) .app-header .text-gray-300,
-        html:not(.dark) .app-header .text-gray-200 { color: #334155 !important; }
-        html:not(.dark) .app-header .text-gray-500 { color: #94a3b8 !important; }
+        html:not(.dark) .app-header .text-gray-200 {
+            color: #334155 !important;
+        }
+        html:not(.dark) .app-header .text-gray-500 {
+            color: #94a3b8 !important;
+        }
         html:not(.dark) .app-header .bg-\[\#0f141c\],
-        html:not(.dark) .app-header .bg-\[\#232f3e\] { background-color: #f1f5f9 !important; border-color: #cbd5e1 !important; color: #334155 !important; }
+        html:not(.dark) .app-header .bg-\[\#232f3e\] {
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important;
+            color: #1e293b !important;
+        }
         html:not(.dark) .app-header .border-\[\#2d3748\],
-        html:not(.dark) .app-header .border-\[\#414d5c\] { border-color: #e2e8f0 !important; }
+        html:not(.dark) .app-header .border-\[\#414d5c\] {
+            border-color: #e2e8f0 !important;
+        }
+
+        /* Guarantee Primary Buttons always stay vibrant orange with crisp white text */
+        html:not(.dark) .aws-btn-primary,
+        html:not(.dark) .aws-btn-primary *,
+        html:not(.dark) .bg-\[\#ec7211\],
+        html:not(.dark) .bg-\[\#ec7211\] * {
+            color: #ffffff !important;
+        }
+
+        /* Secondary & theme-adaptive buttons in light mode */
+        html:not(.dark) .aws-btn-secondary {
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important;
+            color: #1e293b !important;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+        }
+        html:not(.dark) .aws-btn-secondary:hover {
+            background-color: #f8fafc !important;
+            border-color: #ec7211 !important;
+            color: #0f172a !important;
+        }
+
+        /* Prevent any dark buttons from appearing in light mode across all views */
+        html:not(.dark) button.bg-\[\#232f3e\],
+        html:not(.dark) a.bg-\[\#232f3e\],
+        html:not(.dark) div.bg-\[\#232f3e\] {
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important;
+            color: #1e293b !important;
+        }
+        html:not(.dark) button.bg-\[\#232f3e\]:hover,
+        html:not(.dark) a.bg-\[\#232f3e\]:hover {
+            background-color: #f8fafc !important;
+            border-color: #ec7211 !important;
+            color: #0f172a !important;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col font-sans selection:bg-[#ec7211]/30 selection:text-[#ff9900]">
 
     <!-- Top Navigation Header -->
-    <header class="app-header px-4 sm:px-6 py-2.5 flex items-center justify-between sticky top-0 z-40 shadow-xs transition-colors duration-150">
+    <header class="app-header h-14 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-40 shadow-xs transition-colors duration-150">
         
         <!-- Left: Branding & Breadcrumb -->
-        <div class="flex items-center space-x-3">
+        <div class="flex items-center space-x-3 shrink-0">
             <div class="flex items-center space-x-2">
-                <span class="font-extrabold text-white text-base tracking-tight">AetherOps</span>
-                <span class="text-[#ff9900] text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-[#232f3e] border border-[#ff9900]/40 font-mono">MODULE 1</span>
-                <span class="text-gray-500 hidden sm:inline">/</span>
-                <span class="text-xs font-bold text-gray-300 font-mono hidden sm:inline">REQUIREMENT ANALYSIS & SIZING</span>
+                <span class="font-extrabold text-title text-base tracking-tight">AetherOps</span>
+                <span class="text-[#ea580c] dark:text-[#ff9900] text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-orange-100 dark:bg-[#232f3e] border border-orange-200 dark:border-[#ff9900]/40 font-mono">MODULE 1</span>
+                <span class="text-gray-400 dark:text-gray-500 hidden sm:inline">/</span>
+                <span class="text-xs font-bold text-gray-600 dark:text-gray-300 font-mono hidden sm:inline">REQUIREMENT ANALYSIS & SIZING</span>
             </div>
         </div>
 
         <!-- Center: Telemetry Status Badges -->
         <div class="hidden lg:flex items-center space-x-2 text-xs">
-            <span class="px-2 py-0.5 rounded bg-[#0f141c] border border-[#2d3748] flex items-center gap-1.5 text-gray-300 font-mono text-[11px]">
+            <span class="h-7 px-2.5 rounded-md bg-gray-100 dark:bg-[#0f141c] border border-gray-200 dark:border-[#2d3748] flex items-center gap-1.5 text-gray-700 dark:text-gray-300 font-mono text-[11px]">
                 <span class="h-2 w-2 rounded-full bg-[#16a34a]"></span>
                 <span>SQLite (requirements.db)</span>
             </span>
-            <span class="px-2 py-0.5 rounded bg-[#0f141c] border border-[#2d3748] flex items-center gap-1.5 text-gray-300 font-mono text-[11px]">
+            <span class="h-7 px-2.5 rounded-md bg-gray-100 dark:bg-[#0f141c] border border-gray-200 dark:border-[#2d3748] flex items-center gap-1.5 text-gray-700 dark:text-gray-300 font-mono text-[11px]">
                 <span class="h-2 w-2 rounded-full bg-[#16a34a]"></span>
                 <span>Redis L1 Cache</span>
             </span>
-            <span class="px-2 py-0.5 rounded bg-[#0f141c] border border-[#2d3748] flex items-center gap-1.5 text-[#ff9900] font-mono text-[11px]">
+            <span class="h-7 px-2.5 rounded-md bg-orange-50 dark:bg-[#0f141c] border border-orange-200 dark:border-[#2d3748] flex items-center gap-1.5 text-[#ea580c] dark:text-[#ff9900] font-mono text-[11px]">
                 <span class="h-2 w-2 rounded-full bg-[#ec7211] animate-pulse"></span>
                 <span>Port :8001</span>
             </span>
         </div>
 
         <!-- Right: Actions, Links & Theme Toggle -->
-        <div class="flex items-center space-x-2 text-xs">
-            <a href="http://localhost:8000/admin" class="aws-btn-secondary px-3 py-1.5 rounded flex items-center gap-1.5 cursor-pointer text-xs font-semibold">
-                <svg class="w-3.5 h-3.5 text-[#ff9900]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <div class="flex items-center space-x-2 text-xs shrink-0">
+            <a href="http://localhost:8000/admin" class="h-8 aws-btn-secondary px-3 rounded-md flex items-center gap-1.5 cursor-pointer text-xs font-semibold">
+                <svg class="w-3.5 h-3.5 text-[#ec7211]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                 <span class="hidden sm:inline">Admin Catalog</span>
             </a>
 
             <!-- Theme Toggler -->
-            <button onclick="toggleTheme()" id="theme-toggle-btn" class="px-2.5 py-1.5 rounded bg-[#232f3e] hover:bg-[#2a384c] border border-[#414d5c] text-yellow-400 transition cursor-pointer flex items-center gap-1.5 text-xs font-semibold" title="Toggle Light / Dark Theme">
+            <button onclick="toggleTheme()" id="theme-toggle-btn" class="h-8 px-2.5 rounded-md aws-btn-secondary text-yellow-500 dark:text-yellow-400 transition cursor-pointer flex items-center gap-1.5 text-xs font-semibold" title="Toggle Light / Dark Theme">
                 <span id="theme-toggle-icon">☀️</span>
-                <span id="theme-toggle-text" class="text-xs text-gray-200">Light</span>
+                <span id="theme-toggle-text" class="text-xs">Light</span>
             </button>
         </div>
 

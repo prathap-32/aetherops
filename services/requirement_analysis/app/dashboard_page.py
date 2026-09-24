@@ -166,7 +166,7 @@ def get_dashboard_page_html() -> str:
             border-bottom: 1px solid #e2e8f0 !important;
             box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
         }
-        html:not(.dark) header .text-white {
+        html:not(.dark) header .text-white:not(.aws-btn-primary):not(.bg-\[\#ec7211\]) {
             color: #0f172a !important;
         }
         html:not(.dark) header .text-gray-300,
@@ -179,13 +179,53 @@ def get_dashboard_page_html() -> str:
         }
         html:not(.dark) header .bg-\[\#0f141c\],
         html:not(.dark) header .bg-\[\#232f3e\] {
-            background-color: #f1f5f9 !important;
+            background-color: #ffffff !important;
             border-color: #cbd5e1 !important;
-            color: #334155 !important;
+            color: #1e293b !important;
         }
         html:not(.dark) header .border-\[\#2d3748\],
         html:not(.dark) header .border-\[\#414d5c\] {
             border-color: #e2e8f0 !important;
+        }
+
+        /* Guarantee Primary Buttons always stay vibrant orange with crisp white text */
+        html:not(.dark) .aws-btn-primary,
+        html:not(.dark) .aws-btn-primary *,
+        html:not(.dark) .bg-\[\#ec7211\],
+        html:not(.dark) .bg-\[\#ec7211\] *,
+        html:not(.dark) header .aws-btn-primary,
+        html:not(.dark) header .aws-btn-primary *,
+        html:not(.dark) header .bg-\[\#ec7211\],
+        html:not(.dark) header .bg-\[\#ec7211\] * {
+            color: #ffffff !important;
+        }
+
+        /* Secondary & theme-adaptive buttons in light mode */
+        html:not(.dark) .aws-btn-secondary {
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important;
+            color: #1e293b !important;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+        }
+        html:not(.dark) .aws-btn-secondary:hover {
+            background-color: #f8fafc !important;
+            border-color: #ec7211 !important;
+            color: #0f172a !important;
+        }
+
+        /* Prevent any dark buttons from appearing in light mode across all views */
+        html:not(.dark) button.bg-\[\#232f3e\],
+        html:not(.dark) a.bg-\[\#232f3e\],
+        html:not(.dark) div.bg-\[\#232f3e\] {
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important;
+            color: #1e293b !important;
+        }
+        html:not(.dark) button.bg-\[\#232f3e\]:hover,
+        html:not(.dark) a.bg-\[\#232f3e\]:hover {
+            background-color: #f8fafc !important;
+            border-color: #ec7211 !important;
+            color: #0f172a !important;
         }
 
         html:not(.dark) #sidebar {
@@ -229,7 +269,7 @@ def get_dashboard_page_html() -> str:
             background-color: #ffffff !important;
             border-color: #e2e8f0 !important;
         }
-        html:not(.dark) main .text-white {
+        html:not(.dark) main .text-white:not(.aws-btn-primary):not(.bg-\[\#ec7211\]) {
             color: #0f172a !important;
         }
         html:not(.dark) main .text-\[\#9ba7b6\] {
@@ -432,11 +472,11 @@ def get_dashboard_page_html() -> str:
                         <div>
                             <div class="text-[10px] font-bold text-[#9ba7b6] uppercase tracking-wider px-2.5 mb-1.5">Operations</div>
                             <div class="space-y-1">
-                                <button onclick="triggerUploadAllRegions()" class="w-full py-1.5 px-2.5 text-left text-xs text-white bg-[#232f3e] hover:bg-[#2a384c] border border-[#414d5c] rounded transition flex items-center justify-between cursor-pointer">
+                                <button onclick="triggerUploadAllRegions()" class="w-full py-1.5 px-2.5 text-left text-xs aws-btn-secondary rounded transition flex items-center justify-between cursor-pointer">
                                     <span>Sync 39 Regions</span>
-                                    <svg class="w-3.5 h-3.5 text-[#ff9900]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                                    <svg class="w-3.5 h-3.5 text-[#ec7211]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                                 </button>
-                                <button onclick="clearRedisCache()" class="w-full py-1.5 px-2.5 text-left text-xs text-gray-300 bg-[#232f3e] hover:bg-[#2a384c] border border-[#414d5c] rounded transition flex items-center justify-between cursor-pointer">
+                                <button onclick="clearRedisCache()" class="w-full py-1.5 px-2.5 text-left text-xs aws-btn-secondary rounded transition flex items-center justify-between cursor-pointer">
                                     <span>Purge Redis L1</span>
                                     <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                 </button>
@@ -461,38 +501,39 @@ def get_dashboard_page_html() -> str:
         <div class="flex-1 flex flex-col min-w-0 overflow-y-auto">
 
             <!-- Official AWS Console Top Navigation Bar -->
-            <header class="bg-[#161e2e] border-b border-[#2d3748] px-3 sm:px-5 py-2 flex items-center justify-between gap-3 sticky top-0 z-30 shadow-sm">
+            <header class="app-header h-14 bg-white dark:bg-[#161e2e] border-b border-gray-200 dark:border-[#2d3748] px-3 sm:px-5 flex items-center justify-between gap-3 sticky top-0 z-30 shadow-xs transition-colors duration-150">
                 
                 <!-- Left: Hamburger Services Launcher & Breadcrumb -->
                 <div class="flex items-center space-x-2 sm:space-x-3 shrink-0">
-                    <button onclick="toggleSidebar()" id="hamburger-btn" class="px-2.5 py-1.5 rounded bg-[#232f3e] hover:bg-[#2a384c] text-white border border-[#414d5c] focus:outline-none transition flex items-center gap-1.5 text-xs font-bold cursor-pointer" title="AetherOps Modules Menu">
-                        <svg class="w-4 h-4 text-[#ff9900]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    <button onclick="toggleSidebar()" id="hamburger-btn" class="h-8 px-2.5 rounded aws-btn-secondary focus:outline-none transition flex items-center gap-1.5 text-xs font-bold cursor-pointer" title="AetherOps Modules Menu">
+                        <svg class="w-4 h-4 text-[#ec7211]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
                         <span>Services</span>
                     </button>
+                    <div class="h-4 w-px bg-gray-300 dark:bg-gray-700 hidden sm:block"></div>
                     <div class="flex items-center space-x-2 shrink-0">
-                        <span class="font-extrabold text-white text-base tracking-tight">AetherOps</span>
-                        <span class="text-[#ff9900] text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-[#232f3e] border border-[#ff9900]/40 font-mono hidden sm:inline">AWS CONSOLE</span>
-                        <span class="text-gray-500 hidden md:inline">/</span>
-                        <span class="text-xs font-bold text-[#ff9900] font-mono hidden md:inline" id="nav-view-label">CATALOG</span>
+                        <span class="font-extrabold text-title text-base tracking-tight">AetherOps</span>
+                        <span class="text-[#ea580c] dark:text-[#ff9900] text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-orange-100 dark:bg-[#232f3e] border border-orange-200 dark:border-[#ff9900]/40 font-mono hidden sm:inline">AWS CONSOLE</span>
+                        <span class="text-gray-400 dark:text-gray-500 hidden md:inline">/</span>
+                        <span class="text-xs font-bold text-[#ea580c] dark:text-[#ff9900] font-mono hidden md:inline" id="nav-view-label">CATALOG</span>
                     </div>
                 </div>
 
                 <!-- Center: AWS Console View Switcher Tabs -->
-                <div class="hidden xl:flex items-center space-x-1 bg-[#0f141c] border border-[#2d3748] p-1 rounded shrink-0">
-                    <button onclick="switchMainView('catalog')" id="header-tab-catalog" class="px-3 py-1 text-xs font-bold rounded transition bg-[#ec7211] text-white flex items-center gap-1.5 cursor-pointer">
+                <div class="hidden lg:flex items-center space-x-1 bg-gray-100 dark:bg-[#0f141c] border border-gray-200 dark:border-[#2d3748] p-0.5 rounded-lg shrink-0 h-8">
+                    <button onclick="switchMainView('catalog')" id="header-tab-catalog" class="h-7 px-3 text-xs font-bold rounded transition bg-[#ec7211] text-white flex items-center gap-1.5 cursor-pointer shadow-2xs">
                         <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7C5 4 4 5 4 7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6h6v6"></path></svg>
                         <span>Catalog</span>
                     </button>
-                    <button onclick="switchMainView('modules')" id="header-tab-modules" class="px-3 py-1 text-xs font-medium text-gray-300 hover:text-white hover:bg-[#232f3e] rounded transition flex items-center gap-1.5 cursor-pointer">
+                    <button onclick="switchMainView('modules')" id="header-tab-modules" class="h-7 px-3 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200/70 dark:hover:bg-[#232f3e] rounded transition flex items-center gap-1.5 cursor-pointer">
                         <svg class="w-3.5 h-3.5 text-[#539fe5] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                         <span>Modules (8)</span>
                     </button>
-                    <button onclick="switchMainView('matrix')" id="header-tab-matrix" class="px-3 py-1 text-xs font-medium text-gray-300 hover:text-white hover:bg-[#232f3e] rounded transition flex items-center gap-1.5 cursor-pointer">
+                    <button onclick="switchMainView('matrix')" id="header-tab-matrix" class="h-7 px-3 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200/70 dark:hover:bg-[#232f3e] rounded transition flex items-center gap-1.5 cursor-pointer">
                         <svg class="w-3.5 h-3.5 text-[#a87ffb] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064"></path></svg>
                         <span>39 Regions</span>
                     </button>
-                    <button onclick="switchMainView('probes')" id="header-tab-probes" class="px-3 py-1 text-xs font-medium text-gray-300 hover:text-white hover:bg-[#232f3e] rounded transition flex items-center gap-1.5 cursor-pointer">
-                        <svg class="w-3.5 h-3.5 text-[#1d8102] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    <button onclick="switchMainView('probes')" id="header-tab-probes" class="h-7 px-3 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200/70 dark:hover:bg-[#232f3e] rounded transition flex items-center gap-1.5 cursor-pointer">
+                        <svg class="w-3.5 h-3.5 text-[#16a34a] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                         <span>Probes</span>
                     </button>
                 </div>
@@ -501,54 +542,58 @@ def get_dashboard_page_html() -> str:
                 <div class="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
                     
                     <!-- Quick Link: Module 1 Sizing Console -->
-                    <a id="header-module1-link" href="http://localhost:8001/app" target="_blank" class="px-2.5 py-1 rounded bg-[#ec7211] hover:bg-[#eb5f07] text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm" title="Launch Module 1: Requirement Sizing Engine">
+                    <a id="header-module1-link" href="http://localhost:8001/app" target="_blank" class="h-8 px-2.5 sm:px-3 rounded aws-btn-primary text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs" title="Launch Module 1: Requirement Sizing Engine">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                         <span class="hidden md:inline">Module 1 (Sizing)</span>
                     </a>
 
                     <!-- Quick Link: Instance Type Finder (Decision Matrix) -->
-                    <a href="http://localhost:8001/app" target="_blank" class="px-2.5 py-1 rounded bg-[#232f3e] hover:bg-[#2a384c] border border-[#ff9900]/40 text-[#ff9900] text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm" title="Launch Core Math Instance Type Finder & Decision Matrix">
+                    <a href="http://localhost:8001/app" target="_blank" class="h-8 px-2.5 rounded aws-btn-secondary border-orange-300/60 dark:border-[#ff9900]/40 text-[#ea580c] dark:text-[#ff9900] text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs" title="Launch Core Math Instance Type Finder & Decision Matrix">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                        <span class="hidden lg:inline">Instance Finder</span>
+                        <span class="hidden xl:inline">Instance Finder</span>
                     </a>
 
+                    <div class="h-4 w-px bg-gray-300 dark:bg-gray-700 hidden sm:block"></div>
+
                     <!-- AWS Region Selector -->
-                    <div class="flex items-center space-x-1.5 bg-[#0f141c] border border-[#2d3748] rounded px-2.5 py-1 shrink-0">
-                        <svg class="w-3.5 h-3.5 text-[#ff9900] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                        <select id="region-filter" onchange="onRegionFilterChange()" class="bg-transparent text-xs text-gray-200 font-bold focus:outline-none cursor-pointer max-w-[90px] sm:max-w-[140px] md:max-w-[170px] truncate">
+                    <div class="h-8 flex items-center space-x-1.5 bg-gray-100 dark:bg-[#0f141c] border border-gray-200 dark:border-[#2d3748] rounded px-2.5 shrink-0">
+                        <svg class="w-3.5 h-3.5 text-[#ec7211] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        <select id="region-filter" onchange="onRegionFilterChange()" class="bg-transparent text-xs text-gray-800 dark:text-gray-200 font-bold focus:outline-none cursor-pointer max-w-[85px] sm:max-w-[130px] md:max-w-[160px] truncate">
                             <!-- Populated dynamically -->
                         </select>
                     </div>
 
                     <!-- Live Cluster Health Pill -->
-                    <button onclick="switchMainView('probes')" id="pill-cluster" class="flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-[#0f141c] border border-[#1d8102]/50 text-[#8ce299] hover:bg-[#1b2533] transition shrink-0 cursor-pointer" title="Cluster Health Status">
-                        <span class="h-2 w-2 rounded-full bg-[#1d8102] shrink-0"></span>
+                    <button onclick="switchMainView('probes')" id="pill-cluster" class="h-8 flex items-center space-x-1.5 px-2.5 rounded text-xs font-semibold bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800/60 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/40 transition shrink-0 cursor-pointer" title="Cluster Health Status">
+                        <span class="h-2 w-2 rounded-full bg-[#16a34a] shrink-0"></span>
                         <span id="pill-cluster-text" class="font-mono text-[11px] hidden sm:inline">Cluster Healthy</span>
                         <span class="font-mono text-[10px] sm:hidden">Live</span>
                     </button>
 
+                    <div class="h-4 w-px bg-gray-300 dark:bg-gray-700 hidden md:block"></div>
+
                     <!-- Authenticated Admin Account Dropdown Badge -->
-                    <div id="auth-user-pill" class="flex items-center space-x-1.5 bg-[#232f3e] border border-[#414d5c] rounded px-2.5 py-1 text-xs shrink-0" title="Active AWS Account Session">
-                        <svg class="w-3.5 h-3.5 text-[#ff9900] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-                        <span id="auth-username" class="font-bold text-white font-mono text-xs">admin</span>
-                        <span id="auth-role" class="hidden md:inline-block px-1.5 py-0.2 text-[9px] font-extrabold uppercase rounded bg-[#0f141c] text-[#ff9900] border border-[#2d3748]">ROOT</span>
+                    <div id="auth-user-pill" class="h-8 flex items-center space-x-1.5 bg-gray-100 dark:bg-[#232f3e] border border-gray-200 dark:border-[#414d5c] rounded px-2.5 text-xs shrink-0" title="Active AWS Account Session">
+                        <svg class="w-3.5 h-3.5 text-[#ec7211] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                        <span id="auth-username" class="font-bold text-gray-800 dark:text-white font-mono text-xs">admin</span>
+                        <span id="auth-role" class="hidden md:inline-block px-1.5 py-0.2 text-[9px] font-extrabold uppercase rounded bg-gray-200 dark:bg-[#0f141c] text-[#ea580c] dark:text-[#ff9900] border border-gray-300 dark:border-[#2d3748]">ROOT</span>
                     </div>
 
                     <!-- API Key Button -->
-                    <button onclick="promptChangeAdminKey()" class="p-1 px-2 rounded text-xs font-semibold bg-[#232f3e] text-gray-300 border border-[#414d5c] hover:text-white transition flex items-center gap-1 shrink-0 cursor-pointer hidden sm:flex" title="Manage API Secret Key">
-                        <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+                    <button onclick="promptChangeAdminKey()" class="h-8 px-2 rounded text-xs font-semibold aws-btn-secondary transition flex items-center gap-1 shrink-0 cursor-pointer hidden sm:flex" title="Manage API Secret Key">
+                        <svg class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
                         <span class="hidden lg:inline text-[11px]">API Key</span>
                     </button>
 
                     <!-- Theme Toggler -->
-                    <button onclick="toggleTheme()" id="theme-toggle-btn" class="px-2.5 py-1 rounded bg-[#232f3e] hover:bg-[#2a384c] border border-[#414d5c] text-yellow-400 transition cursor-pointer flex items-center gap-1.5 text-xs font-semibold" title="Toggle Light / Dark Theme">
+                    <button onclick="toggleTheme()" id="theme-toggle-btn" class="h-8 px-2.5 rounded aws-btn-secondary text-yellow-500 dark:text-yellow-400 transition cursor-pointer flex items-center gap-1.5 text-xs font-semibold shrink-0" title="Toggle Light / Dark Theme">
                         <span id="theme-toggle-icon">☀️</span>
-                        <span id="theme-toggle-text" class="text-xs text-gray-200">Light</span>
+                        <span id="theme-toggle-text" class="text-xs">Light</span>
                     </button>
 
                     <!-- Sign Out Button -->
-                    <button onclick="logoutAdmin()" class="aws-btn-secondary px-2.5 py-1 text-xs font-bold text-white flex items-center gap-1 shrink-0 cursor-pointer" title="Sign out of AWS Console">
-                        <svg class="w-3.5 h-3.5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                    <button onclick="logoutAdmin()" class="h-8 px-2.5 rounded text-xs font-bold aws-btn-secondary hover:border-red-400 hover:text-red-600 dark:hover:text-red-400 flex items-center gap-1 shrink-0 cursor-pointer transition" title="Sign out of AWS Console">
+                        <svg class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
                         <span class="hidden sm:inline text-[11px]">Sign Out</span>
                     </button>
 
@@ -709,7 +754,7 @@ def get_dashboard_page_html() -> str:
                             </button>
 
                             <!-- Clear Cache Button -->
-                            <button onclick="clearRedisCache()" class="aws-btn-secondary py-2 px-3 text-xs text-gray-400 hover:text-white cursor-pointer">
+                            <button onclick="clearRedisCache()" class="aws-btn-secondary py-2 px-3 text-xs text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-white cursor-pointer">
                                 Purge Redis
                             </button>
 
@@ -728,11 +773,11 @@ def get_dashboard_page_html() -> str:
                                 <div class="text-[10px] font-bold text-[#9ba7b6] uppercase tracking-wider px-2 mb-1.5">Service Categories</div>
                                 <div class="grid grid-cols-1 gap-0.5" id="category-filter-chips">
                                     <button onclick="filterServiceGroup('all')" id="cat-chip-all" class="w-full text-left px-2.5 py-1.5 text-xs font-bold rounded bg-[#ec7211] text-white">All Services (15)</button>
-                                    <button onclick="filterServiceGroup('compute')" id="cat-chip-compute" class="w-full text-left px-2.5 py-1.5 text-xs font-medium text-gray-400 hover:text-white hover:bg-[#232f3e] rounded transition">Compute & Containers (4)</button>
-                                    <button onclick="filterServiceGroup('database')" id="cat-chip-database" class="w-full text-left px-2.5 py-1.5 text-xs font-medium text-gray-400 hover:text-white hover:bg-[#232f3e] rounded transition">Databases & Storage (4)</button>
-                                    <button onclick="filterServiceGroup('network')" id="cat-chip-network" class="w-full text-left px-2.5 py-1.5 text-xs font-medium text-gray-400 hover:text-white hover:bg-[#232f3e] rounded transition">Networking & CDN (3)</button>
-                                    <button onclick="filterServiceGroup('security')" id="cat-chip-security" class="w-full text-left px-2.5 py-1.5 text-xs font-medium text-gray-400 hover:text-white hover:bg-[#232f3e] rounded transition">Security & Governance (3)</button>
-                                    <button onclick="filterServiceGroup('monitoring')" id="cat-chip-monitoring" class="w-full text-left px-2.5 py-1.5 text-xs font-medium text-gray-400 hover:text-white hover:bg-[#232f3e] rounded transition">Observability (1)</button>
+                                    <button onclick="filterServiceGroup('compute')" id="cat-chip-compute" class="w-full text-left px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#232f3e] rounded transition">Compute & Containers (4)</button>
+                                    <button onclick="filterServiceGroup('database')" id="cat-chip-database" class="w-full text-left px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#232f3e] rounded transition">Databases & Storage (4)</button>
+                                    <button onclick="filterServiceGroup('network')" id="cat-chip-network" class="w-full text-left px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#232f3e] rounded transition">Networking & CDN (3)</button>
+                                    <button onclick="filterServiceGroup('security')" id="cat-chip-security" class="w-full text-left px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#232f3e] rounded transition">Security & Governance (3)</button>
+                                    <button onclick="filterServiceGroup('monitoring')" id="cat-chip-monitoring" class="w-full text-left px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#232f3e] rounded transition">Observability (1)</button>
                                 </div>
                             </div>
 
@@ -1239,15 +1284,15 @@ def get_dashboard_page_html() -> str:
                     if (v === viewName) {
                         navBtn.className = "w-full flex items-center justify-between px-2.5 py-2 text-xs font-semibold rounded text-left aws-nav-active transition cursor-pointer";
                     } else {
-                        navBtn.className = "w-full flex items-center justify-between px-2.5 py-2 text-xs font-medium rounded text-[#9ba7b6] hover:text-white hover:bg-[#232f3e] transition text-left cursor-pointer";
+                        navBtn.className = "w-full flex items-center justify-between px-2.5 py-2 text-xs font-medium rounded text-gray-600 dark:text-[#9ba7b6] hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#232f3e] transition text-left cursor-pointer";
                     }
                 }
                 const headerTab = document.getElementById(`header-tab-${v}`);
                 if (headerTab) {
                     if (v === viewName) {
-                        headerTab.className = "px-3 py-1 text-xs font-bold rounded transition bg-[#ec7211] text-white flex items-center gap-1.5 cursor-pointer";
+                        headerTab.className = "h-7 px-3 text-xs font-bold rounded transition bg-[#ec7211] text-white flex items-center gap-1.5 cursor-pointer shadow-2xs";
                     } else {
-                        headerTab.className = "px-3 py-1 text-xs font-medium text-gray-300 hover:text-white hover:bg-[#232f3e] rounded transition flex items-center gap-1.5 cursor-pointer";
+                        headerTab.className = "h-7 px-3 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200/70 dark:hover:bg-[#232f3e] rounded transition flex items-center gap-1.5 cursor-pointer";
                     }
                 }
             });
@@ -1351,10 +1396,10 @@ def get_dashboard_page_html() -> str:
                 if (clusterPill && clusterText) {
                     if (probe.redis.connected && probe.postgres.connected) {
                         clusterText.innerText = 'Cluster Healthy';
-                        clusterPill.className = 'flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-[#0f141c] border border-[#1d8102]/50 text-[#8ce299] hover:bg-[#1b2533] transition shrink-0 cursor-pointer';
+                        clusterPill.className = 'h-8 flex items-center space-x-1.5 px-2.5 rounded text-xs font-semibold bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800/60 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/40 transition shrink-0 cursor-pointer';
                     } else {
                         clusterText.innerText = 'Cluster Degraded';
-                        clusterPill.className = 'flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-[#0f141c] border border-[#d13212]/50 text-[#ff9492] hover:bg-[#1b2533] transition shrink-0 cursor-pointer';
+                        clusterPill.className = 'h-8 flex items-center space-x-1.5 px-2.5 rounded text-xs font-semibold bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/60 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition shrink-0 cursor-pointer';
                     }
                 }
 
@@ -1393,7 +1438,7 @@ def get_dashboard_page_html() -> str:
                     if (c === group) {
                         chip.className = "w-full text-left px-2.5 py-1.5 text-xs font-bold rounded bg-[#ec7211] text-white";
                     } else {
-                        chip.className = "w-full text-left px-2.5 py-1.5 text-xs font-medium text-gray-400 hover:text-white hover:bg-[#232f3e] rounded transition";
+                        chip.className = "w-full text-left px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#232f3e] rounded transition";
                     }
                 }
             });
@@ -1413,8 +1458,8 @@ def get_dashboard_page_html() -> str:
                 const count = items.length;
                 
                 const activeClass = (currentService === svc.code) 
-                    ? "bg-[#232f3e] text-white border-l-4 border-[#ec7211] font-semibold" 
-                    : "text-gray-400 hover:bg-[#232f3e]/60 hover:text-white border-l-4 border-transparent";
+                    ? "bg-orange-50 text-[#ea580c] dark:bg-[#232f3e] dark:text-white border-l-4 border-[#ec7211] font-semibold" 
+                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-[#232f3e]/60 dark:hover:text-white border-l-4 border-transparent";
 
                 nav.innerHTML += `
                     <button onclick="switchService('${svc.code}')" class="w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded transition ${activeClass} cursor-pointer">
@@ -1422,7 +1467,7 @@ def get_dashboard_page_html() -> str:
                             ${getServiceSvg(svc.code)}
                             <span class="truncate">${svc.name}</span>
                         </div>
-                        <span class="px-1.5 py-0.2 rounded bg-[#0f141c] text-[10px] font-semibold text-gray-300 font-mono shrink-0 border border-[#2d3748]">${count}</span>
+                        <span class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-[#0f141c] text-[10px] font-semibold text-gray-700 dark:text-gray-300 font-mono shrink-0 border border-gray-200 dark:border-[#2d3748]">${count}</span>
                     </button>
                 `;
             });
@@ -1511,8 +1556,8 @@ def get_dashboard_page_html() -> str:
                         <td class="p-3 text-right font-mono font-bold text-[#1d8102]">$${hourlyPrice.toFixed(4)}</td>
                         <td class="p-3 text-right font-mono font-semibold text-gray-300">$${monthlyPrice}</td>
                         <td class="p-3 text-center">
-                            <button onclick="inspectItemByIndex(${idx})" class="p-1 px-2.5 text-[10px] font-semibold bg-[#232f3e] hover:bg-[#2a384c] text-gray-200 rounded border border-[#414d5c] transition inline-flex items-center gap-1 cursor-pointer" title="View SKU Specifications">
-                                <svg class="w-3 h-3 text-[#ff9900]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                            <button onclick="inspectItemByIndex(${idx})" class="p-1 px-2.5 text-[10px] font-semibold aws-btn-secondary rounded transition inline-flex items-center gap-1 cursor-pointer" title="View SKU Specifications">
+                                <svg class="w-3 h-3 text-[#ec7211]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                                 <span>View</span>
                             </button>
                         </td>
@@ -1723,7 +1768,7 @@ def get_dashboard_page_html() -> str:
 
                     // Sidebar Item
                     sidebarNav.innerHTML += `
-                        <div onclick="selectModuleFromSidebar('${mod.code}')" class="cursor-pointer flex items-center justify-between px-2.5 py-1.5 text-xs font-medium rounded text-gray-300 hover:bg-[#232f3e] hover:text-white border border-transparent transition">
+                        <div onclick="selectModuleFromSidebar('${mod.code}')" class="cursor-pointer flex items-center justify-between px-2.5 py-1.5 text-xs font-medium rounded text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#232f3e] hover:text-gray-900 dark:hover:text-white border border-transparent transition">
                             <div class="flex items-center space-x-2">
                                 <span class="h-1.5 w-1.5 rounded-full ${statusColor}"></span>
                                 <span>${mod.id}. ${mod.name.replace(' Engine', '').replace(' Service', '')}</span>
@@ -1735,9 +1780,9 @@ def get_dashboard_page_html() -> str:
                     const moduleTargetUrl = mod.ui_url ? mod.ui_url.replace('localhost', window.location.hostname) : (mod.port ? `http://${window.location.hostname}:${mod.port}${mod.ui_path || '/health'}` : null);
                     const launchBtnHtml = moduleTargetUrl ? `
                         <div class="pt-2 flex justify-between items-center">
-                            <a href="${moduleTargetUrl}" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-[#232f3e] hover:bg-[#2d3748] border border-[#414d5c] text-xs font-semibold text-white transition">
+                            <a href="${moduleTargetUrl}" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded aws-btn-secondary text-xs font-semibold transition hover:border-[#ec7211]">
                                 <span>Launch ${mod.ui_path ? 'Console' : 'Health API'}</span>
-                                <svg class="w-3.5 h-3.5 text-[#ff9900]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                <svg class="w-3.5 h-3.5 text-[#ec7211]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                             </a>
                             <span class="text-[10px] text-gray-400 font-mono">Port :${mod.port}</span>
                         </div>
