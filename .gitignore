@@ -34,3 +34,5 @@ logs/
 Thumbs.db
 .vscode/
 .idea/
+
+fronetend/node_modules
