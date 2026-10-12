@@ -92,13 +92,23 @@ async def init_source_db():
     eng = get_sqlite_engine()
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Auto-migrate any newly introduced columns on existing databases
         for col_name, col_def in [
             ("auth_type", "VARCHAR(30) DEFAULT 'PAT'"),
             ("github_user", "VARCHAR(100)"),
+            ("tenant_id", "VARCHAR(36)"),
+            ("created_by_user_id", "VARCHAR(36)"),
         ]:
             try:
                 await conn.execute(text(f"ALTER TABLE sc_git_connections ADD COLUMN {col_name} {col_def}"))
+            except Exception:
+                pass
+
+        for col_name, col_def in [
+            ("tenant_id", "VARCHAR(36)"),
+            ("created_by_user_id", "VARCHAR(36)"),
+        ]:
+            try:
+                await conn.execute(text(f"ALTER TABLE sc_cloud_connections ADD COLUMN {col_name} {col_def}"))
             except Exception:
                 pass
     if not IS_TESTING:
@@ -136,10 +146,10 @@ async def get_db() -> AsyncSession:
     try:
         pg_sf = get_pg_sessionmaker()
         pg_session = pg_sf()
-        await pg_session.execute(text("SELECT 1"))
+        await pg_session.execute(text("SELECT tenant_id FROM sc_git_connections LIMIT 1"))
         pg_ok = True
     except Exception as exc:
-        logger.warning(f"PostgreSQL container unavailable ({exc}), failing over to SQLite.")
+        logger.warning(f"PostgreSQL container unavailable or pre-migration ({exc}), failing over to SQLite.")
         if pg_session:
             await pg_session.close()
 

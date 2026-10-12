@@ -22,7 +22,7 @@ def print_banner():
     txt.append("\n" + "═" * 90 + "\n", style="dim")
     txt.append("  AetherOps AI — Module 2: Source & Cloud Connection  ", style="bold magenta")
     txt.append(" | ", style="dim")
-    txt.append("Port: 8010", style="bold cyan")
+    txt.append("Port: 8002", style="bold cyan")
     txt.append(" | ", style="dim")
     txt.append("SQLite + PostgreSQL + Redis  |  Premium Light UI", style="bold yellow")
     console.print(Panel(txt, border_style="green", box=box.DOUBLE,

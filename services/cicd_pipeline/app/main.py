@@ -28,7 +28,7 @@ async def root():
     return {
         "service": "AetherOps AI - CI/CD Pipeline Service (Module 6)",
         "version": "1.0.0",
-        "port": 8006,
+        "port": 8009,
         "endpoints": {
             "health": "/health",
             "generate-pipeline": "/api/v1/generate-pipeline",
@@ -41,7 +41,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "cicd-pipeline-service",
-        "port": 8006,
+        "port": 8009,
         "timestamp": time.time()
     }
 

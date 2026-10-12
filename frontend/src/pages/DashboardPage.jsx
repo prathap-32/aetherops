@@ -35,10 +35,12 @@ const PATH_VIEW_MAP = {
   '/environments': 'environments',
   '/source-connection': 'source_cloud',
   '/source-analysis': 'repo_analyzer',
+  '/requirements': 'requirements',
   '/architecture': 'architecture',
   '/architecture/designer': 'architecture_designer',
   '/risk-analysis': 'risk_analysis',
   '/architecture/validation': 'architecture_validation',
+  '/security': 'security',
   '/terraform': 'iac',
   '/execution': 'execution',
   '/deployment': 'deployments',
@@ -57,10 +59,12 @@ const VIEW_PATH_MAP = {
   environments: '/environments',
   source_cloud: '/source-connection',
   repo_analyzer: '/source-analysis',
+  requirements: '/requirements',
   architecture: '/architecture',
   architecture_designer: '/architecture/designer',
   risk_analysis: '/risk-analysis',
   architecture_validation: '/architecture/validation',
+  security: '/security',
   iac: '/terraform',
   execution: '/execution',
   deployments: '/deployment',
@@ -213,6 +217,14 @@ export default function DashboardPage() {
             activeEnvironment={activeEnvironment}
           />
         );
+      case 'requirements':
+        return (
+          <RepoAnalyzerView
+            onNavigate={handleNavigate}
+            activeProject={activeProject}
+            activeEnvironment={activeEnvironment}
+          />
+        );
       case 'architecture':
         return (
           <ArchitectureView
@@ -226,6 +238,8 @@ export default function DashboardPage() {
       case 'risk_analysis':
         return <RiskEngineView onNavigate={handleNavigate} />;
       case 'architecture_validation':
+        return <ArchitectureValidationView onNavigate={handleNavigate} />;
+      case 'security':
         return <ArchitectureValidationView onNavigate={handleNavigate} />;
       case 'iac':
         return <IacView onNavigate={handleNavigate} />;

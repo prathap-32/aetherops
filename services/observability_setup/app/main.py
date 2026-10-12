@@ -28,7 +28,7 @@ async def root():
     return {
         "service": "AetherOps AI - Observability & Telemetry Service (Module 7)",
         "version": "1.0.0",
-        "port": 8007,
+        "port": 8010,
         "endpoints": {
             "health": "/health",
             "generate-observability": "/api/v1/generate-observability",
@@ -41,7 +41,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "observability-setup-service",
-        "port": 8007,
+        "port": 8010,
         "timestamp": time.time()
     }
 

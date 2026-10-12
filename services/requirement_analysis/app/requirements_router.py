@@ -8,6 +8,7 @@ from typing import List, Optional
 import hashlib
 import json
 import uuid
+import os
 import logging
 import httpx
 import time
@@ -77,7 +78,7 @@ logger = logging.getLogger("requirement-analysis-router")
 
 requirements_router = APIRouter(tags=["Requirements Analysis & Sizing"])
 
-MODULE_2_URL = "http://localhost:8002/api/v1/generate-graph"
+MODULE_2_URL = os.getenv("ARCH_SERVICE_URL", "http://localhost:8005/api/v1/generate-graph")
 
 
 def _hash_input(payload: RequirementInput) -> str:
@@ -625,7 +626,7 @@ async def dispatch_to_module_2(
         logger.error(f"Failed to communicate with Module 2: {e}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Could not reach Module 2 (Architecture Generator) at {MODULE_2_URL}. Ensure port 8002 is running."
+            detail=f"Could not reach Module 2 (Architecture Generator) at {MODULE_2_URL}. Ensure port 8005 is running."
         )
 
 

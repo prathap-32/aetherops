@@ -33,7 +33,7 @@ async def root():
     return {
         "service": "AetherOps AI - Cloud Deployer Service (Module 8)",
         "version": "1.0.0",
-        "port": 8008,
+        "port": 8011,
         "endpoints": {
             "health": "/health",
             "deploy": "/api/v1/deploy",
@@ -47,7 +47,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "cloud-deployer-service",
-        "port": 8008,
+        "port": 8011,
         "timestamp": time.time()
     }
 

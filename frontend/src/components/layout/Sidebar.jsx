@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   FolderKanban,
   Boxes,
+  Cpu,
   GitBranch,
   FileCode2,
   Network,
@@ -199,6 +200,15 @@ export default function Sidebar({
                   </div>
                 </button>
                 <button
+                  onClick={() => navItemClick('requirements', '/requirements')}
+                  className={navItemClass('requirements')}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Cpu className={iconClass('requirements')} />
+                    <span>Requirement Analysis</span>
+                  </div>
+                </button>
+                <button
                   onClick={() => navItemClick('architecture', '/architecture')}
                   className={navItemClass('architecture')}
                 >
@@ -232,6 +242,15 @@ export default function Sidebar({
                   <div className="flex items-center gap-2.5">
                     <CheckCircle2 className={iconClass('architecture_validation')} />
                     <span>Architecture Validation</span>
+                  </div>
+                </button>
+                <button
+                  onClick={() => navItemClick('security', '/security')}
+                  className={navItemClass('security')}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <ShieldCheck className={iconClass('security')} />
+                    <span>Security &amp; Compliance</span>
                   </div>
                 </button>
               </>

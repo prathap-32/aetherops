@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
         await seed_initial_data()
     except Exception as exc:
         logger.error(f"Startup error: {exc}", exc_info=True)
-    logger.info("Module 2 ready → http://localhost:8010/app/source")
+    logger.info("Module 2 ready → http://localhost:8002/app/source")
     yield
     logger.info("Shutting down Source Connection Service…")
     await cache_manager.disconnect()
@@ -117,7 +117,7 @@ async def root(request: Request):
     return {
         "service": "AetherOps AI — Module 2: Source & Cloud Connection",
         "version": "1.0.0",
-        "port": 8010,
+        "port": 8002,
         "endpoints": {
             "source_ui": "/app/source",
             "health": "/health",
@@ -136,14 +136,14 @@ async def login_page():
 # ── Health / Root ─────────────────────────────────────────────────────────────
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "service": "source-and-cloud-connection", "timestamp": time.time()}
+    return {"status": "healthy", "service": "source-and-cloud-connection", "port": 8002, "timestamp": time.time()}
 
 
 @app.get("/")
 async def root():
     return {
         "service": "AetherOps AI — Module 2: Source & Cloud Connection",
-        "version": "1.0.0", "port": 8010,
+        "version": "1.0.0", "port": 8002,
         "endpoints": {
             "dashboard_ui": "/app/source",
             "connection_detail_ui": "/app/source/{connection_id}",

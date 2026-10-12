@@ -22,7 +22,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
-        port=int(os.getenv("PORT", 8011)),
+        port=int(os.getenv("PORT", 8003)),
         reload=bool(os.getenv("DEV_MODE", "")),
         log_config=None,          # We use our own RichHandler
         access_log=True,

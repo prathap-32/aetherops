@@ -56,7 +56,7 @@ async def test_root(client):
     assert res.status_code == 200
     data = res.json()
     assert "Module 2" in data["service"]
-    assert data["port"] == 8010
+    assert data["port"] == 8002
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -518,7 +518,7 @@ async def test_github_oauth_config_get_and_post(client, hdrs):
     update_payload = {
         "client_id": "test_client_id_123456",
         "client_secret": "test_client_secret_abcdef",
-        "redirect_uri": "http://localhost:8010/api/v1/auth/github/callback"
+        "redirect_uri": "http://localhost:8000/api/v1/auth/github/callback"
     }
     res = await client.post("/api/v1/auth/github/config", json=update_payload, headers=hdrs)
     assert res.status_code == 200

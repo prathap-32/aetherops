@@ -25,7 +25,12 @@ JWT_SECRET_KEY       = os.getenv(
 JWT_ALGORITHM        = "HS256"
 JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "8"))
 SESSION_COOKIE_NAME  = "aether_session"
+ENVIRONMENT          = os.getenv("AETHER_ENV", os.getenv("ENVIRONMENT", "development")).lower()
 MASTER_ADMIN_KEY     = os.getenv("ADMIN_API_KEY", "aetherops-secret-admin-key")
+if ENVIRONMENT == "production" and MASTER_ADMIN_KEY == "aetherops-secret-admin-key":
+    logger.critical("SECURITY ALERT: Insecure default ADMIN_API_KEY in production! Disabling master key fallback.")
+    MASTER_ADMIN_KEY = None
+
 DEFAULT_ADMIN_USER   = os.getenv("ADMIN_DEFAULT_USER", "admin")
 DEFAULT_ADMIN_PASS   = os.getenv("ADMIN_DEFAULT_PASS", "AetherOps@2026!")
 DEFAULT_ADMIN_EMAIL  = os.getenv("ADMIN_DEFAULT_EMAIL", "admin@aetherops.cloud")
@@ -99,11 +104,11 @@ async def get_admin_db_session() -> AsyncSession:
     try:
         sf = _get_admin_pg_sessionmaker()
         async with sf() as session:
-            await session.execute(text("SELECT 1"))
+            await session.execute(text("SELECT uuid FROM pm_admin_users LIMIT 1"))
             yield session
             return
     except Exception as exc:
-        logger.warning(f"PG admin session unavailable ({exc}), using SQLite.")
+        logger.warning(f"PG admin session unavailable or pre-migration ({exc}), using SQLite.")
         sf = _get_admin_sqlite_sessionmaker()
         async with sf() as session:
             yield session
@@ -122,10 +127,17 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
-def create_access_token(username: str, role: str, email: str, hours: int = JWT_EXPIRATION_HOURS) -> str:
+def create_access_token(
+    username: str,
+    role: str,
+    email: str,
+    hours: int = JWT_EXPIRATION_HOURS,
+    user_uuid: Optional[str] = None,
+) -> str:
     now = datetime.datetime.utcnow()
     payload = {
         "sub":   username,
+        "uuid":  user_uuid,
         "role":  role,
         "email": email,
         "iat":   now,
@@ -186,6 +198,10 @@ async def init_admin_security():
     sf = _get_admin_sqlite_sessionmaker()
     async with _admin_sqlite_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        try:
+            await conn.execute(text("ALTER TABLE pm_admin_users ADD COLUMN uuid VARCHAR(36)"))
+        except Exception:
+            pass
 
     if not IS_TESTING:
         try:
@@ -197,11 +213,15 @@ async def init_admin_security():
             logger.warning(f"PG admin security init deferred: {exc}")
 
     pwd_hash = hash_password(DEFAULT_ADMIN_PASS)
+    import uuid as _uuid
+    default_admin_uuid = str(_uuid.uuid5(_uuid.NAMESPACE_DNS, f"{DEFAULT_ADMIN_USER}.aetherops.local"))
 
     async with sf() as session:
         res = await session.execute(select(AdminUser).where(AdminUser.username == DEFAULT_ADMIN_USER))
-        if not res.scalar_one_or_none():
+        existing_admin = res.scalar_one_or_none()
+        if not existing_admin:
             session.add(AdminUser(
+                uuid=default_admin_uuid,
                 username=DEFAULT_ADMIN_USER,
                 email=DEFAULT_ADMIN_EMAIL,
                 password_hash=pwd_hash,
@@ -211,13 +231,18 @@ async def init_admin_security():
             ))
             await session.commit()
             logger.info(f"Seeded default admin '{DEFAULT_ADMIN_USER}' in SQLite.")
+        elif not existing_admin.uuid:
+            existing_admin.uuid = default_admin_uuid
+            await session.commit()
 
     if not IS_TESTING:
         try:
             async with _get_admin_pg_sessionmaker()() as session:
                 res = await session.execute(select(AdminUser).where(AdminUser.username == DEFAULT_ADMIN_USER))
-                if not res.scalar_one_or_none():
+                pg_admin = res.scalar_one_or_none()
+                if not pg_admin:
                     session.add(AdminUser(
+                        uuid=default_admin_uuid,
                         username=DEFAULT_ADMIN_USER,
                         email=DEFAULT_ADMIN_EMAIL,
                         password_hash=pwd_hash,
@@ -225,6 +250,9 @@ async def init_admin_security():
                         is_active=True,
                         created_at=datetime.datetime.utcnow(),
                     ))
+                    await session.commit()
+                elif not pg_admin.uuid:
+                    pg_admin.uuid = default_admin_uuid
                     await session.commit()
         except Exception as exc:
             logger.warning(f"PG admin seed deferred: {exc}")
@@ -235,34 +263,53 @@ async def init_admin_security():
 async def get_current_admin(request: Request) -> Dict[str, Any]:
     """
     Multi-channel authentication:
-    1. HttpOnly cookie  → JWT
-    2. Authorization: Bearer <JWT>
+    1. Authorization: Bearer <JWT> (explicit token)
+    2. HttpOnly cookie → JWT (browser session)
     3. X-Admin-Key header (API key fallback)
     """
-    # 1. Cookie
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    if token:
-        payload = decode_access_token(token)
-        if payload:
-            return {"username": payload.get("sub"), "role": payload.get("role"), "email": payload.get("email"), "auth_type": "cookie"}
-
-    # 2. Bearer
+    # 1. Bearer (explicit token header takes precedence over ambient cookies)
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         payload = decode_access_token(auth_header.split(" ", 1)[1].strip())
         if payload:
-            return {"username": payload.get("sub"), "role": payload.get("role"), "email": payload.get("email"), "auth_type": "bearer"}
+            return {
+                "username":  payload.get("sub"),
+                "uuid":      payload.get("uuid"),
+                "role":      payload.get("role"),
+                "email":     payload.get("email"),
+                "auth_type": "bearer",
+            }
+
+    # 2. Cookie (ambient browser session)
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if token:
+        payload = decode_access_token(token)
+        if payload:
+            return {
+                "username":  payload.get("sub"),
+                "uuid":      payload.get("uuid"),
+                "role":      payload.get("role"),
+                "email":     payload.get("email"),
+                "auth_type": "cookie",
+            }
 
     # 3. X-Admin-Key
     admin_key = request.headers.get("X-Admin-Key", "")
-    if admin_key and secrets.compare_digest(admin_key.strip(), MASTER_ADMIN_KEY):
-        return {"username": "root_admin", "role": "SUPER_ADMIN", "email": "root@aetherops.cloud", "auth_type": "api_key"}
+    if admin_key and MASTER_ADMIN_KEY and secrets.compare_digest(admin_key.strip(), MASTER_ADMIN_KEY):
+        return {
+            "username":  "root_admin",
+            "uuid":      "00000000-0000-0000-0000-000000000001",
+            "role":      "SUPER_ADMIN",
+            "email":     "root@aetherops.cloud",
+            "auth_type": "api_key",
+        }
 
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized: valid session required.")
 
 
-async def register_user(username: str, email: str, password: str, role: str = "ADMIN") -> Dict[str, Any]:
+async def register_user(username: str, email: str, password: str, role: str = "USER") -> Dict[str, Any]:
     """Register a new user account in PostgreSQL / SQLite."""
+    import uuid as _uuid
     async for session in get_admin_db_session():
         res = await session.execute(
             select(AdminUser).where((AdminUser.username == username) | (AdminUser.email == email))
@@ -272,7 +319,9 @@ async def register_user(username: str, email: str, password: str, role: str = "A
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username or email already registered.")
 
         pwd_hash = hash_password(password)
+        new_uuid = str(_uuid.uuid4())
         new_user = AdminUser(
+            uuid=new_uuid,
             username=username,
             email=email,
             password_hash=pwd_hash,
@@ -283,8 +332,8 @@ async def register_user(username: str, email: str, password: str, role: str = "A
         session.add(new_user)
         await session.commit()
         await session.refresh(new_user)
-        token = create_access_token(new_user.username, new_user.role, new_user.email)
-        return {"token": token, "username": new_user.username, "role": new_user.role, "email": new_user.email}
+        token = create_access_token(new_user.username, new_user.role, new_user.email, user_uuid=new_user.uuid)
+        return {"token": token, "username": new_user.username, "role": new_user.role, "email": new_user.email, "uuid": new_user.uuid}
 
 
 async def login_admin(username_or_email: str, password: str, request: Request):
@@ -306,9 +355,14 @@ async def login_admin(username_or_email: str, password: str, request: Request):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials.")
 
         clear_failed_login(client_ip)
-        token = create_access_token(user.username, user.role, user.email)
+        if not user.uuid:
+            import uuid as _uuid
+            user.uuid = str(_uuid.uuid5(_uuid.NAMESPACE_DNS, f"{user.username}.aetherops.local"))
+            await session.commit()
+
+        token = create_access_token(user.username, user.role, user.email, user_uuid=user.uuid)
 
         user.last_login_at = datetime.datetime.utcnow()
         await session.commit()
 
-        return {"token": token, "username": user.username, "role": user.role, "email": user.email}
+        return {"token": token, "username": user.username, "role": user.role, "email": user.email, "uuid": user.uuid}

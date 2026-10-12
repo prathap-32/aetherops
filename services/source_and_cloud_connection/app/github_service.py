@@ -49,7 +49,7 @@ class GitHubConfigManager:
     def get_client_secret(self) -> str:
         return self._client_secret or os.getenv("GITHUB_CLIENT_SECRET", "")
 
-    def get_redirect_uri(self, fallback: str = "http://localhost:8010/api/v1/auth/github/callback") -> str:
+    def get_redirect_uri(self, fallback: str = "http://localhost:8000/api/v1/auth/github/callback") -> str:
         return self._redirect_uri or os.getenv("GITHUB_OAUTH_REDIRECT_URI", "") or fallback
 
     def is_configured(self) -> bool:

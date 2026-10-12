@@ -7,6 +7,7 @@ from app.database import Base
 class AdminUser(Base):
     __tablename__ = "sc_admin_users"
     id             = Column(Integer, primary_key=True, index=True)
+    uuid           = Column(String(36), unique=True, index=True, nullable=True)
     username       = Column(String(64),  unique=True, index=True, nullable=False)
     email          = Column(String(120), unique=True, index=True, nullable=False)
     password_hash  = Column(String(255), nullable=False)
@@ -18,7 +19,7 @@ class AdminUser(Base):
     created_at     = Column(DateTime,    default=datetime.datetime.utcnow, nullable=False)
 
     def to_dict(self):
-        return {"id": self.id, "username": self.username, "email": self.email,
+        return {"id": self.id, "uuid": self.uuid, "username": self.username, "email": self.email,
                 "role": self.role, "is_active": self.is_active,
                 "last_login_at": self.last_login_at.isoformat() if self.last_login_at else None,
                 "created_at": self.created_at.isoformat() if self.created_at else None}

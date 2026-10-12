@@ -16,6 +16,8 @@ class GitConnection(Base):
     id              = Column(String(36),  primary_key=True, index=True)   # UUID v4
     project_id      = Column(String(36),  nullable=False, index=True)     # from Module 1
     environment_id  = Column(String(36),  nullable=False, index=True)     # from Module 1
+    tenant_id       = Column(String(36),  nullable=True,  index=True)     # Tenant isolation
+    created_by_user_id = Column(String(36), nullable=True, index=True)    # User UUID
     owner           = Column(String(100), nullable=False, index=True)     # user who connected
 
     # Repository details (filled by user)
@@ -54,6 +56,8 @@ class GitConnection(Base):
             "id":               self.id,
             "project_id":       self.project_id,
             "environment_id":   self.environment_id,
+            "tenant_id":        self.tenant_id,
+            "created_by_user_id": self.created_by_user_id,
             "owner":            self.owner,
             "repo_url":         self.repo_url,
             "repo_name":        self.repo_name,
@@ -87,6 +91,8 @@ class CloudConnection(Base):
     id                 = Column(String(36),  primary_key=True, index=True)   # UUID v4
     project_id         = Column(String(36),  nullable=False, index=True)
     environment_id     = Column(String(36),  nullable=False, index=True)
+    tenant_id          = Column(String(36),  nullable=True,  index=True)
+    created_by_user_id = Column(String(36),  nullable=True,  index=True)
     owner              = Column(String(100), nullable=False, index=True)
 
     provider           = Column(String(30),  nullable=False, default="AWS")  # AWS | GCP | AZURE
@@ -124,6 +130,8 @@ class CloudConnection(Base):
             "id":                self.id,
             "project_id":        self.project_id,
             "environment_id":    self.environment_id,
+            "tenant_id":          self.tenant_id,
+            "created_by_user_id": self.created_by_user_id,
             "owner":             self.owner,
             "provider":          self.provider,
             "auth_type":         self.auth_type,

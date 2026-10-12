@@ -98,9 +98,12 @@ class SourceCacheManager:
     async def set_cloud_conn(self, cid: str, d: Any): await self.set_json(f"sc:cloud:conn:{cid}", d, 30)
     async def del_cloud_conn(self, cid: str): await self._del(f"sc:cloud:conn:{cid}")
 
-    async def invalidate_all(self, owner: str, cid: Optional[str] = None):
+    async def invalidate_all(self, owner: str, cid: Optional[str] = None, tenant_id: Optional[str] = None):
         await self.del_list(owner)
         await self.del_cloud_list(owner)
+        if tenant_id:
+            await self.del_list(f"{owner}:{tenant_id}")
+            await self.del_cloud_list(f"{owner}:{tenant_id}")
         if cid:
             await self.del_conn(cid)
             await self.del_snapshot(cid)

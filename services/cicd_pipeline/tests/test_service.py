@@ -9,7 +9,7 @@ def test_health():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
-    assert data["port"] == 8006
+    assert data["port"] == 8009
 
 def test_generate_github_actions_pipeline():
     payload = {

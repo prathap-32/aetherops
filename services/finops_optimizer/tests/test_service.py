@@ -9,7 +9,7 @@ def test_health():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
-    assert data["port"] == 8004
+    assert data["port"] == 8007
 
 def test_optimize_costs():
     payload = {

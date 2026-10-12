@@ -28,7 +28,7 @@ async def root():
     return {
         "service": "AetherOps AI - FinOps Cost Optimizer Service (Module 4)",
         "version": "1.0.0",
-        "port": 8004,
+        "port": 8007,
         "endpoints": {
             "health": "/health",
             "optimize": "/api/v1/optimize",
@@ -41,7 +41,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "finops-optimizer-service",
-        "port": 8004,
+        "port": 8007,
         "timestamp": time.time()
     }
 

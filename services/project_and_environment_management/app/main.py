@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.error(f"Startup initialisation error: {exc}", exc_info=True)
 
-    logger.info("Module 1 ready → http://localhost:8009/app")
+    logger.info("Module 1 ready → http://localhost:8001/app")
     yield
 
     # Shutdown
@@ -159,7 +159,7 @@ async def login_form(request: Request):
 # ── Health / Root ─────────────────────────────────────────────────────────────
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "service": "project-manager", "timestamp": time.time()}
+    return {"status": "healthy", "service": "project-manager", "port": 8001, "timestamp": time.time()}
 
 
 @app.get("/")
@@ -172,7 +172,7 @@ async def root(request: Request):
     return {
         "service": "AetherOps AI — Module 1: Project & Environment Management",
         "version": "1.0.0",
-        "port": 8009,
+        "port": 8001,
         "endpoints": {
             "dashboard_ui":     "/app",
             "project_detail_ui":"/app/projects/{project_id}",

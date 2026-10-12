@@ -1,5 +1,5 @@
 # services/admin_console/app/main.py
-from fastapi import FastAPI, status
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, JSONResponse
 from contextlib import asynccontextmanager
@@ -66,7 +66,7 @@ async def background_catalog_warm():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print_banner()
-    logger.info("Starting up AetherOps Admin Console Control Plane on port 8000...")
+    logger.info("Starting up AetherOps Admin Console Control Plane on port 8012...")
     await cache_manager.connect()
     
     try:
@@ -95,8 +95,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="AetherOps AI - Admin Console & Fleet Gateway",
-    description="Central AWS Management Console, Catalog Manager, and Microservices Telemetry Control Plane (Port 8000)",
+    title="AetherOps AI - Admin Console Control Plane",
+    description="Central AWS Management Console, Catalog Manager, and Microservices Telemetry Control Plane (Port 8012)",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -125,8 +125,14 @@ if os.path.exists(static_dir):
 
 app.include_router(admin_router)
 
-from app.gateway_router import gateway_router
-app.include_router(gateway_router)
+
+@app.get("/")
+async def root(request: Request):
+    from app.auth import SESSION_COOKIE_NAME, decode_access_token
+    cookie_token = request.cookies.get(SESSION_COOKIE_NAME)
+    if cookie_token and decode_access_token(cookie_token):
+        return RedirectResponse(url="/admin")
+    return RedirectResponse(url="/admin/login?redirect=/admin", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/health", status_code=status.HTTP_200_OK)
@@ -134,7 +140,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "admin-console-service",
-        "port": 8000,
+        "port": 8012,
         "timestamp": time.time()
     }
 

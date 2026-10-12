@@ -8,6 +8,7 @@ class AdminUser(Base):
     __tablename__ = "pm_admin_users"
 
     id             = Column(Integer, primary_key=True, index=True)
+    uuid           = Column(String(36), unique=True, index=True, nullable=True)
     username       = Column(String(64),  unique=True, index=True, nullable=False)
     email          = Column(String(120), unique=True, index=True, nullable=False)
     password_hash  = Column(String(255), nullable=False)
@@ -21,6 +22,7 @@ class AdminUser(Base):
     def to_dict(self):
         return {
             "id":            self.id,
+            "uuid":          self.uuid,
             "username":      self.username,
             "email":         self.email,
             "role":          self.role,

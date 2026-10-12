@@ -184,6 +184,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "requirement-analysis-service",
+        "port": 8004,
         "timestamp": time.time()
     }
 

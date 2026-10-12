@@ -28,7 +28,7 @@ async def root():
     return {
         "service": "AetherOps AI - Security Scanner Service (Module 5)",
         "version": "1.0.0",
-        "port": 8005,
+        "port": 8008,
         "endpoints": {
             "health": "/health",
             "scan": "/api/v1/scan",
@@ -41,7 +41,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "security-scanner-service",
-        "port": 8005,
+        "port": 8008,
         "timestamp": time.time()
     }
 

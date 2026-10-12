@@ -70,6 +70,8 @@ class GitConnectionOut(BaseModel):
     id:                 str
     project_id:         str
     environment_id:     str
+    tenant_id:          Optional[str] = None
+    created_by_user_id: Optional[str] = None
     owner:              str
     repo_url:           str
     repo_name:          str
@@ -247,6 +249,8 @@ class CloudConnectionOut(BaseModel):
     id:                 str
     project_id:         str
     environment_id:     str
+    tenant_id:          Optional[str] = None
+    created_by_user_id: Optional[str] = None
     owner:              str
     provider:           str
     auth_type:          str

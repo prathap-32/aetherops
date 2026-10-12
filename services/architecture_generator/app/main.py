@@ -92,6 +92,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "architecture-generator-service",
+        "port": 8005,
         "timestamp": time.time()
     }
 

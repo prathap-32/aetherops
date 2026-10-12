@@ -62,7 +62,7 @@ logger = logging.getLogger("repo-analyzer-service")
 # ---------------------------------------------------------------------------
 # Module 1 base URL
 # ---------------------------------------------------------------------------
-MODULE_1_URL = os.getenv("MODULE_1_URL", "http://localhost:8001")
+MODULE_1_URL = os.getenv("REQ_SERVICE_URL", os.getenv("MODULE_1_URL", "http://localhost:8004"))
 ANALYZE_REPO_ENDPOINT = f"{MODULE_1_URL}/api/v1/requirements/analyze-repo"
 
 
@@ -158,6 +158,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "repo-analyzer-service",
+        "port": 8003,
         "module": 3,
         "timestamp": time.time(),
     }
@@ -174,6 +175,80 @@ async def serve_module3_ui():
     return HTMLResponse(content=get_module3_page_html())
 
 
+def validate_safe_repo_path(raw_path: str) -> Path:
+    """
+    Validate that raw_path points to an existing directory and does not traverse
+    into forbidden system directories or sensitive credential stores.
+    """
+    from pathlib import Path
+    if not raw_path or not str(raw_path).strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Repository path cannot be empty.",
+        )
+    try:
+        repo_path = Path(raw_path).expanduser().resolve()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid repository path: {exc}",
+        )
+
+    # 1. Deny filesystem root
+    if str(repo_path) == "/":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Scanning filesystem root '/' is not permitted.",
+        )
+
+    # 2. Deny sensitive system paths
+    str_path = str(repo_path)
+    system_forbidden = [
+        "/etc", "/proc", "/sys", "/dev", "/boot", "/root",
+        "/bin", "/sbin", "/lib", "/lib64", "/var/log", "/var/run"
+    ]
+    for forbidden in system_forbidden:
+        if str_path == forbidden or str_path.startswith(forbidden + "/"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access to system path '{forbidden}' is restricted.",
+            )
+
+    # 3. Deny credential / secret configuration directories
+    sensitive_parts = {".ssh", ".aws", ".gnupg", ".docker", ".kube"}
+    if any(part in sensitive_parts for part in repo_path.parts):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access to credential directory is restricted.",
+        )
+
+    # 4. Enforce allowlist if AETHER_ALLOWED_REPO_ROOTS is set
+    allowed_roots_env = os.getenv("AETHER_ALLOWED_REPO_ROOTS")
+    if allowed_roots_env:
+        allowed_roots = [
+            Path(p.strip()).expanduser().resolve()
+            for p in allowed_roots_env.split(",")
+            if p.strip()
+        ]
+        if not any(repo_path == ar or ar in repo_path.parents for ar in allowed_roots):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Repository path is outside permitted workspace roots.",
+            )
+
+    if not repo_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Path does not exist: {raw_path}",
+        )
+    if not repo_path.is_dir():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Path is not a directory: {raw_path}",
+        )
+    return repo_path
+
+
 @app.post("/api/v1/repo/scan", status_code=status.HTTP_200_OK)
 async def scan_repo_endpoint(payload: ScanRequest):
     """
@@ -183,18 +258,7 @@ async def scan_repo_endpoint(payload: ScanRequest):
     frameworks, databases, ports, components, unknowns, conflicts, and
     coverage metrics.  Does NOT call Module 1 (no AWS sizing).
     """
-    from pathlib import Path
-    repo_path = Path(payload.repo_path).expanduser().resolve()
-    if not repo_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Path does not exist: {payload.repo_path}",
-        )
-    if not repo_path.is_dir():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Path is not a directory: {payload.repo_path}",
-        )
+    repo_path = validate_safe_repo_path(payload.repo_path)
 
     try:
         result = scan_repository(repo_path, include_findings=payload.include_findings)
@@ -226,18 +290,7 @@ async def scan_and_size_endpoint(payload: DispatchRequest):
     - ``sizing_data``  — full Module 1 output (costs, rationales, AI advice)
     - ``project_id``   — requirements.db record ID (when auto_save=True)
     """
-    from pathlib import Path
-    repo_path = Path(payload.repo_path).expanduser().resolve()
-    if not repo_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Path does not exist: {payload.repo_path}",
-        )
-    if not repo_path.is_dir():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Path is not a directory: {payload.repo_path}",
-        )
+    repo_path = validate_safe_repo_path(payload.repo_path)
 
     # 1. Local scan
     try:

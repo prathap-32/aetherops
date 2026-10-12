@@ -123,6 +123,16 @@ async def init_projects_db():
     eng = get_sqlite_engine()
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        for table, col, col_type in [
+            ("aether_projects", "tenant_id", "VARCHAR(36)"),
+            ("aether_projects", "created_by_user_id", "VARCHAR(36)"),
+            ("aether_environments", "tenant_id", "VARCHAR(36)"),
+            ("aether_environments", "created_by_user_id", "VARCHAR(36)"),
+        ]:
+            try:
+                await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
+            except Exception:
+                pass
     logger.info("projects.db initialised (SQLite WAL).")
 
     # 2. PostgreSQL (best-effort, skip in tests)
@@ -167,10 +177,10 @@ async def get_db() -> AsyncSession:
     try:
         pg_sf = get_pg_sessionmaker()
         pg_session = pg_sf()
-        await pg_session.execute(text("SELECT 1"))
+        await pg_session.execute(text("SELECT tenant_id FROM aether_projects LIMIT 1"))
         pg_ok = True
     except Exception as exc:
-        logger.warning(f"PostgreSQL container unavailable ({exc}), failing over to SQLite.")
+        logger.warning(f"PostgreSQL container unavailable or pre-migration ({exc}), failing over to SQLite.")
         if pg_session:
             await pg_session.close()
 

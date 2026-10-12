@@ -9,7 +9,7 @@ def test_health():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
-    assert data["port"] == 8005
+    assert data["port"] == 8008
 
 def test_security_scan_pass():
     payload = {

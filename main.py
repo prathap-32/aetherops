@@ -3,16 +3,20 @@
 AetherOps Cloud - Real-Time Microservices Fleet Orchestrator & Live Telemetry Watchdog.
 
 Features:
-- Spawns, supervises, and maintains continuous 24/7 uptime for all 9 AetherOps microservices:
-  * Admin Console & Control Plane: Port 8000
-  * Module 1 (Requirement Analysis): Port 8001
-  * Module 2 (Architecture Generator): Port 8002
-  * Module 3 (IaC Generator): Port 8003
-  * Module 4 (FinOps Optimizer): Port 8004
-  * Module 5 (Security Scanner): Port 8005
-  * Module 6 (CI/CD Pipeline): Port 8006
-  * Module 7 (Observability Setup): Port 8007
-  * Module 8 (Cloud Deployer): Port 8008
+- Spawns, supervises, and maintains continuous 24/7 uptime for all 13 AetherOps microservices:
+  * Gateway & Unified Dashboard: Port 8000
+  * Project & Environment Management: Port 8001
+  * Source & Cloud Connection: Port 8002
+  * Source Code Analyzer: Port 8003
+  * Requirement Analysis Engine: Port 8004
+  * Architecture Graph Generator: Port 8005
+  * IaC / Terraform Generator: Port 8006
+  * FinOps Cost Optimizer: Port 8007
+  * Security & Compliance Engine: Port 8008
+  * CI/CD Pipeline Generator: Port 8009
+  * Observability & Monitoring: Port 8010
+  * Cloud Deployer & Drift Engine: Port 8011
+  * Admin Console & Control Plane: Port 8012
 - High-frequency parallel dynamic probing with millisecond latency telemetry (RTT).
 - Real-time in-place terminal dashboard using Rich (flicker-free).
 - Self-healing watchdog: auto-restarts failed processes with restart metrics.
@@ -66,112 +70,121 @@ class ServiceSpec:
 
 FLEET_SPECS: List[ServiceSpec] = [
     ServiceSpec(
-        id="admin_console",
-        code="ADMIN",
-        name="Admin Console & Gateway",
+        id="gateway",
+        code="GW",
+        name="Unified Dashboard & Gateway",
         port=8000,
-        dir="services/admin_console",
+        dir="services/gateway",
         health_path="/health",
-        ui_url="http://localhost:8000/admin"
-    ),
-    ServiceSpec(
-        id="requirement_analysis",
-        code="MOD-01",
-        name="Requirement Analysis Engine",
-        port=8001,
-        dir="services/requirement_analysis",
-        health_path="/health",
-        ui_url="http://localhost:8001/app"
-    ),
-    ServiceSpec(
-        id="architecture_generator",
-        code="MOD-02",
-        name="Architecture Graph Generator",
-        port=8002,
-        dir="services/architecture_generator",
-        health_path="/health",
-        ui_url="http://localhost:8002/health"
-    ),
-    ServiceSpec(
-        id="iac_generator",
-        code="MOD-03",
-        name="IaC Code Generator",
-        port=8003,
-        dir="services/iac_generator",
-        health_path="/health",
-        ui_url="http://localhost:8003/health"
-    ),
-    ServiceSpec(
-        id="finops_optimizer",
-        code="MOD-04",
-        name="FinOps Cost Optimizer",
-        port=8004,
-        dir="services/finops_optimizer",
-        health_path="/health",
-        ui_url="http://localhost:8004/health"
-    ),
-    ServiceSpec(
-        id="security_scanner",
-        code="MOD-05",
-        name="Security & Compliance Engine",
-        port=8005,
-        dir="services/security_scanner",
-        health_path="/health",
-        ui_url="http://localhost:8005/health"
-    ),
-    ServiceSpec(
-        id="cicd_pipeline",
-        code="MOD-06",
-        name="CI/CD Pipeline Engine",
-        port=8006,
-        dir="services/cicd_pipeline",
-        health_path="/health",
-        ui_url="http://localhost:8006/health"
-    ),
-    ServiceSpec(
-        id="observability_setup",
-        code="MOD-07",
-        name="Observability & APM Engine",
-        port=8007,
-        dir="services/observability_setup",
-        health_path="/health",
-        ui_url="http://localhost:8007/health"
-    ),
-    ServiceSpec(
-        id="cloud_deployer",
-        code="MOD-08",
-        name="Cloud Deployer & Drift Engine",
-        port=8008,
-        dir="services/cloud_deployer",
-        health_path="/health",
-        ui_url="http://localhost:8008/health"
+        ui_url="http://localhost:8000"
     ),
     ServiceSpec(
         id="project_and_environment_management",
         code="MOD-PM",
         name="Project & Environment Manager",
-        port=8009,
+        port=8001,
         dir="services/project_and_environment_management",
         health_path="/health",
-        ui_url="http://localhost:8009/app"
+        ui_url="http://localhost:8001/app"
     ),
     ServiceSpec(
         id="source_and_cloud_connection",
         code="MOD-SC",
         name="Source & Cloud Connection",
-        port=8010,
+        port=8002,
         dir="services/source_and_cloud_connection",
         health_path="/health",
-        ui_url="http://localhost:8010/app/source"
+        ui_url="http://localhost:8002/app/source"
     ),
     ServiceSpec(
         id="repo_analyzer_service",
         code="MOD-RA",
         name="Source Code Analyzer",
-        port=8011,
+        port=8003,
         dir="services/repo_analyzer_service",
         health_path="/health",
-        ui_url="http://localhost:8011/app"
+        ui_url="http://localhost:8003/app"
+    ),
+    ServiceSpec(
+        id="requirement_analysis",
+        code="MOD-01",
+        name="Requirement Analysis Engine",
+        port=8004,
+        dir="services/requirement_analysis",
+        health_path="/health",
+        ui_url="http://localhost:8004/app"
+    ),
+    ServiceSpec(
+        id="architecture_generator",
+        code="MOD-02",
+        name="Architecture Graph Generator",
+        port=8005,
+        dir="services/architecture_generator",
+        health_path="/health",
+        ui_url="http://localhost:8005/health"
+    ),
+    ServiceSpec(
+        id="iac_generator",
+        code="MOD-03",
+        name="IaC Code Generator",
+        port=8006,
+        dir="services/iac_generator",
+        health_path="/health",
+        ui_url="http://localhost:8006/health"
+    ),
+    ServiceSpec(
+        id="finops_optimizer",
+        code="MOD-04",
+        name="FinOps Cost Optimizer",
+        port=8007,
+        dir="services/finops_optimizer",
+        health_path="/health",
+        ui_url="http://localhost:8007/health"
+    ),
+    ServiceSpec(
+        id="security_scanner",
+        code="MOD-05",
+        name="Security & Compliance Engine",
+        port=8008,
+        dir="services/security_scanner",
+        health_path="/health",
+        ui_url="http://localhost:8008/health"
+    ),
+    ServiceSpec(
+        id="cicd_pipeline",
+        code="MOD-06",
+        name="CI/CD Pipeline Engine",
+        port=8009,
+        dir="services/cicd_pipeline",
+        health_path="/health",
+        ui_url="http://localhost:8009/health"
+    ),
+    ServiceSpec(
+        id="observability_setup",
+        code="MOD-07",
+        name="Observability & APM Engine",
+        port=8010,
+        dir="services/observability_setup",
+        health_path="/health",
+        ui_url="http://localhost:8010/health"
+    ),
+    ServiceSpec(
+        id="cloud_deployer",
+        code="MOD-08",
+        name="Cloud Deployer & Drift Engine",
+        port=8011,
+        dir="services/cloud_deployer",
+        health_path="/health",
+        ui_url="http://localhost:8011/health"
+    ),
+    ServiceSpec(
+        id="admin_console",
+        code="ADMIN",
+        name="Admin Console & Control Plane",
+        port=8012,
+        dir="services/admin_console",
+        health_path="/health",
+        ui_url="http://localhost:8012/admin"
     ),
 ]
 

@@ -20,8 +20,9 @@ import pytest
 import httpx
 
 MAIN_APP_URL = "http://127.0.0.1:8000"
-GOOGLE_AUTH_URL = "http://127.0.0.1:8009"
-GITHUB_AUTH_URL = "http://127.0.0.1:8010"
+GOOGLE_AUTH_URL = "http://127.0.0.1:8001"
+GITHUB_AUTH_URL = "http://127.0.0.1:8002"
+ADMIN_URL = "http://127.0.0.1:8012"
 ADMIN_KEY = "aetherops-secret-admin-key"
 
 CLEAN_PAGE_ROUTES = [
@@ -30,10 +31,12 @@ CLEAN_PAGE_ROUTES = [
     "/environments",
     "/source-connection",
     "/source-analysis",
+    "/requirements",
     "/architecture",
     "/architecture/designer",
     "/risk-analysis",
     "/architecture/validation",
+    "/security",
     "/terraform",
     "/execution",
     "/deployment",
@@ -42,6 +45,9 @@ CLEAN_PAGE_ROUTES = [
     "/optimization",
     "/audit",
     "/documentation",
+    "/login",
+    "/settings",
+    "/admin",
 ]
 
 
@@ -58,22 +64,53 @@ async def test_main_application_health():
 
 @pytest.mark.asyncio
 async def test_google_auth_service_health():
-    """Verify Google Auth Service on Port 8009 is healthy."""
+    """Verify Google Auth Service on Port 8001 is healthy."""
     async with httpx.AsyncClient() as client:
         resp = await client.get(f"{GOOGLE_AUTH_URL}/health")
         assert resp.status_code == 200
         data = resp.json()
         assert data.get("status") == "healthy"
+        assert data.get("port") == 8001
 
 
 @pytest.mark.asyncio
 async def test_github_connection_service_health():
-    """Verify GitHub Connection Service on Port 8010 is healthy."""
+    """Verify GitHub Connection Service on Port 8002 is healthy."""
     async with httpx.AsyncClient() as client:
         resp = await client.get(f"{GITHUB_AUTH_URL}/health")
         assert resp.status_code == 200
         data = resp.json()
         assert data.get("status") == "healthy"
+        assert data.get("port") == 8002
+
+
+ALL_FLEET_SERVICES = [
+    ("gateway", "http://127.0.0.1:8000/health", 8000),
+    ("project_management", "http://127.0.0.1:8001/health", 8001),
+    ("source_connection", "http://127.0.0.1:8002/health", 8002),
+    ("repo_analyzer", "http://127.0.0.1:8003/health", 8003),
+    ("requirement_analysis", "http://127.0.0.1:8004/health", 8004),
+    ("architecture_generator", "http://127.0.0.1:8005/health", 8005),
+    ("iac_generator", "http://127.0.0.1:8006/health", 8006),
+    ("finops_optimizer", "http://127.0.0.1:8007/health", 8007),
+    ("security_scanner", "http://127.0.0.1:8008/health", 8008),
+    ("cicd_pipeline", "http://127.0.0.1:8009/health", 8009),
+    ("observability_setup", "http://127.0.0.1:8010/health", 8010),
+    ("cloud_deployer", "http://127.0.0.1:8011/health", 8011),
+    ("admin_console", "http://127.0.0.1:8012/health", 8012),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name,url,expected_port", ALL_FLEET_SERVICES)
+async def test_all_13_services_health(name, url, expected_port):
+    """Verify each of the 13 microservices responds healthy on its designated port."""
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data.get("status") == "healthy"
+        assert data.get("port") == expected_port
 
 
 @pytest.mark.asyncio
@@ -149,7 +186,7 @@ async def test_api_gateway_projects_proxy():
 async def test_api_gateway_connections_proxy():
     """
     Verify /api/v1/connections requested through Port 8000 Gateway
-    is transparently proxied to Port 8010.
+    is transparently proxied to Port 8002.
     """
     async with httpx.AsyncClient() as client:
         resp = await client.get(

@@ -69,7 +69,7 @@ class DispatchRequest(BaseModel):
     reliability: Optional[str] = Field(None, description="dev_testing / production_safe / mission_critical")
     target_region: str = Field(default="us-east-1")
     module1_url: str = Field(
-        default="http://localhost:8001",
+        default="http://localhost:8004",
         description="Base URL of the Module 1 Requirement Analysis Service",
     )
     auto_save: bool = Field(default=True)

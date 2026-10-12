@@ -1,4 +1,5 @@
 # services/source_and_cloud_connection/app/router.py
+import os
 import uuid
 import json
 import datetime
@@ -36,7 +37,7 @@ from app.github_service import (
 logger = logging.getLogger("source-connection-router")
 router = APIRouter()
 
-MODULE1_BASE_URL = "http://localhost:8009"
+MODULE1_BASE_URL = os.getenv("PM_SERVICE_URL", "http://localhost:8001")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -279,7 +280,7 @@ async def github_oauth_callback(
     Handles GitHub OAuth redirect callback.
     Exchanges code for access token and seamlessly communicates with parent window or redirects.
     """
-    cb = f"{str(request.base_url).rstrip('/')}/api/v1/auth/github/callback"
+    cb = github_config.get_redirect_uri(fallback=f"{str(request.base_url).rstrip('/')}/api/v1/auth/github/callback")
 
     if error:
         err_msg = error_description or error or "GitHub authorization was cancelled or failed."
@@ -458,17 +459,29 @@ async def list_cloud_connections(
     admin: Dict[str, Any] = Depends(get_current_admin),
 ):
     owner = admin["username"]
-    cached = await cache_manager.get_cloud_list(owner)
+    role = admin.get("role", "")
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+    cache_key = f"{owner}:{tenant_id}" if tenant_id else owner
+
+    cached = await cache_manager.get_cloud_list(cache_key)
     if cached:
         return CloudConnectionListOut(connections=cached, total=len(cached))
 
-    res = await db.execute(
-        select(CloudConnection).where(CloudConnection.owner == owner)
-        .order_by(CloudConnection.created_at.desc())
-    )
+    if role in ("SUPER_ADMIN", "PLATFORM_SUPER_ADMIN") and not tenant_id:
+        query = select(CloudConnection).order_by(CloudConnection.created_at.desc())
+    elif tenant_id:
+        query = select(CloudConnection).where(
+            (CloudConnection.tenant_id == tenant_id) | (CloudConnection.owner == owner)
+        ).order_by(CloudConnection.created_at.desc())
+    else:
+        query = select(CloudConnection).where(
+            CloudConnection.owner == owner
+        ).order_by(CloudConnection.created_at.desc())
+
+    res = await db.execute(query)
     conns = res.scalars().all()
     out = [CloudConnectionOut(**c.to_dict()) for c in conns]
-    await cache_manager.set_cloud_list(owner, [o.model_dump() for o in out])
+    await cache_manager.set_cloud_list(cache_key, [o.model_dump() for o in out])
     return CloudConnectionListOut(connections=out, total=len(out))
 
 
@@ -484,6 +497,8 @@ async def create_cloud_connection(
     Validates credentials with AWS STS prior to saving.
     """
     owner = admin["username"]
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+    user_uuid = admin.get("uuid")
 
     # Validate credentials
     try:
@@ -521,6 +536,8 @@ async def create_cloud_connection(
         id=str(uuid.uuid4()),
         project_id=payload.project_id,
         environment_id=payload.environment_id,
+        tenant_id=tenant_id,
+        created_by_user_id=user_uuid,
         owner=owner,
         provider="AWS",
         auth_type=payload.auth_type,
@@ -542,8 +559,35 @@ async def create_cloud_connection(
     await db.commit()
     await db.refresh(conn)
 
-    await cache_manager.invalidate_all(owner, conn.id)
+    await cache_manager.invalidate_all(owner, conn.id, tenant_id=tenant_id)
     return CloudConnectionOut(**conn.to_dict())
+
+
+async def _get_cloud_conn_or_404(
+    db: AsyncSession,
+    cloud_id: str,
+    owner: str,
+    role: str = "",
+    user_uuid: Optional[str] = None,
+    tenant_id: Optional[str] = None,
+) -> CloudConnection:
+    res = await db.execute(select(CloudConnection).where(CloudConnection.id == cloud_id))
+    conn = res.scalar_one_or_none()
+    if not conn:
+        raise HTTPException(status_code=404, detail=f"Cloud connection '{cloud_id}' not found.")
+
+    if role in ("SUPER_ADMIN", "PLATFORM_SUPER_ADMIN"):
+        return conn
+
+    if conn.tenant_id and tenant_id:
+        if conn.tenant_id != tenant_id:
+            raise HTTPException(status_code=404, detail=f"Cloud connection '{cloud_id}' not found.")
+        return conn
+
+    if conn.owner == owner or (user_uuid and conn.created_by_user_id == user_uuid):
+        return conn
+
+    raise HTTPException(status_code=404, detail=f"Cloud connection '{cloud_id}' not found.")
 
 
 @router.get("/api/v1/cloud/connections/{cloud_id}", response_model=CloudConnectionOut)
@@ -553,19 +597,20 @@ async def get_cloud_connection(
     db: AsyncSession = Depends(get_db),
     admin: Dict[str, Any] = Depends(get_current_admin),
 ):
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+    conn = await _get_cloud_conn_or_404(
+        db,
+        cloud_id,
+        admin["username"],
+        role=admin.get("role", "USER"),
+        user_uuid=admin.get("uuid"),
+        tenant_id=tenant_id,
+    )
+
     cached = await cache_manager.get_cloud_conn(cloud_id)
     if cached:
         return CloudConnectionOut(**cached)
 
-    res = await db.execute(
-        select(CloudConnection).where(
-            CloudConnection.id == cloud_id,
-            CloudConnection.owner == admin["username"],
-        )
-    )
-    conn = res.scalar_one_or_none()
-    if not conn:
-        raise HTTPException(status_code=404, detail=f"Cloud connection '{cloud_id}' not found.")
     out = CloudConnectionOut(**conn.to_dict())
     await cache_manager.set_cloud_conn(cloud_id, out.model_dump())
     return out
@@ -578,12 +623,24 @@ async def get_cloud_connection_by_env(
     db: AsyncSession = Depends(get_db),
     admin: Dict[str, Any] = Depends(get_current_admin),
 ):
-    res = await db.execute(
-        select(CloudConnection).where(
+    role = admin.get("role", "USER")
+    owner = admin["username"]
+    user_uuid = admin.get("uuid")
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+
+    if role in ("SUPER_ADMIN", "PLATFORM_SUPER_ADMIN"):
+        query = select(CloudConnection).where(CloudConnection.environment_id == environment_id)
+    elif tenant_id:
+        query = select(CloudConnection).where(
             CloudConnection.environment_id == environment_id,
-            CloudConnection.owner == admin["username"],
+            (CloudConnection.tenant_id == tenant_id) | (CloudConnection.owner == owner)
         )
-    )
+    else:
+        query = select(CloudConnection).where(
+            CloudConnection.environment_id == environment_id,
+            (CloudConnection.owner == owner) | (CloudConnection.created_by_user_id == user_uuid if user_uuid else CloudConnection.owner == owner)
+        )
+    res = await db.execute(query)
     conn = res.scalar_one_or_none()
     if not conn:
         raise HTTPException(status_code=404, detail=f"No cloud connection found for environment '{environment_id}'.")
@@ -598,15 +655,15 @@ async def update_cloud_connection(
     db: AsyncSession = Depends(get_db),
     admin: Dict[str, Any] = Depends(get_current_admin),
 ):
-    res = await db.execute(
-        select(CloudConnection).where(
-            CloudConnection.id == cloud_id,
-            CloudConnection.owner == admin["username"],
-        )
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+    conn = await _get_cloud_conn_or_404(
+        db,
+        cloud_id,
+        admin["username"],
+        role=admin.get("role", "USER"),
+        user_uuid=admin.get("uuid"),
+        tenant_id=tenant_id,
     )
-    conn = res.scalar_one_or_none()
-    if not conn:
-        raise HTTPException(status_code=404, detail=f"Cloud connection '{cloud_id}' not found.")
 
     if payload.aws_region is not None:
         conn.aws_region = payload.aws_region.strip()
@@ -626,7 +683,7 @@ async def update_cloud_connection(
     conn.updated_at = datetime.datetime.utcnow()
     await db.commit()
     await db.refresh(conn)
-    await cache_manager.invalidate_all(admin["username"], cloud_id)
+    await cache_manager.invalidate_all(admin["username"], cloud_id, tenant_id=tenant_id)
     return CloudConnectionOut(**conn.to_dict())
 
 
@@ -637,18 +694,18 @@ async def delete_cloud_connection(
     db: AsyncSession = Depends(get_db),
     admin: Dict[str, Any] = Depends(get_current_admin),
 ):
-    res = await db.execute(
-        select(CloudConnection).where(
-            CloudConnection.id == cloud_id,
-            CloudConnection.owner == admin["username"],
-        )
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+    conn = await _get_cloud_conn_or_404(
+        db,
+        cloud_id,
+        admin["username"],
+        role=admin.get("role", "USER"),
+        user_uuid=admin.get("uuid"),
+        tenant_id=tenant_id,
     )
-    conn = res.scalar_one_or_none()
-    if not conn:
-        raise HTTPException(status_code=404, detail=f"Cloud connection '{cloud_id}' not found.")
     await db.delete(conn)
     await db.commit()
-    await cache_manager.invalidate_all(admin["username"], cloud_id)
+    await cache_manager.invalidate_all(admin["username"], cloud_id, tenant_id=tenant_id)
     return Response(status_code=204)
 
 
@@ -660,15 +717,15 @@ async def revalidate_cloud_connection(
     admin: Dict[str, Any] = Depends(get_current_admin),
 ):
     """Re-validates an existing cloud connection against AWS."""
-    res = await db.execute(
-        select(CloudConnection).where(
-            CloudConnection.id == cloud_id,
-            CloudConnection.owner == admin["username"],
-        )
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+    conn = await _get_cloud_conn_or_404(
+        db,
+        cloud_id,
+        admin["username"],
+        role=admin.get("role", "USER"),
+        user_uuid=admin.get("uuid"),
+        tenant_id=tenant_id,
     )
-    conn = res.scalar_one_or_none()
-    if not conn:
-        raise HTTPException(status_code=404, detail=f"Cloud connection '{cloud_id}' not found.")
 
     try:
         val = await validate_aws_connection(
@@ -690,7 +747,7 @@ async def revalidate_cloud_connection(
     conn.updated_at = datetime.datetime.utcnow()
     await db.commit()
     await db.refresh(conn)
-    await cache_manager.invalidate_all(admin["username"], cloud_id)
+    await cache_manager.invalidate_all(admin["username"], cloud_id, tenant_id=tenant_id)
     return CloudConnectionOut(**conn.to_dict())
 
 
@@ -711,6 +768,8 @@ async def finalize_connection(
     Advances Module 1 environment status to REPOSITORY_CONNECTED.
     """
     owner = admin["username"]
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+    user_uuid = admin.get("uuid")
 
     # 1. Validate AWS credentials
     try:
@@ -748,6 +807,8 @@ async def finalize_connection(
         id=str(uuid.uuid4()),
         project_id=payload.project_id,
         environment_id=payload.environment_id,
+        tenant_id=tenant_id,
+        created_by_user_id=user_uuid,
         owner=owner,
         repo_url=payload.repo_url,
         repo_name=repo_name,
@@ -790,6 +851,8 @@ async def finalize_connection(
         id=str(uuid.uuid4()),
         project_id=payload.project_id,
         environment_id=payload.environment_id,
+        tenant_id=tenant_id,
+        created_by_user_id=user_uuid,
         owner=owner,
         provider="AWS",
         auth_type=payload.cloud_auth_type,
@@ -819,7 +882,7 @@ async def finalize_connection(
     # 5. Notify Module 1 → advance env lifecycle
     await _notify_module1_status(payload.environment_id, payload.project_id, "REPOSITORY_CONNECTED")
 
-    await cache_manager.invalidate_all(owner, git_conn.id)
+    await cache_manager.invalidate_all(owner, git_conn.id, tenant_id=tenant_id)
     await cache_manager.del_cloud_conn(cloud_conn.id)
 
     return UnifiedFinalizeOut(
@@ -842,17 +905,29 @@ async def list_connections(
     admin: Dict[str, Any] = Depends(get_current_admin),
 ):
     owner = admin["username"]
-    cached = await cache_manager.get_list(owner)
+    role = admin.get("role", "")
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+    cache_key = f"{owner}:{tenant_id}" if tenant_id else owner
+
+    cached = await cache_manager.get_list(cache_key)
     if cached:
         return ConnectionListOut(connections=cached, total=len(cached))
 
-    res = await db.execute(
-        select(GitConnection).where(GitConnection.owner == owner)
-        .order_by(GitConnection.created_at.desc())
-    )
+    if role in ("SUPER_ADMIN", "PLATFORM_SUPER_ADMIN") and not tenant_id:
+        query = select(GitConnection).order_by(GitConnection.created_at.desc())
+    elif tenant_id:
+        query = select(GitConnection).where(
+            (GitConnection.tenant_id == tenant_id) | (GitConnection.owner == owner)
+        ).order_by(GitConnection.created_at.desc())
+    else:
+        query = select(GitConnection).where(
+            GitConnection.owner == owner
+        ).order_by(GitConnection.created_at.desc())
+
+    res = await db.execute(query)
     conns = res.scalars().all()
     out   = [GitConnectionOut(**c.to_dict()) for c in conns]
-    await cache_manager.set_list(owner, [o.model_dump() for o in out])
+    await cache_manager.set_list(cache_key, [o.model_dump() for o in out])
     return ConnectionListOut(connections=out, total=len(out))
 
 
@@ -864,6 +939,8 @@ async def create_connection(
     admin: Dict[str, Any] = Depends(get_current_admin),
 ):
     owner = admin["username"]
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+    user_uuid = admin.get("uuid")
 
     res = await db.execute(
         select(GitConnection).where(
@@ -887,6 +964,8 @@ async def create_connection(
         id=str(uuid.uuid4()),
         project_id=payload.project_id,
         environment_id=payload.environment_id,
+        tenant_id=tenant_id,
+        created_by_user_id=user_uuid,
         owner=owner,
         repo_url=payload.repo_url,
         repo_name=repo_name,
@@ -904,11 +983,10 @@ async def create_connection(
     await db.refresh(conn)
 
     await _notify_module1_status(payload.environment_id, payload.project_id, "CONFIGURED")
-    await cache_manager.invalidate_all(owner)
+    await cache_manager.invalidate_all(owner, tenant_id=tenant_id)
     return GitConnectionOut(**conn.to_dict())
 
 
-@router.get("/api/v1/connections/{connection_id}", response_model=GitConnectionOut)
 @router.get("/api/v1/connections/{connection_id}", response_model=GitConnectionOut)
 async def get_connection(
     connection_id: str,
@@ -916,10 +994,18 @@ async def get_connection(
     db: AsyncSession = Depends(get_db),
     admin: Dict[str, Any] = Depends(get_current_admin),
 ):
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+    conn = await _get_conn_or_404(
+        db,
+        connection_id,
+        admin["username"],
+        role=admin.get("role", ""),
+        user_uuid=admin.get("uuid"),
+        tenant_id=tenant_id,
+    )
     cached = await cache_manager.get_conn(connection_id)
     if cached:
         return GitConnectionOut(**cached)
-    conn = await _get_conn_or_404(db, connection_id, admin["username"], role=admin.get("role", ""))
     out  = GitConnectionOut(**conn.to_dict())
     await cache_manager.set_conn(connection_id, out.model_dump())
     return out
@@ -933,12 +1019,21 @@ async def get_connection_by_env(
     admin: Dict[str, Any] = Depends(get_current_admin),
 ):
     role = admin.get("role", "")
-    if role == "SUPER_ADMIN":
+    owner = admin["username"]
+    user_uuid = admin.get("uuid")
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+
+    if role in ("SUPER_ADMIN", "PLATFORM_SUPER_ADMIN"):
         query = select(GitConnection).where(GitConnection.environment_id == environment_id)
+    elif tenant_id:
+        query = select(GitConnection).where(
+            GitConnection.environment_id == environment_id,
+            (GitConnection.tenant_id == tenant_id) | (GitConnection.owner == owner)
+        )
     else:
         query = select(GitConnection).where(
             GitConnection.environment_id == environment_id,
-            (GitConnection.owner == admin["username"]) | (GitConnection.owner.in_(["root_admin", "admin"]))
+            (GitConnection.owner == owner) | (GitConnection.created_by_user_id == user_uuid if user_uuid else GitConnection.owner == owner)
         )
     res = await db.execute(query)
     conn = res.scalar_one_or_none()
@@ -955,7 +1050,15 @@ async def update_connection(
     db: AsyncSession = Depends(get_db),
     admin: Dict[str, Any] = Depends(get_current_admin),
 ):
-    conn = await _get_conn_or_404(db, connection_id, admin["username"], role=admin.get("role", ""))
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+    conn = await _get_conn_or_404(
+        db,
+        connection_id,
+        admin["username"],
+        role=admin.get("role", ""),
+        user_uuid=admin.get("uuid"),
+        tenant_id=tenant_id,
+    )
     if payload.branch is not None:
         conn.branch = payload.branch.strip()
     if payload.auth_type is not None:
@@ -970,7 +1073,7 @@ async def update_connection(
     conn.updated_at = datetime.datetime.utcnow()
     await db.commit()
     await db.refresh(conn)
-    await cache_manager.invalidate_all(admin["username"], connection_id)
+    await cache_manager.invalidate_all(admin["username"], connection_id, tenant_id=tenant_id)
     return GitConnectionOut(**conn.to_dict())
 
 
@@ -981,7 +1084,15 @@ async def validate_connection(
     db: AsyncSession = Depends(get_db),
     admin: Dict[str, Any] = Depends(get_current_admin),
 ):
-    conn = await _get_conn_or_404(db, connection_id, admin["username"], role=admin.get("role", ""))
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+    conn = await _get_conn_or_404(
+        db,
+        connection_id,
+        admin["username"],
+        role=admin.get("role", ""),
+        user_uuid=admin.get("uuid"),
+        tenant_id=tenant_id,
+    )
     token = request.headers.get("X-GitHub-Token")
 
     conn.status     = "CONNECTED"
@@ -992,7 +1103,7 @@ async def validate_connection(
     await db.refresh(conn)
 
     await _notify_module1_status(conn.environment_id, conn.project_id, "REPOSITORY_CONNECTED")
-    await cache_manager.invalidate_all(admin["username"], connection_id)
+    await cache_manager.invalidate_all(admin["username"], connection_id, tenant_id=tenant_id)
     return GitConnectionOut(**conn.to_dict())
 
 
@@ -1003,20 +1114,21 @@ async def delete_connection(
     db: AsyncSession = Depends(get_db),
     admin: Dict[str, Any] = Depends(get_current_admin),
 ):
-    conn = await _get_conn_or_404(db, connection_id, admin["username"], role=admin.get("role", ""))
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+    conn = await _get_conn_or_404(
+        db,
+        connection_id,
+        admin["username"],
+        role=admin.get("role", ""),
+        user_uuid=admin.get("uuid"),
+        tenant_id=tenant_id,
+    )
     snaps = await db.execute(select(SourceSnapshot).where(SourceSnapshot.connection_id == connection_id))
     for s in snaps.scalars().all():
         await db.delete(s)
     await db.delete(conn)
     await db.commit()
-    await cache_manager.invalidate_all(admin["username"], connection_id)
-    return Response(status_code=204)
-    snaps = await db.execute(select(SourceSnapshot).where(SourceSnapshot.connection_id == connection_id))
-    for s in snaps.scalars().all():
-        await db.delete(s)
-    await db.delete(conn)
-    await db.commit()
-    await cache_manager.invalidate_all(admin["username"], connection_id)
+    await cache_manager.invalidate_all(admin["username"], connection_id, tenant_id=tenant_id)
     return Response(status_code=204)
 
 
@@ -1031,6 +1143,16 @@ async def get_snapshot(
     db: AsyncSession = Depends(get_db),
     admin: Dict[str, Any] = Depends(get_current_admin),
 ):
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+    conn = await _get_conn_or_404(
+        db,
+        connection_id,
+        admin["username"],
+        role=admin.get("role", ""),
+        user_uuid=admin.get("uuid"),
+        tenant_id=tenant_id,
+    )
+
     cached = await cache_manager.get_snapshot(connection_id)
     if cached:
         return SourceSnapshotOut(**cached)
@@ -1041,7 +1163,6 @@ async def get_snapshot(
     )
     snap = res.scalar_one_or_none()
     if not snap:
-        conn = await _get_conn_or_404(db, connection_id, admin["username"], role=admin.get("role", ""))
         if conn.status == "CONNECTED" or request.query_params.get("auto") == "1":
             token = request.headers.get("X-GitHub-Token")
             snap = await _capture_snapshot(db, conn, token=token)
@@ -1062,7 +1183,15 @@ async def refresh_snapshot(
     db: AsyncSession = Depends(get_db),
     admin: Dict[str, Any] = Depends(get_current_admin),
 ):
-    conn = await _get_conn_or_404(db, connection_id, admin["username"], role=admin.get("role", ""))
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+    conn = await _get_conn_or_404(
+        db,
+        connection_id,
+        admin["username"],
+        role=admin.get("role", ""),
+        user_uuid=admin.get("uuid"),
+        tenant_id=tenant_id,
+    )
     token = request.headers.get("X-GitHub-Token")
     snap = await _capture_snapshot(db, conn, token=token)
     await cache_manager.del_snapshot(connection_id)
@@ -1073,20 +1202,31 @@ async def refresh_snapshot(
 # HELPERS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-async def _get_conn_or_404(db: AsyncSession, connection_id: str, owner: str, role: str = "") -> GitConnection:
-    if role == "SUPER_ADMIN" or owner in ("root_admin", "admin"):
-        res = await db.execute(select(GitConnection).where(GitConnection.id == connection_id))
-    else:
-        res = await db.execute(
-            select(GitConnection).where(
-                GitConnection.id == connection_id,
-                (GitConnection.owner == owner) | (GitConnection.owner.in_(["root_admin", "admin"]))
-            )
-        )
+async def _get_conn_or_404(
+    db: AsyncSession,
+    connection_id: str,
+    owner: str,
+    role: str = "",
+    user_uuid: Optional[str] = None,
+    tenant_id: Optional[str] = None,
+) -> GitConnection:
+    res = await db.execute(select(GitConnection).where(GitConnection.id == connection_id))
     conn = res.scalar_one_or_none()
     if not conn:
         raise HTTPException(status_code=404, detail=f"Connection '{connection_id}' not found.")
-    return conn
+
+    if role in ("SUPER_ADMIN", "PLATFORM_SUPER_ADMIN"):
+        return conn
+
+    if conn.tenant_id and tenant_id:
+        if conn.tenant_id != tenant_id:
+            raise HTTPException(status_code=404, detail=f"Connection '{connection_id}' not found.")
+        return conn
+
+    if conn.owner == owner or (user_uuid and conn.created_by_user_id == user_uuid):
+        return conn
+
+    raise HTTPException(status_code=404, detail=f"Connection '{connection_id}' not found.")
 
 
 def _extract_repo_name(url: str) -> str:

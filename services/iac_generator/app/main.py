@@ -28,7 +28,7 @@ async def root():
     return {
         "service": "AetherOps AI - IaC Code Generator Service (Module 3)",
         "version": "1.0.0",
-        "port": 8003,
+        "port": 8006,
         "endpoints": {
             "health": "/health",
             "generate-iac": "/api/v1/generate-iac",
@@ -41,7 +41,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "iac-generator-service",
-        "port": 8003,
+        "port": 8006,
         "timestamp": time.time()
     }
 

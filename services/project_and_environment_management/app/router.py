@@ -3,7 +3,7 @@ import os
 import uuid
 import logging
 import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
@@ -11,11 +11,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import AetherProject, AetherEnvironment
+from app.models import AetherProject, AetherEnvironment, Tenant, TenantMembership
 from app.schemas import (
     ProjectCreate, ProjectUpdate,
     EnvironmentCreate, EnvironmentUpdate, EnvironmentStatusUpdate,
     ProjectOut, ProjectListOut, EnvironmentOut,
+    TenantCreate, TenantUpdate, TenantOut, TenantListOut,
+    TenantMemberAdd, TenantMemberRoleUpdate, TenantMemberOut,
+)
+from app.tenant_context import (
+    TenantContext, get_tenant_context, create_personal_workspace_for_user, slugify,
+    TENANT_ROLES,
 )
 from app.auth import (
     get_current_admin, login_admin, register_user,
@@ -42,7 +48,13 @@ async def api_login(payload: Dict[str, Any], request: Request, response: Respons
     result = await login_admin(username, password, request)
     hours = 168 if remember else 8  # 7 days vs 8 hours
 
-    token = create_access_token(result["username"], result["role"], result.get("email", username), hours=hours)
+    token = create_access_token(
+        result["username"],
+        result["role"],
+        result.get("email", username),
+        hours=hours,
+        user_uuid=result.get("uuid"),
+    )
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
@@ -51,12 +63,23 @@ async def api_login(payload: Dict[str, Any], request: Request, response: Respons
         max_age=hours * 3600,
         path="/",
     )
-    return {"token": token, "username": result["username"], "role": result["role"], "email": result.get("email", "")}
+    return {
+        "token": token,
+        "username": result["username"],
+        "role": result["role"],
+        "email": result.get("email", ""),
+        "uuid": result.get("uuid"),
+    }
 
 
 @router.post("/api/v1/auth/register")
-async def api_register(payload: Dict[str, Any], request: Request, response: Response):
-    """Register a new user account with email and password."""
+async def api_register(
+    payload: Dict[str, Any],
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
+    """Register a new user account with email and password, creating their personal workspace."""
     username = payload.get("username", "").strip()
     email = payload.get("email", "").strip().lower()
     password = payload.get("password", "")
@@ -70,6 +93,14 @@ async def api_register(payload: Dict[str, Any], request: Request, response: Resp
 
     result = await register_user(username, email, password)
     token = result["token"]
+    user_uuid = result.get("uuid", "")
+
+    # Automatically provision personal workspace with TENANT_OWNER
+    try:
+        await create_personal_workspace_for_user(db, user_uuid, username)
+    except Exception as exc:
+        logger.warning(f"Could not provision personal workspace immediately during registration: {exc}")
+
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
@@ -78,6 +109,13 @@ async def api_register(payload: Dict[str, Any], request: Request, response: Resp
         max_age=8 * 3600,
         path="/",
     )
+    return {
+        "token": token,
+        "username": result["username"],
+        "role": result["role"],
+        "email": result["email"],
+        "uuid": user_uuid,
+    }
 @router.get("/auth/google/login")
 @router.get("/api/v1/auth/google/login")
 async def google_oauth_login(request: Request, redirect_uri: Optional[str] = None):
@@ -245,7 +283,7 @@ async def google_oauth_callback(
       window.opener.postMessage(payload, '*');
       setTimeout(() => window.close(), 600);
     }} else {{
-      const targetHost = (window.location.port === '8009') ? 'http://' + window.location.hostname + ':8000' : '';
+      const targetHost = (window.location.port !== '8000') ? 'http://' + window.location.hostname + ':8000' : '';
       window.location.href = targetHost + '/?token={token}&username={u_name}&email={u_email}&role={u_role}';
     }}
   </script>
@@ -303,22 +341,26 @@ async def api_oauth_callback(payload: Dict[str, Any], response: Response):
             from app.auth import hash_password
             dummy_pw = _sec.token_urlsafe(24)
             user = AdminUser(
+                uuid=str(uuid.uuid4()),
                 username=username,
                 email=email,
                 password_hash=hash_password(dummy_pw),
-                role="ADMIN",
+                role="USER",
                 is_active=True,
                 created_at=datetime.datetime.utcnow(),
             )
             session.add(user)
             await session.commit()
             await session.refresh(user)
+        elif not user.uuid:
+            user.uuid = str(uuid.uuid4())
+            await session.commit()
 
         user.last_login_at = datetime.datetime.utcnow()
         await session.commit()
-        user_data = {"username": user.username, "role": user.role, "email": user.email}
+        user_data = {"username": user.username, "role": user.role, "email": user.email, "uuid": user.uuid}
 
-    token = create_access_token(user_data["username"], user_data["role"], user_data["email"], hours=24)
+    token = create_access_token(user_data["username"], user_data["role"], user_data["email"], hours=24, user_uuid=user_data.get("uuid"))
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
@@ -327,7 +369,7 @@ async def api_oauth_callback(payload: Dict[str, Any], response: Response):
         max_age=24 * 3600,
         path="/",
     )
-    return {"token": token, "username": user_data["username"], "role": user_data["role"], "email": user_data["email"], "provider": provider}
+    return {"token": token, "username": user_data["username"], "role": user_data["role"], "email": user_data["email"], "uuid": user_data.get("uuid"), "provider": provider}
 
 
 @router.get("/api/v1/auth/me")
@@ -342,6 +384,7 @@ async def api_get_me(admin: Dict[str, Any] = Depends(get_current_admin)):
         if user:
             return {
                 "id": user.id,
+                "uuid": user.uuid,
                 "username": user.username,
                 "email": user.email,
                 "role": user.role,
@@ -351,6 +394,7 @@ async def api_get_me(admin: Dict[str, Any] = Depends(get_current_admin)):
 
     return {
         "id": 1,
+        "uuid": admin.get("uuid"),
         "username": username or "admin",
         "email": admin.get("email", f"{username}@aetherops.cloud"),
         "role": admin.get("role", "ADMIN"),
@@ -359,9 +403,11 @@ async def api_get_me(admin: Dict[str, Any] = Depends(get_current_admin)):
 
 
 @router.put("/api/v1/auth/profile")
+@router.patch("/api/v1/auth/profile")
 async def api_update_profile(
     payload: Dict[str, Any],
     response: Response,
+    db: AsyncSession = Depends(get_db),
     admin: Dict[str, Any] = Depends(get_current_admin),
 ):
     """Update user username or display handle in DB and issue refreshed token."""
@@ -385,19 +431,23 @@ async def api_update_profile(
         )
         user = res.scalar_one_or_none()
         if not user:
-            # Create user if needed
             from app.auth import hash_password
             import secrets as _sec
+            user_uuid = str(uuid.uuid4())
             user = AdminUser(
+                uuid=user_uuid,
                 username=new_username,
                 email=new_email or f"{new_username}@aetherops.cloud",
                 password_hash=hash_password(_sec.token_urlsafe(16)),
-                role=admin.get("role", "ADMIN"),
+                role=admin.get("role", "USER"),
                 is_active=True,
                 created_at=datetime.datetime.utcnow(),
             )
             session.add(user)
         else:
+            if not user.uuid:
+                import uuid as _uuid
+                user.uuid = str(_uuid.uuid5(_uuid.NAMESPACE_DNS, f"{user.username}.aetherops.local"))
             user.username = new_username
             if new_email and "@" in new_email:
                 user.email = new_email
@@ -405,7 +455,22 @@ async def api_update_profile(
         await session.commit()
         await session.refresh(user)
 
-        token = create_access_token(user.username, user.role, user.email, hours=24)
+        # Safely preserve historical project ownership by propagating the change to projects & memberships
+        if new_username != old_username:
+            from sqlalchemy import update
+            await db.execute(
+                update(AetherProject)
+                .where(AetherProject.owner == old_username)
+                .values(owner=new_username, created_by_user_id=user.uuid)
+            )
+            await db.execute(
+                update(TenantMembership)
+                .where(TenantMembership.user_id == old_username)
+                .values(user_id=user.uuid)
+            )
+            await db.commit()
+
+        token = create_access_token(user.username, user.role, user.email, hours=24, user_uuid=user.uuid)
         response.set_cookie(
             key=SESSION_COOKIE_NAME,
             value=token,
@@ -420,6 +485,7 @@ async def api_update_profile(
             "username": user.username,
             "email": user.email,
             "role": user.role,
+            "uuid": user.uuid,
         }
 
 
@@ -430,6 +496,299 @@ async def api_logout(response: Response):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# TENANT & RBAC ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/api/v1/tenants", response_model=TenantListOut)
+async def list_user_tenants(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: Dict[str, Any] = Depends(get_current_admin),
+):
+    """List all tenants accessible to the current user with their membership role."""
+    user_name = admin.get("username", "")
+    user_uuid = admin.get("uuid") or user_name
+    is_platform_admin = admin.get("role") == "SUPER_ADMIN" or user_name in ("admin", "root_admin")
+
+    mem_query = (
+        select(TenantMembership, Tenant)
+        .join(Tenant, Tenant.id == TenantMembership.tenant_id)
+        .where(
+            (TenantMembership.user_id == user_uuid) | (TenantMembership.user_id == user_name),
+            TenantMembership.status == "ACTIVE",
+            Tenant.status != "ARCHIVED",
+        )
+    )
+    res = await db.execute(mem_query)
+    rows = res.all()
+
+    if not rows and not is_platform_admin:
+        tenant = await create_personal_workspace_for_user(db, user_uuid, user_name)
+        mem_res = await db.execute(
+            select(TenantMembership).where(
+                TenantMembership.tenant_id == tenant.id,
+                TenantMembership.user_id == user_uuid,
+            )
+        )
+        mem = mem_res.scalar_one_or_none()
+        t_dict = tenant.to_dict()
+        t_dict["role"] = mem.role if mem else "OWNER"
+        return TenantListOut(tenants=[TenantOut(**t_dict)], total=1)
+
+    out: List[TenantOut] = []
+    seen_tenant_ids = set()
+    for mem, tenant in rows:
+        t_dict = tenant.to_dict()
+        t_dict["role"] = mem.role
+        out.append(TenantOut(**t_dict))
+        seen_tenant_ids.add(tenant.id)
+
+    if is_platform_admin and request.query_params.get("all") == "true":
+        all_res = await db.execute(select(Tenant).where(Tenant.status != "ARCHIVED"))
+        for t in all_res.scalars().all():
+            if t.id not in seen_tenant_ids:
+                t_dict = t.to_dict()
+                t_dict["role"] = "SUPER_ADMIN"
+                out.append(TenantOut(**t_dict))
+                seen_tenant_ids.add(t.id)
+
+    return TenantListOut(tenants=out, total=len(out))
+
+
+@router.post("/api/v1/tenants", response_model=TenantOut, status_code=status.HTTP_201_CREATED)
+async def create_tenant(
+    payload: TenantCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: Dict[str, Any] = Depends(get_current_admin),
+):
+    """Create a new organization workspace. The creator becomes TENANT_OWNER."""
+    user_name = admin.get("username", "")
+    user_uuid = admin.get("uuid") or user_name
+
+    slug_base = slugify(payload.slug or payload.name)
+    slug = f"{slug_base}-{uuid.uuid4().hex[:6]}"
+    tenant_id = str(uuid.uuid4())
+
+    tenant = Tenant(
+        id=tenant_id,
+        name=payload.name.strip(),
+        slug=slug,
+        tenant_type="ORGANIZATION",
+        status="ACTIVE",
+    )
+    db.add(tenant)
+    await db.flush()
+
+    membership = TenantMembership(
+        id=str(uuid.uuid4()),
+        tenant_id=tenant.id,
+        user_id=user_uuid,
+        role="OWNER",
+        status="ACTIVE",
+    )
+    db.add(membership)
+    await db.commit()
+    await db.refresh(tenant)
+
+    t_dict = tenant.to_dict()
+    t_dict["role"] = "OWNER"
+    return TenantOut(**t_dict)
+
+
+@router.get("/api/v1/tenants/current", response_model=TenantOut)
+async def get_current_tenant(
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Return the currently resolved tenant context."""
+    t_dict = ctx.tenant.to_dict()
+    t_dict["role"] = ctx.role
+    return TenantOut(**t_dict)
+
+
+@router.get("/api/v1/tenants/{tenant_id}/members", response_model=List[TenantMemberOut])
+async def list_tenant_members(
+    tenant_id: str,
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """List members of a tenant. User must be a member of this tenant."""
+    if ctx.tenant.id != tenant_id and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to tenant members.")
+
+    res = await db.execute(
+        select(TenantMembership).where(TenantMembership.tenant_id == tenant_id)
+    )
+    members = res.scalars().all()
+    return [TenantMemberOut(**m.to_dict()) for m in members]
+
+
+@router.post(
+    "/api/v1/tenants/{tenant_id}/members",
+    response_model=TenantMemberOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_tenant_member(
+    tenant_id: str,
+    payload: TenantMemberAdd,
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Add a member to the tenant. Requires OWNER or ADMIN role. Prevents privilege escalation."""
+    if ctx.tenant.id != tenant_id and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+    ctx.require_role("OWNER", "ADMIN")
+
+    target_role = payload.role.strip().upper()
+    if ctx.role == "ADMIN" and target_role == "OWNER":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Privilege escalation denied: Tenant ADMIN cannot assign OWNER role.",
+        )
+
+    target_identifier = (payload.user_id or payload.username or "").strip()
+    if not target_identifier:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="user_id or username required.")
+
+    # Validate target user exists in AdminUser registry
+    target_user = None
+    async for s in get_admin_db_session():
+        u_res = await s.execute(
+            select(AdminUser).where(
+                (AdminUser.uuid == target_identifier)
+                | (AdminUser.username == target_identifier)
+                | (AdminUser.email == target_identifier)
+            )
+        )
+        target_user = u_res.scalar_one_or_none()
+
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Target user '{target_identifier}' not found.",
+        )
+
+    canonical_user_id = target_user.uuid or target_user.username
+
+    existing_res = await db.execute(
+        select(TenantMembership).where(
+            TenantMembership.tenant_id == tenant_id,
+            (TenantMembership.user_id == canonical_user_id)
+            | (TenantMembership.user_id == target_user.username),
+        )
+    )
+    if existing_res.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"User '{target_identifier}' is already a member of this tenant.",
+        )
+
+    membership = TenantMembership(
+        id=str(uuid.uuid4()),
+        tenant_id=tenant_id,
+        user_id=canonical_user_id,
+        role=target_role,
+        status="ACTIVE",
+    )
+    db.add(membership)
+    await db.commit()
+    await db.refresh(membership)
+    return TenantMemberOut(**membership.to_dict())
+
+
+@router.patch("/api/v1/tenants/{tenant_id}/members/{user_id}", response_model=TenantMemberOut)
+async def update_tenant_member_role(
+    tenant_id: str,
+    user_id: str,
+    payload: TenantMemberRoleUpdate,
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Update tenant member role. Requires OWNER or ADMIN. Prevents privilege escalation."""
+    if ctx.tenant.id != tenant_id and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+    ctx.require_role("OWNER", "ADMIN")
+    target_role = payload.role.strip().upper()
+
+    res = await db.execute(
+        select(TenantMembership).where(
+            TenantMembership.tenant_id == tenant_id,
+            TenantMembership.user_id == user_id,
+        )
+    )
+    target_mem = res.scalar_one_or_none()
+    if not target_mem:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found.")
+
+    if ctx.role == "ADMIN":
+        if target_mem.role in ("OWNER", "ADMIN"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="ADMIN cannot modify OWNER or fellow ADMIN.")
+        if target_role in ("OWNER", "ADMIN"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Privilege escalation denied: ADMIN cannot promote to OWNER or ADMIN.")
+
+    if target_mem.role == "OWNER" and target_role != "OWNER":
+        owners_res = await db.execute(
+            select(TenantMembership).where(
+                TenantMembership.tenant_id == tenant_id,
+                TenantMembership.role == "OWNER",
+                TenantMembership.status == "ACTIVE",
+            )
+        )
+        if len(owners_res.scalars().all()) <= 1:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot demote the only remaining OWNER of the workspace.")
+
+    target_mem.role = target_role
+    target_mem.updated_at = datetime.datetime.utcnow()
+    await db.commit()
+    await db.refresh(target_mem)
+    return TenantMemberOut(**target_mem.to_dict())
+
+
+@router.delete("/api/v1/tenants/{tenant_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_tenant_member(
+    tenant_id: str,
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Remove member from tenant. Requires OWNER or ADMIN."""
+    if ctx.tenant.id != tenant_id and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+    ctx.require_role("OWNER", "ADMIN")
+
+    res = await db.execute(
+        select(TenantMembership).where(
+            TenantMembership.tenant_id == tenant_id,
+            TenantMembership.user_id == user_id,
+        )
+    )
+    target_mem = res.scalar_one_or_none()
+    if not target_mem:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found.")
+
+    if ctx.role == "ADMIN" and target_mem.role in ("OWNER", "ADMIN"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="ADMIN cannot remove OWNER or fellow ADMIN.")
+
+    if target_mem.role == "OWNER":
+        owners_res = await db.execute(
+            select(TenantMembership).where(
+                TenantMembership.tenant_id == tenant_id,
+                TenantMembership.role == "OWNER",
+                TenantMembership.status == "ACTIVE",
+            )
+        )
+        if len(owners_res.scalars().all()) <= 1:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot remove the only remaining OWNER of the workspace.")
+
+    await db.delete(target_mem)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # PROJECT ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -437,28 +796,30 @@ async def api_logout(response: Response):
 async def list_projects(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: Dict[str, Any] = Depends(get_current_admin),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
-    """Return all projects accessible to the user, with cache-aside."""
-    owner = admin["username"]
-    role  = admin.get("role", "ADMIN")
+    """Return all projects accessible within the current tenant context, with cache-aside."""
+    owner = ctx.user["username"]
+    cache_key = f"{ctx.tenant.id}:{owner}"
 
-    # Cache check
-    cached = await cache_manager.get_projects_list(owner)
+    cached = await cache_manager.get_projects_list(cache_key)
     if cached:
         return ProjectListOut(projects=cached, total=len(cached))
 
-    # If SUPER_ADMIN or root_admin, view all organization projects; otherwise user's projects
-    if role in ("SUPER_ADMIN", "ADMIN") or owner in ("admin", "root_admin"):
+    has_explicit_tenant = bool(request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id"))
+    if ctx.is_platform_admin and not has_explicit_tenant:
         query = select(AetherProject).order_by(AetherProject.created_at.desc())
     else:
-        query = select(AetherProject).where(AetherProject.owner == owner).order_by(AetherProject.created_at.desc())
+        query = select(AetherProject).where(
+            (AetherProject.tenant_id == ctx.tenant.id)
+            | ((AetherProject.tenant_id.is_(None)) & (AetherProject.owner == owner))
+        ).order_by(AetherProject.created_at.desc())
 
     res = await db.execute(query)
     projects = res.scalars().all()
 
     out = [ProjectOut(**p.to_dict()) for p in projects]
-    await cache_manager.set_projects_list(owner, [o.model_dump() for o in out])
+    await cache_manager.set_projects_list(cache_key, [o.model_dump() for o in out])
 
     return ProjectListOut(projects=out, total=len(out))
 
@@ -468,10 +829,12 @@ async def create_project(
     payload: ProjectCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: Dict[str, Any] = Depends(get_current_admin),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
-    """Create a new project and invalidate the owner's list cache."""
-    owner = admin["username"]
+    """Create a new project scoped to the current tenant boundary."""
+    ctx.require_role("OWNER", "ADMIN", "MEMBER")
+    owner = ctx.user["username"]
+    user_uuid = ctx.user.get("uuid")
 
     project = AetherProject(
         id=str(uuid.uuid4()),
@@ -479,6 +842,8 @@ async def create_project(
         description=payload.description,
         project_type=payload.project_type,
         owner=owner,
+        tenant_id=ctx.tenant.id,
+        created_by_user_id=user_uuid,
         status="CREATED",
         environment_count=0,
         created_at=datetime.datetime.utcnow(),
@@ -488,8 +853,9 @@ async def create_project(
     await db.commit()
     await db.refresh(project)
 
+    await cache_manager.invalidate_projects_list(f"{ctx.tenant.id}:{owner}")
     await cache_manager.invalidate_projects_list(owner)
-    logger.info(f"Created project '{project.name}' (id={project.id}) for owner='{owner}'")
+    logger.info(f"Created project '{project.name}' (id={project.id}) for owner='{owner}', tenant='{ctx.tenant.id}'")
 
     return ProjectOut(**project.to_dict())
 
@@ -499,16 +865,14 @@ async def get_project(
     project_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: Dict[str, Any] = Depends(get_current_admin),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
-    """Return project + all its environments. Uses detail cache."""
-    owner = admin["username"]
+    """Return project + all its environments. Authorizes tenant ownership BEFORE returning cache."""
+    project = await _get_project_or_404(db, project_id, ctx)
 
     cached = await cache_manager.get_project_detail(project_id)
     if cached:
         return ProjectOut(**cached)
-
-    project = await _get_project_or_404(db, project_id, owner)
 
     env_res = await db.execute(
         select(AetherEnvironment)
@@ -529,11 +893,11 @@ async def update_project(
     payload: ProjectUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: Dict[str, Any] = Depends(get_current_admin),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
-    """Update project name, description, or status."""
-    owner = admin["username"]
-    project = await _get_project_or_404(db, project_id, owner)
+    """Update project name, description, or status. Requires MEMBER, ADMIN, or OWNER."""
+    ctx.require_role("OWNER", "ADMIN", "MEMBER")
+    project = await _get_project_or_404(db, project_id, ctx)
 
     if payload.name is not None:
         project.name = payload.name.strip()
@@ -546,7 +910,9 @@ async def update_project(
     await db.commit()
     await db.refresh(project)
 
+    owner = ctx.user["username"]
     await cache_manager.invalidate_all_for_owner(owner, project_id)
+    await cache_manager.invalidate_projects_list(f"{ctx.tenant.id}:{owner}")
     return ProjectOut(**project.to_dict())
 
 
@@ -555,13 +921,12 @@ async def delete_project(
     project_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: Dict[str, Any] = Depends(get_current_admin),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
-    """Delete project and all its environments."""
-    owner = admin["username"]
-    project = await _get_project_or_404(db, project_id, owner)
+    """Delete project and all its environments. Denied for VIEWER and regular MEMBER."""
+    ctx.require_role("OWNER", "ADMIN")
+    project = await _get_project_or_404(db, project_id, ctx)
 
-    # Delete all child environments first
     env_res = await db.execute(
         select(AetherEnvironment).where(AetherEnvironment.project_id == project_id)
     )
@@ -571,8 +936,10 @@ async def delete_project(
     await db.delete(project)
     await db.commit()
 
+    owner = ctx.user["username"]
     await cache_manager.invalidate_all_for_owner(owner, project_id)
-    logger.info(f"Deleted project '{project_id}' for owner='{owner}'")
+    await cache_manager.invalidate_projects_list(f"{ctx.tenant.id}:{owner}")
+    logger.info(f"Deleted project '{project_id}' for owner='{owner}', tenant='{ctx.tenant.id}'")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -585,10 +952,9 @@ async def list_environments(
     project_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: Dict[str, Any] = Depends(get_current_admin),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
-    owner = admin["username"]
-    await _get_project_or_404(db, project_id, owner)
+    await _get_project_or_404(db, project_id, ctx)
 
     res = await db.execute(
         select(AetherEnvironment)
@@ -609,13 +975,12 @@ async def create_environment(
     payload: EnvironmentCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: Dict[str, Any] = Depends(get_current_admin),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
-    """Create a new environment under a project."""
-    owner = admin["username"]
-    project = await _get_project_or_404(db, project_id, owner)
+    """Create a new environment under a project. Scoped to tenant."""
+    ctx.require_role("OWNER", "ADMIN", "MEMBER")
+    project = await _get_project_or_404(db, project_id, ctx)
 
-    # Check for duplicate env name within this project
     dup = await db.execute(
         select(AetherEnvironment).where(
             AetherEnvironment.project_id == project_id,
@@ -631,6 +996,8 @@ async def create_environment(
     env = AetherEnvironment(
         id=str(uuid.uuid4()),
         project_id=project_id,
+        tenant_id=ctx.tenant.id,
+        created_by_user_id=ctx.user.get("uuid"),
         name=payload.name,
         env_type=payload.env_type,
         aws_region=payload.aws_region,
@@ -641,15 +1008,16 @@ async def create_environment(
     )
     db.add(env)
 
-    # Update denormalised env count on project
     project.environment_count = (project.environment_count or 0) + 1
     project.updated_at = datetime.datetime.utcnow()
 
     await db.commit()
     await db.refresh(env)
 
+    owner = ctx.user["username"]
     await cache_manager.invalidate_all_for_owner(owner, project_id)
-    logger.info(f"Created environment '{env.name}' (id={env.id}) in project '{project_id}'")
+    await cache_manager.invalidate_projects_list(f"{ctx.tenant.id}:{owner}")
+    logger.info(f"Created environment '{env.name}' (id={env.id}) in project '{project_id}', tenant='{ctx.tenant.id}'")
 
     return EnvironmentOut(**env.to_dict())
 
@@ -660,10 +1028,9 @@ async def get_environment(
     env_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: Dict[str, Any] = Depends(get_current_admin),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
-    owner = admin["username"]
-    await _get_project_or_404(db, project_id, owner)
+    await _get_project_or_404(db, project_id, ctx)
     env = await _get_env_or_404(db, env_id, project_id)
     return EnvironmentOut(**env.to_dict())
 
@@ -675,11 +1042,11 @@ async def update_environment(
     payload: EnvironmentUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: Dict[str, Any] = Depends(get_current_admin),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
-    """Update environment name or description."""
-    owner = admin["username"]
-    await _get_project_or_404(db, project_id, owner)
+    """Update environment name or description. Requires MEMBER, ADMIN, or OWNER."""
+    ctx.require_role("OWNER", "ADMIN", "MEMBER")
+    await _get_project_or_404(db, project_id, ctx)
     env = await _get_env_or_404(db, env_id, project_id)
 
     if payload.name is not None:
@@ -691,7 +1058,9 @@ async def update_environment(
     await db.commit()
     await db.refresh(env)
 
+    owner = ctx.user["username"]
     await cache_manager.invalidate_all_for_owner(owner, project_id)
+    await cache_manager.invalidate_projects_list(f"{ctx.tenant.id}:{owner}")
     return EnvironmentOut(**env.to_dict())
 
 
@@ -705,14 +1074,14 @@ async def update_environment_status(
     payload: EnvironmentStatusUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: Dict[str, Any] = Depends(get_current_admin),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     """
     Advance the environment lifecycle state.
-    Called by downstream modules (Module 2, 3 …) to update progress shown on the dashboard.
+    Requires active membership role MEMBER, ADMIN, or OWNER.
     """
-    owner = admin["username"]
-    await _get_project_or_404(db, project_id, owner)
+    ctx.require_role("OWNER", "ADMIN", "MEMBER")
+    await _get_project_or_404(db, project_id, ctx)
     env = await _get_env_or_404(db, env_id, project_id)
 
     old_status = env.status
@@ -721,7 +1090,9 @@ async def update_environment_status(
     await db.commit()
     await db.refresh(env)
 
+    owner = ctx.user["username"]
     await cache_manager.invalidate_all_for_owner(owner, project_id)
+    await cache_manager.invalidate_projects_list(f"{ctx.tenant.id}:{owner}")
     logger.info(f"Environment '{env.id}' status: {old_status} → {env.status}")
     return EnvironmentOut(**env.to_dict())
 
@@ -735,10 +1106,11 @@ async def delete_environment(
     env_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: Dict[str, Any] = Depends(get_current_admin),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
-    owner = admin["username"]
-    project = await _get_project_or_404(db, project_id, owner)
+    """Delete environment. Denied for MEMBER and VIEWER."""
+    ctx.require_role("OWNER", "ADMIN")
+    project = await _get_project_or_404(db, project_id, ctx)
     env = await _get_env_or_404(db, env_id, project_id)
 
     await db.delete(env)
@@ -746,7 +1118,9 @@ async def delete_environment(
     project.updated_at = datetime.datetime.utcnow()
     await db.commit()
 
+    owner = ctx.user["username"]
     await cache_manager.invalidate_all_for_owner(owner, project_id)
+    await cache_manager.invalidate_projects_list(f"{ctx.tenant.id}:{owner}")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -754,14 +1128,36 @@ async def delete_environment(
 # HELPERS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-async def _get_project_or_404(db: AsyncSession, project_id: str, owner: str) -> AetherProject:
-    if owner in ("admin", "root_admin"):
-        query = select(AetherProject).where(AetherProject.id == project_id)
+async def _get_project_or_404(
+    db: AsyncSession,
+    project_id: str,
+    ctx_or_owner: Any,
+    role: Optional[str] = None,
+) -> AetherProject:
+    """
+    Fetch project ensuring isolation. Supports both TenantContext and legacy (owner, role) signatures.
+    """
+    if isinstance(ctx_or_owner, TenantContext):
+        ctx = ctx_or_owner
+        if ctx.is_platform_admin and not ctx.membership:
+            query = select(AetherProject).where(AetherProject.id == project_id)
+        else:
+            query = select(AetherProject).where(
+                AetherProject.id == project_id,
+                (AetherProject.tenant_id == ctx.tenant.id)
+                | ((AetherProject.tenant_id.is_(None)) & (AetherProject.owner == ctx.user["username"]))
+            )
     else:
-        query = select(AetherProject).where(
-            AetherProject.id == project_id,
-            AetherProject.owner == owner,
-        )
+        owner = str(ctx_or_owner)
+        user_role = role or "USER"
+        if user_role == "SUPER_ADMIN" or owner in ("admin", "root_admin"):
+            query = select(AetherProject).where(AetherProject.id == project_id)
+        else:
+            query = select(AetherProject).where(
+                AetherProject.id == project_id,
+                AetherProject.owner == owner,
+            )
+
     res = await db.execute(query)
     project = res.scalar_one_or_none()
     if not project:

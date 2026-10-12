@@ -132,33 +132,116 @@ class EnvironmentStatusUpdate(BaseModel):
         return v
 
 
+# ── Tenant & Membership Schemas ───────────────────────────────────────────────
+
+class TenantCreate(BaseModel):
+    name: str
+    slug: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_not_empty(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Tenant name cannot be empty.")
+        if len(v) > 100:
+            raise ValueError("Tenant name must be <= 100 characters.")
+        return v
+
+
+class TenantUpdate(BaseModel):
+    name:   Optional[str] = None
+    status: Optional[str] = None
+
+
+class TenantMemberAdd(BaseModel):
+    user_id:  Optional[str] = None
+    username: Optional[str] = None
+    role:     str = "MEMBER"
+
+    @field_validator("role")
+    @classmethod
+    def valid_role(cls, v: str) -> str:
+        v = v.strip().upper()
+        if v not in {"OWNER", "ADMIN", "MEMBER", "VIEWER"}:
+            raise ValueError("Role must be one of: OWNER, ADMIN, MEMBER, VIEWER")
+        return v
+
+
+class TenantMemberRoleUpdate(BaseModel):
+    role: str
+
+    @field_validator("role")
+    @classmethod
+    def valid_role(cls, v: str) -> str:
+        v = v.strip().upper()
+        if v not in {"OWNER", "ADMIN", "MEMBER", "VIEWER"}:
+            raise ValueError("Role must be one of: OWNER, ADMIN, MEMBER, VIEWER")
+        return v
+
+
+class TenantMemberOut(BaseModel):
+    id:         str
+    tenant_id:  str
+    user_id:    str
+    username:   Optional[str] = None
+    role:       str
+    status:     str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class TenantOut(BaseModel):
+    id:          str
+    name:        str
+    slug:        str
+    tenant_type: str
+    status:      str
+    role:        Optional[str] = None
+    created_at:  Optional[str] = None
+    updated_at:  Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class TenantListOut(BaseModel):
+    tenants: List[TenantOut]
+    total:   int
+
+
 # ── Output Schemas ────────────────────────────────────────────────────────────
 
 class EnvironmentOut(BaseModel):
-    id:          str
-    project_id:  str
-    name:        str
-    env_type:    str
-    aws_region:  str
-    description: Optional[str]
-    status:      str
-    created_at:  str
-    updated_at:  str
+    id:                 str
+    project_id:         str
+    tenant_id:          Optional[str] = None
+    created_by_user_id: Optional[str] = None
+    name:               str
+    env_type:           str
+    aws_region:         str
+    description:        Optional[str] = None
+    status:             str
+    created_at:         str
+    updated_at:         str
 
     model_config = {"from_attributes": True}
 
 
 class ProjectOut(BaseModel):
-    id:                str
-    name:              str
-    description:       Optional[str]
-    project_type:      str
-    owner:             str
-    status:            str
-    environment_count: int
-    environments:      List[EnvironmentOut] = []
-    created_at:        str
-    updated_at:        str
+    id:                 str
+    name:               str
+    description:        Optional[str] = None
+    project_type:       str
+    owner:              str
+    tenant_id:          Optional[str] = None
+    created_by_user_id: Optional[str] = None
+    status:             str
+    environment_count:  int
+    environments:       List[EnvironmentOut] = []
+    created_at:         str
+    updated_at:         str
 
     model_config = {"from_attributes": True}
 
@@ -166,3 +249,4 @@ class ProjectOut(BaseModel):
 class ProjectListOut(BaseModel):
     projects: List[ProjectOut]
     total:    int
+

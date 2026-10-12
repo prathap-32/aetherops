@@ -16,7 +16,12 @@ JWT_SECRET_KEY       = os.getenv("JWT_SECRET_KEY", "aetherops-super-secure-produ
 JWT_ALGORITHM        = "HS256"
 JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "8"))
 SESSION_COOKIE_NAME  = "aether_session"
+ENVIRONMENT          = os.getenv("AETHER_ENV", os.getenv("ENVIRONMENT", "development")).lower()
 MASTER_ADMIN_KEY     = os.getenv("ADMIN_API_KEY", "aetherops-secret-admin-key")
+if ENVIRONMENT == "production" and MASTER_ADMIN_KEY == "aetherops-secret-admin-key":
+    logger.critical("SECURITY ALERT: Insecure default ADMIN_API_KEY in production! Disabling master key fallback.")
+    MASTER_ADMIN_KEY = None
+
 DEFAULT_ADMIN_USER   = os.getenv("ADMIN_DEFAULT_USER", "admin")
 DEFAULT_ADMIN_PASS   = os.getenv("ADMIN_DEFAULT_PASS", "AetherOps@2026!")
 DEFAULT_ADMIN_EMAIL  = os.getenv("ADMIN_DEFAULT_EMAIL", "admin@aetherops.cloud")
@@ -63,11 +68,11 @@ async def get_admin_session() -> AsyncSession:
         return
     try:
         async with _get_pg_sm()() as s:
-            await s.execute(text("SELECT 1"))
+            await s.execute(text("SELECT uuid FROM sc_admin_users LIMIT 1"))
             yield s
             return
     except Exception as exc:
-        logger.warning(f"PG admin unavailable ({exc}), using SQLite.")
+        logger.warning(f"PG admin unavailable or pre-migration ({exc}), using SQLite.")
         async with _get_sqlite_sm()() as s:
             yield s
 
@@ -81,9 +86,9 @@ def verify_password(plain: str, hashed: str) -> bool:
     except Exception:
         return False
 
-def create_access_token(username: str, role: str, email: str, hours: int = JWT_EXPIRATION_HOURS) -> str:
+def create_access_token(username: str, role: str, email: str, hours: int = JWT_EXPIRATION_HOURS, user_uuid: Optional[str] = None) -> str:
     now = datetime.datetime.utcnow()
-    payload = {"sub": username, "role": role, "email": email, "iat": now,
+    payload = {"sub": username, "uuid": user_uuid, "role": role, "email": email, "iat": now,
                "exp": now + datetime.timedelta(hours=hours), "jti": secrets.token_hex(16)}
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
@@ -97,9 +102,14 @@ def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
 async def init_admin_security():
     from app.database import Base
     import app.security_models  # noqa
+    import uuid as _uuid
     sf = _get_sqlite_sm()
     async with _sqlite_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        try:
+            await conn.execute(text("ALTER TABLE sc_admin_users ADD COLUMN uuid VARCHAR(36)"))
+        except Exception:
+            pass
     if not IS_TESTING:
         try:
             async with _pg_engine.begin() as conn:
@@ -108,42 +118,53 @@ async def init_admin_security():
         except Exception as exc:
             logger.warning(f"PG admin init deferred: {exc}")
     pwd = hash_password(DEFAULT_ADMIN_PASS)
+    admin_uuid = str(_uuid.uuid5(_uuid.NAMESPACE_DNS, f"{DEFAULT_ADMIN_USER}.aetherops.local"))
     async with sf() as s:
         r = await s.execute(select(AdminUser).where(AdminUser.username == DEFAULT_ADMIN_USER))
-        if not r.scalar_one_or_none():
-            s.add(AdminUser(username=DEFAULT_ADMIN_USER, email=DEFAULT_ADMIN_EMAIL,
+        existing = r.scalar_one_or_none()
+        if not existing:
+            s.add(AdminUser(uuid=admin_uuid, username=DEFAULT_ADMIN_USER, email=DEFAULT_ADMIN_EMAIL,
                             password_hash=pwd, role="SUPER_ADMIN", is_active=True,
                             created_at=datetime.datetime.utcnow()))
+            await s.commit()
+        elif not existing.uuid:
+            existing.uuid = admin_uuid
             await s.commit()
 
 
 async def get_current_admin(request: Request) -> Dict[str, Any]:
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    if token:
-        p = decode_access_token(token)
-        if p:
-            return {"username": p.get("sub"), "role": p.get("role"), "email": p.get("email"), "auth_type": "cookie"}
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
         p = decode_access_token(auth.split(" ", 1)[1].strip())
         if p:
-            return {"username": p.get("sub"), "role": p.get("role"), "email": p.get("email"), "auth_type": "bearer"}
+            return {"username": p.get("sub"), "uuid": p.get("uuid"), "role": p.get("role"), "email": p.get("email"), "auth_type": "bearer"}
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if token:
+        p = decode_access_token(token)
+        if p:
+            return {"username": p.get("sub"), "uuid": p.get("uuid"), "role": p.get("role"), "email": p.get("email"), "auth_type": "cookie"}
     key = request.headers.get("X-Admin-Key", "")
-    if key and secrets.compare_digest(key.strip(), MASTER_ADMIN_KEY):
-        return {"username": "root_admin", "role": "SUPER_ADMIN", "email": "root@aetherops.cloud", "auth_type": "api_key"}
+    if key and MASTER_ADMIN_KEY and secrets.compare_digest(key.strip(), MASTER_ADMIN_KEY):
+        return {"username": "root_admin", "uuid": "00000000-0000-0000-0000-000000000001", "role": "SUPER_ADMIN", "email": "root@aetherops.cloud", "auth_type": "api_key"}
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized.")
 
 
 async def login_admin(username: str, password: str, request: Request):
     if username == DEFAULT_ADMIN_USER and password == DEFAULT_ADMIN_PASS:
-        return {"token": create_access_token(username, "SUPER_ADMIN", DEFAULT_ADMIN_EMAIL),
-                "username": username, "role": "SUPER_ADMIN"}
+        import uuid as _uuid
+        admin_uuid = str(_uuid.uuid5(_uuid.NAMESPACE_DNS, f"{DEFAULT_ADMIN_USER}.aetherops.local"))
+        return {"token": create_access_token(username, "SUPER_ADMIN", DEFAULT_ADMIN_EMAIL, user_uuid=admin_uuid),
+                "username": username, "role": "SUPER_ADMIN", "uuid": admin_uuid}
     async for session in get_admin_session():
         res = await session.execute(select(AdminUser).where(AdminUser.username == username))
         user = res.scalar_one_or_none()
         if not user or not user.is_active or not verify_password(password, user.password_hash):
             raise HTTPException(status_code=401, detail="Invalid credentials.")
+        if not user.uuid:
+            import uuid as _uuid
+            user.uuid = str(_uuid.uuid5(_uuid.NAMESPACE_DNS, f"{user.username}.aetherops.local"))
+            await session.commit()
         user.last_login_at = datetime.datetime.utcnow()
         await session.commit()
-        return {"token": create_access_token(user.username, user.role, user.email),
-                "username": user.username, "role": user.role}
+        return {"token": create_access_token(user.username, user.role, user.email, user_uuid=user.uuid),
+                "username": user.username, "role": user.role, "uuid": user.uuid}
