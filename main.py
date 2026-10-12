@@ -146,7 +146,35 @@ FLEET_SPECS: List[ServiceSpec] = [
         health_path="/health",
         ui_url="http://localhost:8008/health"
     ),
+    ServiceSpec(
+        id="project_and_environment_management",
+        code="MOD-PM",
+        name="Project & Environment Manager",
+        port=8009,
+        dir="services/project_and_environment_management",
+        health_path="/health",
+        ui_url="http://localhost:8009/app"
+    ),
+    ServiceSpec(
+        id="source_and_cloud_connection",
+        code="MOD-SC",
+        name="Source & Cloud Connection",
+        port=8010,
+        dir="services/source_and_cloud_connection",
+        health_path="/health",
+        ui_url="http://localhost:8010/app/source"
+    ),
+    ServiceSpec(
+        id="repo_analyzer_service",
+        code="MOD-RA",
+        name="Source Code Analyzer",
+        port=8011,
+        dir="services/repo_analyzer_service",
+        health_path="/health",
+        ui_url="http://localhost:8011/app"
+    ),
 ]
+
 
 
 class RealTimeFleetOrchestrator:
@@ -375,7 +403,7 @@ class RealTimeFleetOrchestrator:
 
     def shutdown(self, signum=None, frame=None):
         self.running = False
-        print("\n\n[FLEET SUPERVISOR] Stopping all 9 microservices gracefully...")
+        print(f"\n\n[FLEET SUPERVISOR] Stopping all {len(self.services)} microservices gracefully...")
         for s in self.services:
             if s.proc and s.proc.poll() is None:
                 try:
@@ -405,9 +433,10 @@ class RealTimeFleetOrchestrator:
         signal.signal(signal.SIGINT, self.shutdown)
         signal.signal(signal.SIGTERM, self.shutdown)
 
-        self.console.print("\n[bold cyan]Booting AetherOps Microservices Fleet (9 Services)...[/bold cyan]")
+        self.console.print(f"\n[bold cyan]Booting AetherOps Microservices Fleet ({len(self.services)} Services)...[/bold cyan]")
         for s in self.services:
             self.start_service(s)
+
 
         # Allow services initial socket binding window
         time.sleep(2.0)

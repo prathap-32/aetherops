@@ -1,0 +1,2292 @@
+{
+  "schema_version": "3.0",
+  "scanner": {
+    "type": "deterministic_repository_scanner",
+    "llm_used": false,
+    "principle": "Facts are extracted from repository evidence. The scanner does not infer architecture."
+  },
+  "repository": {
+    "name": "aether-cloud",
+    "root": ".",
+    "file_count": 115,
+    "git": {
+      "branch": null,
+      "commit": "afa7a10b03a48964527df985b1906605b1aa0559"
+    }
+  },
+  "project_types": [
+    {
+      "value": "python_monorepo",
+      "confidence": "high",
+      "reason": "multiple Python project manifests detected"
+    },
+    {
+      "value": "containerized_application",
+      "confidence": "high",
+      "reason": "Docker Compose detected"
+    }
+  ],
+  "workspace": {
+    "detected": true,
+    "type": "Python uv workspace",
+    "members": [
+      "services/*"
+    ]
+  },
+  "languages": [
+    {
+      "name": "Python",
+      "file_count": 78,
+      "confidence": "high"
+    },
+    {
+      "name": "Shell",
+      "file_count": 1,
+      "confidence": "medium"
+    }
+  ],
+  "package_managers": [
+    {
+      "name": "uv",
+      "ecosystem": "Python",
+      "evidence": [
+        {
+          "file": "uv.lock",
+          "source": "lockfile",
+          "detail": "uv lockfile detected",
+          "confidence": "high"
+        }
+      ]
+    }
+  ],
+  "structure": [
+    {
+      "directory": "services",
+      "file_count": 104
+    },
+    {
+      "directory": "static",
+      "file_count": 2
+    }
+  ],
+  "python": {
+    "projects": [
+      {
+        "manifest": "pyproject.toml",
+        "name": "aether-cloud",
+        "version": "0.1.0",
+        "python_requirement": ">=3.11",
+        "dependencies": [
+          "bcrypt",
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pyjwt",
+          "pytest",
+          "uvicorn"
+        ],
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "workspace": {
+          "members": [
+            "services/*"
+          ]
+        },
+        "evidence": [
+          {
+            "file": "pyproject.toml",
+            "source": "structured_manifest",
+            "detail": "Python project metadata parsed from [project]",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "manifest": "services/admin_console/pyproject.toml",
+        "name": "admin-console-service",
+        "version": "1.0.0",
+        "python_requirement": ">=3.11",
+        "dependencies": [
+          "aiosqlite",
+          "asyncpg",
+          "bcrypt",
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pyjwt",
+          "pytest",
+          "redis",
+          "rich",
+          "sqlalchemy",
+          "uvicorn"
+        ],
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/admin_console/pyproject.toml",
+            "source": "structured_manifest",
+            "detail": "Python project metadata parsed from [project]",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "manifest": "services/architecture_generator/pyproject.toml",
+        "name": "architecture-generator-service",
+        "version": "1.0.0",
+        "python_requirement": ">=3.11",
+        "dependencies": [
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pytest",
+          "uvicorn"
+        ],
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/architecture_generator/pyproject.toml",
+            "source": "structured_manifest",
+            "detail": "Python project metadata parsed from [project]",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "manifest": "services/cicd_pipeline/pyproject.toml",
+        "name": "cicd-pipeline-service",
+        "version": "1.0.0",
+        "python_requirement": ">=3.11",
+        "dependencies": [
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pytest",
+          "uvicorn"
+        ],
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/cicd_pipeline/pyproject.toml",
+            "source": "structured_manifest",
+            "detail": "Python project metadata parsed from [project]",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "manifest": "services/cloud_deployer/pyproject.toml",
+        "name": "cloud-deployer-service",
+        "version": "1.0.0",
+        "python_requirement": ">=3.11",
+        "dependencies": [
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pytest",
+          "uvicorn"
+        ],
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/cloud_deployer/pyproject.toml",
+            "source": "structured_manifest",
+            "detail": "Python project metadata parsed from [project]",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "manifest": "services/finops_optimizer/pyproject.toml",
+        "name": "finops-optimizer-service",
+        "version": "1.0.0",
+        "python_requirement": ">=3.11",
+        "dependencies": [
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pytest",
+          "uvicorn"
+        ],
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/finops_optimizer/pyproject.toml",
+            "source": "structured_manifest",
+            "detail": "Python project metadata parsed from [project]",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "manifest": "services/iac_generator/pyproject.toml",
+        "name": "iac-generator-service",
+        "version": "1.0.0",
+        "python_requirement": ">=3.11",
+        "dependencies": [
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pytest",
+          "uvicorn"
+        ],
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/iac_generator/pyproject.toml",
+            "source": "structured_manifest",
+            "detail": "Python project metadata parsed from [project]",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "manifest": "services/observability_setup/pyproject.toml",
+        "name": "observability-setup-service",
+        "version": "1.0.0",
+        "python_requirement": ">=3.11",
+        "dependencies": [
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pytest",
+          "uvicorn"
+        ],
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/observability_setup/pyproject.toml",
+            "source": "structured_manifest",
+            "detail": "Python project metadata parsed from [project]",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "manifest": "services/requirement_analysis/pyproject.toml",
+        "name": "requirement-analysis-service",
+        "version": "1.0.0",
+        "python_requirement": ">=3.11",
+        "dependencies": [
+          "aiosqlite",
+          "asyncpg",
+          "bcrypt",
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pyjwt",
+          "pytest",
+          "redis",
+          "rich",
+          "sqlalchemy",
+          "uvicorn"
+        ],
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/requirement_analysis/pyproject.toml",
+            "source": "structured_manifest",
+            "detail": "Python project metadata parsed from [project]",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "manifest": "services/security_scanner/pyproject.toml",
+        "name": "security-scanner-service",
+        "version": "1.0.0",
+        "python_requirement": ">=3.11",
+        "dependencies": [
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pytest",
+          "uvicorn"
+        ],
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/security_scanner/pyproject.toml",
+            "source": "structured_manifest",
+            "detail": "Python project metadata parsed from [project]",
+            "confidence": "high"
+          }
+        ]
+      }
+    ]
+  },
+  "node": {
+    "projects": []
+  },
+  "other_ecosystems": {
+    "Java": [],
+    "Go": [],
+    "Rust": [],
+    "C#": [],
+    "PHP": [],
+    "Ruby": []
+  },
+  "application": {
+    "services": [
+      {
+        "name": "",
+        "path": ".",
+        "manifest": "pyproject.toml",
+        "runtime": "Python",
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "dependencies": [
+          "bcrypt",
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pyjwt",
+          "pytest",
+          "uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "pyproject.toml",
+            "source": "service_structure",
+            "detail": "Component directory contains project manifest and main.py",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "name": "admin_console",
+        "path": "services/admin_console",
+        "manifest": "services/admin_console/pyproject.toml",
+        "runtime": "Python",
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "dependencies": [
+          "aiosqlite",
+          "asyncpg",
+          "bcrypt",
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pyjwt",
+          "pytest",
+          "redis",
+          "rich",
+          "sqlalchemy",
+          "uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/admin_console/pyproject.toml",
+            "source": "service_structure",
+            "detail": "Component directory contains project manifest and main.py",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "name": "architecture_generator",
+        "path": "services/architecture_generator",
+        "manifest": "services/architecture_generator/pyproject.toml",
+        "runtime": "Python",
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "dependencies": [
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pytest",
+          "uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/architecture_generator/pyproject.toml",
+            "source": "service_structure",
+            "detail": "Component directory contains project manifest and main.py",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "name": "cicd_pipeline",
+        "path": "services/cicd_pipeline",
+        "manifest": "services/cicd_pipeline/pyproject.toml",
+        "runtime": "Python",
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "dependencies": [
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pytest",
+          "uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/cicd_pipeline/pyproject.toml",
+            "source": "service_structure",
+            "detail": "Component directory contains project manifest and main.py",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "name": "cloud_deployer",
+        "path": "services/cloud_deployer",
+        "manifest": "services/cloud_deployer/pyproject.toml",
+        "runtime": "Python",
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "dependencies": [
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pytest",
+          "uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/cloud_deployer/pyproject.toml",
+            "source": "service_structure",
+            "detail": "Component directory contains project manifest and main.py",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "name": "finops_optimizer",
+        "path": "services/finops_optimizer",
+        "manifest": "services/finops_optimizer/pyproject.toml",
+        "runtime": "Python",
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "dependencies": [
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pytest",
+          "uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/finops_optimizer/pyproject.toml",
+            "source": "service_structure",
+            "detail": "Component directory contains project manifest and main.py",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "name": "iac_generator",
+        "path": "services/iac_generator",
+        "manifest": "services/iac_generator/pyproject.toml",
+        "runtime": "Python",
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "dependencies": [
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pytest",
+          "uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/iac_generator/pyproject.toml",
+            "source": "service_structure",
+            "detail": "Component directory contains project manifest and main.py",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "name": "observability_setup",
+        "path": "services/observability_setup",
+        "manifest": "services/observability_setup/pyproject.toml",
+        "runtime": "Python",
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "dependencies": [
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pytest",
+          "uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/observability_setup/pyproject.toml",
+            "source": "service_structure",
+            "detail": "Component directory contains project manifest and main.py",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "name": "requirement_analysis",
+        "path": "services/requirement_analysis",
+        "manifest": "services/requirement_analysis/pyproject.toml",
+        "runtime": "Python",
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "dependencies": [
+          "aiosqlite",
+          "asyncpg",
+          "bcrypt",
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pyjwt",
+          "pytest",
+          "redis",
+          "rich",
+          "sqlalchemy",
+          "uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/requirement_analysis/pyproject.toml",
+            "source": "service_structure",
+            "detail": "Component directory contains project manifest and main.py",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "name": "security_scanner",
+        "path": "services/security_scanner",
+        "manifest": "services/security_scanner/pyproject.toml",
+        "runtime": "Python",
+        "frameworks": [
+          "FastAPI",
+          "Uvicorn"
+        ],
+        "dependencies": [
+          "fastapi",
+          "httpx",
+          "pydantic",
+          "pytest",
+          "uvicorn"
+        ],
+        "evidence": [
+          {
+            "file": "services/security_scanner/pyproject.toml",
+            "source": "service_structure",
+            "detail": "Component directory contains project manifest and main.py",
+            "confidence": "strong"
+          }
+        ]
+      }
+    ],
+    "service_count": 10
+  },
+  "containers": {
+    "dockerfiles": [],
+    "compose": [
+      {
+        "file": "docker-compose.yml",
+        "services": [
+          "postgres",
+          "redis"
+        ],
+        "images": [
+          "postgres:15-alpine",
+          "redis:7-alpine"
+        ],
+        "ports": [
+          {
+            "host": 5432,
+            "container": 5432,
+            "service": "postgres"
+          },
+          {
+            "host": 6379,
+            "container": 6379,
+            "service": "redis"
+          }
+        ],
+        "volumes": [
+          {
+            "service": "postgres",
+            "source": "./data/postgres",
+            "target": "/var/lib/postgresql/data"
+          },
+          {
+            "service": "redis",
+            "source": "./data/redis",
+            "target": "/data"
+          }
+        ],
+        "healthchecks": [
+          "postgres",
+          "redis"
+        ],
+        "restart_policies": [
+          {
+            "service": "postgres",
+            "policy": "always"
+          },
+          {
+            "service": "redis",
+            "policy": "always"
+          }
+        ],
+        "evidence": [
+          {
+            "file": "docker-compose.yml",
+            "source": "docker_compose",
+            "detail": "Docker Compose configuration detected",
+            "confidence": "high"
+          }
+        ]
+      }
+    ],
+    "images": [
+      "postgres:15-alpine",
+      "redis:7-alpine"
+    ],
+    "services": [
+      "postgres",
+      "redis"
+    ],
+    "ports": [
+      {
+        "host": 5432,
+        "container": 5432,
+        "service": "postgres"
+      },
+      {
+        "host": 6379,
+        "container": 6379,
+        "service": "redis"
+      }
+    ]
+  },
+  "databases_and_caches": [
+    {
+      "technology": "PostgreSQL",
+      "category": "database",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "file": "services/admin_console/pyproject.toml",
+          "source": "dependency",
+          "detail": "asyncpg",
+          "confidence": "medium"
+        },
+        {
+          "file": "services/requirement_analysis/pyproject.toml",
+          "source": "dependency",
+          "detail": "asyncpg",
+          "confidence": "medium"
+        },
+        {
+          "file": "docker-compose.yml",
+          "source": "docker_image",
+          "detail": "postgres:15-alpine",
+          "confidence": "high"
+        },
+        {
+          "file": "docker-compose.yml",
+          "source": "docker_compose_service",
+          "detail": "postgres",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "technology": "Redis",
+      "category": "cache",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "file": "services/admin_console/pyproject.toml",
+          "source": "dependency",
+          "detail": "redis",
+          "confidence": "medium"
+        },
+        {
+          "file": "services/requirement_analysis/pyproject.toml",
+          "source": "dependency",
+          "detail": "redis",
+          "confidence": "medium"
+        },
+        {
+          "file": "docker-compose.yml",
+          "source": "docker_image",
+          "detail": "redis:7-alpine",
+          "confidence": "high"
+        },
+        {
+          "file": "docker-compose.yml",
+          "source": "docker_compose_service",
+          "detail": "redis",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "technology": "SQLite",
+      "category": "database",
+      "status": "dependency_hint",
+      "evidence": [
+        {
+          "file": "services/admin_console/pyproject.toml",
+          "source": "dependency",
+          "detail": "aiosqlite",
+          "confidence": "medium"
+        },
+        {
+          "file": "services/requirement_analysis/pyproject.toml",
+          "source": "dependency",
+          "detail": "aiosqlite",
+          "confidence": "medium"
+        }
+      ]
+    }
+  ],
+  "infrastructure": {
+    "terraform": [],
+    "kubernetes": [],
+    "github_actions": [],
+    "jenkins": [],
+    "gitlab_ci": [],
+    "cloudformation": [],
+    "serverless": []
+  },
+  "environment_configuration": [
+    {
+      "file": "services/requirement_analysis/.env.example",
+      "type": "environment_template",
+      "variables": [
+        "ADMIN_SECRET_KEY",
+        "DEFAULT_ADMIN_EMAIL",
+        "DEFAULT_ADMIN_PASS",
+        "DEFAULT_ADMIN_USER",
+        "JWT_EXPIRATION_HOURS",
+        "JWT_SECRET_KEY",
+        "POSTGRES_DB",
+        "POSTGRES_HOST",
+        "POSTGRES_PASSWORD",
+        "POSTGRES_PORT",
+        "POSTGRES_USER",
+        "REDIS_URL"
+      ],
+      "secret_like_variables": [
+        "ADMIN_SECRET_KEY",
+        "DEFAULT_ADMIN_PASS",
+        "JWT_SECRET_KEY",
+        "POSTGRES_PASSWORD"
+      ],
+      "note": "Only variable names are collected. Values are never collected."
+    }
+  ],
+  "entrypoints": {
+    "runnable": [
+      {
+        "file": "main.py",
+        "type": "python_runnable",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "main.py",
+            "source": "python_ast",
+            "detail": "__name__ == '__main__' detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/admin_console/app/sync_catalog.py",
+        "type": "python_runnable",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/admin_console/app/sync_catalog.py",
+            "source": "python_ast",
+            "detail": "__name__ == '__main__' detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/admin_console/main.py",
+        "type": "python_runnable",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/admin_console/main.py",
+            "source": "python_ast",
+            "detail": "__name__ == '__main__' detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/architecture_generator/main.py",
+        "type": "python_runnable",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/architecture_generator/main.py",
+            "source": "python_ast",
+            "detail": "__name__ == '__main__' detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/cicd_pipeline/main.py",
+        "type": "python_runnable",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/cicd_pipeline/main.py",
+            "source": "python_ast",
+            "detail": "__name__ == '__main__' detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/cloud_deployer/main.py",
+        "type": "python_runnable",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/cloud_deployer/main.py",
+            "source": "python_ast",
+            "detail": "__name__ == '__main__' detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/finops_optimizer/main.py",
+        "type": "python_runnable",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/finops_optimizer/main.py",
+            "source": "python_ast",
+            "detail": "__name__ == '__main__' detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/iac_generator/main.py",
+        "type": "python_runnable",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/iac_generator/main.py",
+            "source": "python_ast",
+            "detail": "__name__ == '__main__' detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/observability_setup/main.py",
+        "type": "python_runnable",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/observability_setup/main.py",
+            "source": "python_ast",
+            "detail": "__name__ == '__main__' detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/requirement_analysis/app/sync_catalog.py",
+        "type": "python_runnable",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/requirement_analysis/app/sync_catalog.py",
+            "source": "python_ast",
+            "detail": "__name__ == '__main__' detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/requirement_analysis/main.py",
+        "type": "python_runnable",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/requirement_analysis/main.py",
+            "source": "python_ast",
+            "detail": "__name__ == '__main__' detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/security_scanner/main.py",
+        "type": "python_runnable",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/security_scanner/main.py",
+            "source": "python_ast",
+            "detail": "__name__ == '__main__' detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "simple_scanner_old.py",
+        "type": "python_runnable",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "simple_scanner_old.py",
+            "source": "python_ast",
+            "detail": "__name__ == '__main__' detected",
+            "confidence": "high"
+          }
+        ]
+      }
+    ],
+    "service_launchers": [
+      {
+        "file": "main.py",
+        "type": "service_launcher",
+        "confidence": "strong",
+        "evidence": [
+          {
+            "file": "main.py",
+            "source": "directory_structure",
+            "detail": "main.py located directly inside a component directory",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "file": "services/admin_console/main.py",
+        "type": "service_launcher",
+        "confidence": "strong",
+        "evidence": [
+          {
+            "file": "services/admin_console/main.py",
+            "source": "directory_structure",
+            "detail": "main.py located directly inside a component directory",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "file": "services/architecture_generator/main.py",
+        "type": "service_launcher",
+        "confidence": "strong",
+        "evidence": [
+          {
+            "file": "services/architecture_generator/main.py",
+            "source": "directory_structure",
+            "detail": "main.py located directly inside a component directory",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "file": "services/cicd_pipeline/main.py",
+        "type": "service_launcher",
+        "confidence": "strong",
+        "evidence": [
+          {
+            "file": "services/cicd_pipeline/main.py",
+            "source": "directory_structure",
+            "detail": "main.py located directly inside a component directory",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "file": "services/cloud_deployer/main.py",
+        "type": "service_launcher",
+        "confidence": "strong",
+        "evidence": [
+          {
+            "file": "services/cloud_deployer/main.py",
+            "source": "directory_structure",
+            "detail": "main.py located directly inside a component directory",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "file": "services/finops_optimizer/main.py",
+        "type": "service_launcher",
+        "confidence": "strong",
+        "evidence": [
+          {
+            "file": "services/finops_optimizer/main.py",
+            "source": "directory_structure",
+            "detail": "main.py located directly inside a component directory",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "file": "services/iac_generator/main.py",
+        "type": "service_launcher",
+        "confidence": "strong",
+        "evidence": [
+          {
+            "file": "services/iac_generator/main.py",
+            "source": "directory_structure",
+            "detail": "main.py located directly inside a component directory",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "file": "services/observability_setup/main.py",
+        "type": "service_launcher",
+        "confidence": "strong",
+        "evidence": [
+          {
+            "file": "services/observability_setup/main.py",
+            "source": "directory_structure",
+            "detail": "main.py located directly inside a component directory",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "file": "services/requirement_analysis/main.py",
+        "type": "service_launcher",
+        "confidence": "strong",
+        "evidence": [
+          {
+            "file": "services/requirement_analysis/main.py",
+            "source": "directory_structure",
+            "detail": "main.py located directly inside a component directory",
+            "confidence": "strong"
+          }
+        ]
+      },
+      {
+        "file": "services/security_scanner/main.py",
+        "type": "service_launcher",
+        "confidence": "strong",
+        "evidence": [
+          {
+            "file": "services/security_scanner/main.py",
+            "source": "directory_structure",
+            "detail": "main.py located directly inside a component directory",
+            "confidence": "strong"
+          }
+        ]
+      }
+    ],
+    "application_modules": [
+      {
+        "file": "services/admin_console/main.py",
+        "type": "python_web_application",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/admin_console/main.py",
+            "source": "python_ast",
+            "detail": "uvicorn.run(...) detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/architecture_generator/main.py",
+        "type": "python_web_application",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/architecture_generator/main.py",
+            "source": "python_ast",
+            "detail": "uvicorn.run(...) detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/cicd_pipeline/main.py",
+        "type": "python_web_application",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/cicd_pipeline/main.py",
+            "source": "python_ast",
+            "detail": "uvicorn.run(...) detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/cloud_deployer/main.py",
+        "type": "python_web_application",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/cloud_deployer/main.py",
+            "source": "python_ast",
+            "detail": "uvicorn.run(...) detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/finops_optimizer/main.py",
+        "type": "python_web_application",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/finops_optimizer/main.py",
+            "source": "python_ast",
+            "detail": "uvicorn.run(...) detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/iac_generator/main.py",
+        "type": "python_web_application",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/iac_generator/main.py",
+            "source": "python_ast",
+            "detail": "uvicorn.run(...) detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/observability_setup/main.py",
+        "type": "python_web_application",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/observability_setup/main.py",
+            "source": "python_ast",
+            "detail": "uvicorn.run(...) detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/requirement_analysis/main.py",
+        "type": "python_web_application",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/requirement_analysis/main.py",
+            "source": "python_ast",
+            "detail": "uvicorn.run(...) detected",
+            "confidence": "high"
+          }
+        ]
+      },
+      {
+        "file": "services/security_scanner/main.py",
+        "type": "python_web_application",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "services/security_scanner/main.py",
+            "source": "python_ast",
+            "detail": "uvicorn.run(...) detected",
+            "confidence": "high"
+          }
+        ]
+      }
+    ],
+    "scripts": [
+      {
+        "file": "start.sh",
+        "type": "shell_script",
+        "confidence": "high",
+        "evidence": [
+          {
+            "file": "start.sh",
+            "source": "file_extension",
+            "detail": "Shell script detected",
+            "confidence": "high"
+          }
+        ]
+      }
+    ]
+  },
+  "important_files": [
+    {
+      "path": ".python-version",
+      "reason": "runtime_version"
+    },
+    {
+      "path": "README.md",
+      "reason": "project_documentation"
+    },
+    {
+      "path": "docker-compose.yml",
+      "reason": "container_configuration"
+    },
+    {
+      "path": "pyproject.toml",
+      "reason": "project_manifest"
+    },
+    {
+      "path": "services/admin_console/pyproject.toml",
+      "reason": "project_manifest"
+    },
+    {
+      "path": "services/architecture_generator/pyproject.toml",
+      "reason": "project_manifest"
+    },
+    {
+      "path": "services/cicd_pipeline/pyproject.toml",
+      "reason": "project_manifest"
+    },
+    {
+      "path": "services/cloud_deployer/pyproject.toml",
+      "reason": "project_manifest"
+    },
+    {
+      "path": "services/finops_optimizer/pyproject.toml",
+      "reason": "project_manifest"
+    },
+    {
+      "path": "services/iac_generator/pyproject.toml",
+      "reason": "project_manifest"
+    },
+    {
+      "path": "services/observability_setup/pyproject.toml",
+      "reason": "project_manifest"
+    },
+    {
+      "path": "services/requirement_analysis/.env.example",
+      "reason": "environment_configuration"
+    },
+    {
+      "path": "services/requirement_analysis/pyproject.toml",
+      "reason": "project_manifest"
+    },
+    {
+      "path": "services/security_scanner/pyproject.toml",
+      "reason": "project_manifest"
+    }
+  ],
+  "files": [
+    {
+      "path": ".gitignore",
+      "type": "other",
+      "language": null,
+      "role": "other",
+      "size_bytes": 360,
+      "analyze": false
+    },
+    {
+      "path": ".python-version",
+      "type": "configuration",
+      "language": null,
+      "role": "configuration",
+      "size_bytes": 5,
+      "analyze": true
+    },
+    {
+      "path": "README.md",
+      "type": "configuration",
+      "language": null,
+      "role": "configuration",
+      "size_bytes": 3329,
+      "analyze": true
+    },
+    {
+      "path": "docker-compose.yml",
+      "type": "configuration",
+      "language": null,
+      "role": "configuration",
+      "size_bytes": 820,
+      "analyze": true
+    },
+    {
+      "path": "main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 15253,
+      "analyze": true
+    },
+    {
+      "path": "pyproject.toml",
+      "type": "configuration",
+      "language": null,
+      "role": "configuration",
+      "size_bytes": 366,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/app/__init__.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 41,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/app/admin_router.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 42998,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/app/auth.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 11719,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/app/cache.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 10916,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/app/catalog.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 12300,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/app/dashboard_page.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 105077,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/app/database.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 9718,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/app/login_page.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 15932,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/app/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 4582,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/app/models.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 8016,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/app/schemas.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 5860,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/app/security.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 3367,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/app/security_models.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 2297,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/app/seed.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 13340,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/app/sync_catalog.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 1180,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/app/sync_helper.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 41706,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/app/terminal_ui.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 11827,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 172,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/pyproject.toml",
+      "type": "configuration",
+      "language": null,
+      "role": "configuration",
+      "size_bytes": 480,
+      "analyze": true
+    },
+    {
+      "path": "services/admin_console/static/fonts/fonts.css",
+      "type": "source",
+      "language": "CSS",
+      "role": "vendor_or_static",
+      "size_bytes": 805,
+      "analyze": false
+    },
+    {
+      "path": "services/admin_console/static/js/tailwind.js",
+      "type": "source",
+      "language": "JavaScript",
+      "role": "vendor_or_static",
+      "size_bytes": 407279,
+      "analyze": false
+    },
+    {
+      "path": "services/admin_console/tests/test_admin_service.py",
+      "type": "source",
+      "language": "Python",
+      "role": "test",
+      "size_bytes": 3411,
+      "analyze": false
+    },
+    {
+      "path": "services/architecture_generator/app/__init__.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 114,
+      "analyze": true
+    },
+    {
+      "path": "services/architecture_generator/app/generator.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 11381,
+      "analyze": true
+    },
+    {
+      "path": "services/architecture_generator/app/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 3629,
+      "analyze": true
+    },
+    {
+      "path": "services/architecture_generator/app/schemas.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 2883,
+      "analyze": true
+    },
+    {
+      "path": "services/architecture_generator/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 181,
+      "analyze": true
+    },
+    {
+      "path": "services/architecture_generator/pyproject.toml",
+      "type": "configuration",
+      "language": null,
+      "role": "configuration",
+      "size_bytes": 324,
+      "analyze": true
+    },
+    {
+      "path": "services/architecture_generator/tests/test_generator.py",
+      "type": "source",
+      "language": "Python",
+      "role": "test",
+      "size_bytes": 3470,
+      "analyze": false
+    },
+    {
+      "path": "services/cicd_pipeline/app/__init__.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 41,
+      "analyze": true
+    },
+    {
+      "path": "services/cicd_pipeline/app/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 1874,
+      "analyze": true
+    },
+    {
+      "path": "services/cicd_pipeline/app/pipeline_engine.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 4229,
+      "analyze": true
+    },
+    {
+      "path": "services/cicd_pipeline/app/schemas.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 796,
+      "analyze": true
+    },
+    {
+      "path": "services/cicd_pipeline/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 172,
+      "analyze": true
+    },
+    {
+      "path": "services/cicd_pipeline/pyproject.toml",
+      "type": "configuration",
+      "language": null,
+      "role": "configuration",
+      "size_bytes": 318,
+      "analyze": true
+    },
+    {
+      "path": "services/cicd_pipeline/tests/test_service.py",
+      "type": "source",
+      "language": "Python",
+      "role": "test",
+      "size_bytes": 1659,
+      "analyze": false
+    },
+    {
+      "path": "services/cloud_deployer/app/__init__.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 42,
+      "analyze": true
+    },
+    {
+      "path": "services/cloud_deployer/app/deployer_engine.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 2045,
+      "analyze": true
+    },
+    {
+      "path": "services/cloud_deployer/app/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 2493,
+      "analyze": true
+    },
+    {
+      "path": "services/cloud_deployer/app/schemas.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 1411,
+      "analyze": true
+    },
+    {
+      "path": "services/cloud_deployer/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 173,
+      "analyze": true
+    },
+    {
+      "path": "services/cloud_deployer/pyproject.toml",
+      "type": "configuration",
+      "language": null,
+      "role": "configuration",
+      "size_bytes": 320,
+      "analyze": true
+    },
+    {
+      "path": "services/cloud_deployer/tests/test_service.py",
+      "type": "source",
+      "language": "Python",
+      "role": "test",
+      "size_bytes": 1136,
+      "analyze": false
+    },
+    {
+      "path": "services/finops_optimizer/app/__init__.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 44,
+      "analyze": true
+    },
+    {
+      "path": "services/finops_optimizer/app/finops_engine.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 4043,
+      "analyze": true
+    },
+    {
+      "path": "services/finops_optimizer/app/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 1843,
+      "analyze": true
+    },
+    {
+      "path": "services/finops_optimizer/app/schemas.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 1186,
+      "analyze": true
+    },
+    {
+      "path": "services/finops_optimizer/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 175,
+      "analyze": true
+    },
+    {
+      "path": "services/finops_optimizer/pyproject.toml",
+      "type": "configuration",
+      "language": null,
+      "role": "configuration",
+      "size_bytes": 316,
+      "analyze": true
+    },
+    {
+      "path": "services/finops_optimizer/tests/test_service.py",
+      "type": "source",
+      "language": "Python",
+      "role": "test",
+      "size_bytes": 1004,
+      "analyze": false
+    },
+    {
+      "path": "services/iac_generator/app/__init__.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 41,
+      "analyze": true
+    },
+    {
+      "path": "services/iac_generator/app/iac_engine.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 6262,
+      "analyze": true
+    },
+    {
+      "path": "services/iac_generator/app/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 1819,
+      "analyze": true
+    },
+    {
+      "path": "services/iac_generator/app/schemas.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 1282,
+      "analyze": true
+    },
+    {
+      "path": "services/iac_generator/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 172,
+      "analyze": true
+    },
+    {
+      "path": "services/iac_generator/pyproject.toml",
+      "type": "configuration",
+      "language": null,
+      "role": "configuration",
+      "size_bytes": 325,
+      "analyze": true
+    },
+    {
+      "path": "services/iac_generator/tests/test_service.py",
+      "type": "source",
+      "language": "Python",
+      "role": "test",
+      "size_bytes": 1174,
+      "analyze": false
+    },
+    {
+      "path": "services/observability_setup/app/__init__.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 47,
+      "analyze": true
+    },
+    {
+      "path": "services/observability_setup/app/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 1931,
+      "analyze": true
+    },
+    {
+      "path": "services/observability_setup/app/observability_engine.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 4957,
+      "analyze": true
+    },
+    {
+      "path": "services/observability_setup/app/schemas.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 1053,
+      "analyze": true
+    },
+    {
+      "path": "services/observability_setup/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 178,
+      "analyze": true
+    },
+    {
+      "path": "services/observability_setup/pyproject.toml",
+      "type": "configuration",
+      "language": null,
+      "role": "configuration",
+      "size_bytes": 321,
+      "analyze": true
+    },
+    {
+      "path": "services/observability_setup/tests/test_service.py",
+      "type": "source",
+      "language": "Python",
+      "role": "test",
+      "size_bytes": 1104,
+      "analyze": false
+    },
+    {
+      "path": "services/requirement_analysis/.env.example",
+      "type": "configuration",
+      "language": null,
+      "role": "configuration",
+      "size_bytes": 684,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/__init__.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 104,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/admin_router.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 42258,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/ai_advisor.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 24687,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/auth.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 11719,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/cache.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 10916,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/catalog.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 12300,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/dashboard_page.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 103606,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/database.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 9718,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/engine.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 45615,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/login_page.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 15932,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 9310,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/models.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 8016,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/module1_page.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 70729,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/requirements_router.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 18137,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/schemas.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 6567,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/security.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 3367,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/security_models.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 2304,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/seed.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 13340,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/sync_catalog.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 1180,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/sync_helper.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 41706,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/app/terminal_ui.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 11827,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/aws_regions_reference.json",
+      "type": "configuration",
+      "language": null,
+      "role": "configuration",
+      "size_bytes": 55409,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 179,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/pyproject.toml",
+      "type": "configuration",
+      "language": null,
+      "role": "configuration",
+      "size_bytes": 469,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/scratch/aws_regions_reference.json",
+      "type": "configuration",
+      "language": null,
+      "role": "configuration",
+      "size_bytes": 55409,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/scratch/gen_json.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 17359,
+      "analyze": true
+    },
+    {
+      "path": "services/requirement_analysis/static/fonts/fonts.css",
+      "type": "source",
+      "language": "CSS",
+      "role": "vendor_or_static",
+      "size_bytes": 805,
+      "analyze": false
+    },
+    {
+      "path": "services/requirement_analysis/static/js/tailwind.js",
+      "type": "source",
+      "language": "JavaScript",
+      "role": "vendor_or_static",
+      "size_bytes": 407279,
+      "analyze": false
+    },
+    {
+      "path": "services/requirement_analysis/tests/test_admin_auth.py",
+      "type": "source",
+      "language": "Python",
+      "role": "test",
+      "size_bytes": 3336,
+      "analyze": false
+    },
+    {
+      "path": "services/requirement_analysis/tests/test_admin_sync.py",
+      "type": "source",
+      "language": "Python",
+      "role": "test",
+      "size_bytes": 2582,
+      "analyze": false
+    },
+    {
+      "path": "services/requirement_analysis/tests/test_engine.py",
+      "type": "source",
+      "language": "Python",
+      "role": "test",
+      "size_bytes": 21896,
+      "analyze": false
+    },
+    {
+      "path": "services/requirement_analysis/tests/test_requirements_service.py",
+      "type": "source",
+      "language": "Python",
+      "role": "test",
+      "size_bytes": 12508,
+      "analyze": false
+    },
+    {
+      "path": "services/security_scanner/app/__init__.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 44,
+      "analyze": true
+    },
+    {
+      "path": "services/security_scanner/app/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 1801,
+      "analyze": true
+    },
+    {
+      "path": "services/security_scanner/app/scanner_engine.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 5276,
+      "analyze": true
+    },
+    {
+      "path": "services/security_scanner/app/schemas.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 1044,
+      "analyze": true
+    },
+    {
+      "path": "services/security_scanner/main.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 175,
+      "analyze": true
+    },
+    {
+      "path": "services/security_scanner/pyproject.toml",
+      "type": "configuration",
+      "language": null,
+      "role": "configuration",
+      "size_bytes": 329,
+      "analyze": true
+    },
+    {
+      "path": "services/security_scanner/tests/test_service.py",
+      "type": "source",
+      "language": "Python",
+      "role": "test",
+      "size_bytes": 1647,
+      "analyze": false
+    },
+    {
+      "path": "simple_scanner_old.py",
+      "type": "source",
+      "language": "Python",
+      "role": "source",
+      "size_bytes": 45557,
+      "analyze": true
+    },
+    {
+      "path": "start.sh",
+      "type": "source",
+      "language": "Shell",
+      "role": "source",
+      "size_bytes": 74,
+      "analyze": true
+    },
+    {
+      "path": "static/fonts/fonts.css",
+      "type": "source",
+      "language": "CSS",
+      "role": "vendor_or_static",
+      "size_bytes": 805,
+      "analyze": false
+    },
+    {
+      "path": "static/js/tailwind.js",
+      "type": "source",
+      "language": "JavaScript",
+      "role": "vendor_or_static",
+      "size_bytes": 407279,
+      "analyze": false
+    },
+    {
+      "path": "uv.lock",
+      "type": "configuration",
+      "language": null,
+      "role": "configuration",
+      "size_bytes": 120315,
+      "analyze": true
+    }
+  ],
+  "scanner_artifacts": [
+    "prompt.txt",
+    "repo_scan_prompt.txt",
+    "simple_scanner.py"
+  ],
+  "ignored_runtime_or_binary_files": {
+    "count": 300,
+    "examples": [
+      "catalog_us-east-2.db-wal",
+      "test_admin_security.db",
+      "catalog_ap-south-1.db-shm",
+      "test_catalog_ap-south-1.db-shm",
+      "catalog_eu-west-1.db",
+      "catalog_eu-west-1.db-wal",
+      "requirements.db-wal",
+      "test_requirements.db",
+      "catalog_us-west-2.db-wal",
+      "catalog_ap-south-1.db-wal",
+      "test_catalog_us-west-2.db-wal",
+      "test_requirements.db-shm",
+      "test_catalog_us-west-2.db",
+      "simple_scanner.py",
+      "catalog_eu-west-1.db-shm",
+      "catalog_us-east-2.db-shm",
+      "prompt.txt",
+      "catalog_us-east-1.db-wal",
+      "catalog_us-east-1.db",
+      "test_catalog_us-east-1.db-shm",
+      "test_catalog_us-east-1.db",
+      "test_catalog_us-east-1.db-wal",
+      "catalog_us-west-2.db-shm",
+      "test_catalog_ap-south-1.db",
+      "requirements.db"
+    ]
+  },
+  "analysis_notes": [
+    "Dependency-based database detection is a hint only. Configuration or runtime infrastructure evidence can upgrade a technology to confirmed.",
+    "The scanner does not infer architecture, deployment topology, cloud resources, or scaling requirements.",
+    "Static, vendor, test, generated, binary, and runtime artifacts are excluded from primary architecture analysis.",
+    "Environment variable values are never collected.",
+    "Unknown technologies are not guessed.",
+    "Every important detected technology should have repository evidence."
+  ]
+}

@@ -11,6 +11,7 @@ import uuid
 import logging
 import httpx
 import time
+from pydantic import BaseModel, Field
 
 from app.schemas import RequirementInput, RequirementProfileOutput, NaturalLanguagePromptRequest
 from app.models import RequirementProject, EC2Catalog, RDSCatalog
@@ -20,6 +21,57 @@ from app.engine import analyze_and_explain_requirements
 from app.cache import cache_manager
 from app.ai_advisor import ai_parse_requirements_with_llm_fallback
 from app.instance_finder import InstanceFinderInput, InstanceFinderOutput, evaluate_decision_matrix
+
+
+
+# ---------------------------------------------------------------------------
+# Request model for repository-scan endpoint (Task 3)
+# ---------------------------------------------------------------------------
+
+class AnalyzeRepoRequest(BaseModel):
+    repo_path: Optional[str] = Field(
+        default=None,
+        description="Absolute or relative path to the repository root directory to scan",
+        examples=["/home/user/my-project", "../../my-repo"],
+    )
+    repo_url: Optional[str] = Field(
+        default=None,
+        description="Optional Git repository URL",
+    )
+    traffic_profile: Optional[str] = Field(
+        default=None,
+        description="Traffic scale profile",
+    )
+    budget_tier: Optional[str] = Field(
+        default=None,
+        description="Budget tier",
+    )
+    project_name: Optional[str] = Field(
+        None,
+        description="Override the project name (defaults to repo folder name)",
+    )
+    monthly_budget: Optional[float] = Field(
+        None,
+        ge=0.0,
+        description="Optional monthly cost cap in USD forwarded to the sizing engine",
+    )
+    traffic_scale: Optional[str] = Field(
+        None,
+        description="Force traffic scale: hobby_dev / growth / production",
+    )
+    reliability: Optional[str] = Field(
+        None,
+        description="Force reliability tier: dev_testing / production_safe / mission_critical",
+    )
+    target_region: Optional[str] = Field(
+        default="us-east-1",
+        description="Target AWS region for sizing catalog lookup",
+    )
+    auto_save: bool = Field(
+        default=True,
+        description="Whether to persist the analyzed project in requirements.db",
+    )
+
 
 logger = logging.getLogger("requirement-analysis-router")
 
@@ -32,6 +84,10 @@ def _hash_input(payload: RequirementInput) -> str:
     serialized = json.dumps(payload.model_dump(), sort_keys=True)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:16]
 
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
 
 @requirements_router.post("/api/v1/requirements/parse-prompt", status_code=status.HTTP_200_OK)
 async def parse_prompt_endpoint(payload: NaturalLanguagePromptRequest):
@@ -125,6 +181,141 @@ async def ai_analyze_requirements_endpoint(
     }
 
 
+@requirements_router.post("/api/v1/repo/scan-and-size", status_code=status.HTTP_200_OK)
+@requirements_router.post("/api/v1/repo/scan", status_code=status.HTTP_200_OK)
+@requirements_router.post("/api/v1/requirements/analyze-repo", status_code=status.HTTP_200_OK)
+async def analyze_repo_endpoint(
+    payload: AnalyzeRepoRequest,
+    db: AsyncSession = Depends(get_requirements_db)
+):
+    """
+    Repository-Driven Architecture Analysis — Module 3 Integration.
+
+    Scans a local repository using the repo_analyzer library (zero-network,
+    zero-LLM, deterministic), maps the detected tech stack to a RequirementInput,
+    runs the full Module 1 sizing engine against the regional SQLite catalog, and returns:
+
+    - ``scan_result``   — raw repository fingerprint (languages, frameworks, DBs, ports, …)
+    - ``parsed_input``  — the mapped RequirementInput derived from the scan
+    - ``data``          — full Module 1 sizing output (costs, rationales, FinOps, AI advice)
+    - ``project_id``    — SQLite requirements.db record ID (when auto_save=True)
+
+    The bridge is deterministic — no LLM calls, no guessing.
+    Every mapping decision is traceable to a concrete Finding in the ApplicationProfile.
+    """
+    from pathlib import Path
+    import os
+
+    # 1. Validate repository path
+    raw_path = payload.repo_path
+    if not raw_path:
+        raw_path = os.getenv("WORKSPACE_ROOT", "/home/prathap32/GP/devops-lab/projects/aether-cloud")
+    repo_path = Path(raw_path).expanduser().resolve()
+    if not repo_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Repository path does not exist: {raw_path}"
+        )
+    if not repo_path.is_dir():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Path is not a directory: {raw_path}"
+        )
+
+    # 2. Run repo_analyzer bridge (blocking but fast — pure Python file scan)
+    try:
+        from app.repo_bridge import analyze_repository
+        bridge_result = analyze_repository(
+            repo_path,
+            project_name_override=payload.project_name,
+            monthly_budget=payload.monthly_budget,
+            traffic_scale_override=payload.traffic_scale,
+            reliability_override=payload.reliability,
+        )
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"repo_analyzer not installed: {exc}"
+        )
+    except Exception as exc:
+        logger.error("repo_bridge analysis failed: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Repository scan failed: {str(exc)}"
+        )
+
+    req_input = bridge_result.requirement_input
+    target_reg = payload.target_region or "us-east-1"
+
+    # 3. Run the full Module 1 sizing engine (with Redis L1 cache)
+    cache_key = f"req:repo_analysis:{_hash_input(req_input)}:{target_reg}"
+    cached_result = await cache_manager.get_json(cache_key)
+
+    if cached_result is not None:
+        logger.info("Redis L1 cache hit for repo analysis %s", cache_key)
+        result = cached_result
+    else:
+        logger.info(
+            "Running sizing engine for repo '%s' (region=%s) …",
+            bridge_result.repo_name, target_reg
+        )
+        cat_sf = get_sqlite_sessionmaker(target_reg)
+        async with cat_sf() as cat_session:
+            result = await analyze_and_explain_requirements(req_input, cat_session)
+        await cache_manager.set_json(cache_key, result, ttl=3600)
+
+    # 4. Optionally persist in requirements.db
+    project_id = None
+    if payload.auto_save:
+        project_id = str(uuid.uuid4())
+        project = RequirementProject(
+            id=project_id,
+            project_name=req_input.project_name,
+            description=(
+                f"Auto-analyzed from repository scan of '{bridge_result.repo_name}'. "
+                f"Detected: {', '.join(bridge_result.languages_detected[:5])}. "
+                f"Monorepo: {bridge_result.is_monorepo}."
+            ),
+            stream=req_input.stream.value,
+            target_region=target_reg,
+            traffic_scale=req_input.traffic_scale.value,
+            reliability=req_input.reliability.value,
+            security_need=req_input.security_need.value,
+            data_storage_gb=req_input.data_storage_gb,
+            monthly_budget=req_input.monthly_budget,
+            tech_stack=json.dumps(req_input.technology.model_dump()),
+            operations=json.dumps(req_input.operations.model_dump()),
+            monitoring=json.dumps(req_input.monitoring.model_dump()),
+            architecture_tier=result["architecture_tier"],
+            estimated_monthly_cost=result["total_estimated_cost"],
+            cost_breakdown=json.dumps(result["cost_breakdown"]),
+            service_rationales=json.dumps(result["service_rationales"]),
+            cost_optimizations=json.dumps(result["cost_optimizations"]),
+            profile_output=json.dumps(result["profile"]),
+            status="ANALYZED",
+        )
+        db.add(project)
+        await db.commit()
+        await db.refresh(project)
+        logger.info("Persisted repo-analyzed project %s in requirements.db", project_id)
+
+    return {
+        "status": "SUCCESS",
+        "source": "repository_scan",
+        "repo_path": str(repo_path),
+        "project_id": project_id,
+        "scan_result": bridge_result.to_dict(),
+        "parsed_input": req_input.model_dump(),
+        "data": result,
+        "data_source": {
+            "sqlite_catalog_partition": f"catalog_{target_reg}.db",
+            "redis_cache": "aether_redis",
+            "repo_analyzer": "rules-only, zero-network, zero-LLM scan",
+            "pricing_guarantee": "100% Grounded in Official AWS Pricing (Zero Hallucination)",
+        },
+    }
+
+
 @requirements_router.post("/api/v1/requirements/analyze", status_code=status.HTTP_200_OK)
 async def analyze_requirements_endpoint(
     payload: RequirementInput,
@@ -138,7 +329,7 @@ async def analyze_requirements_endpoint(
     """
     cache_key = f"req:analysis:{_hash_input(payload)}"
     cached_result = await cache_manager.get_json(cache_key)
-    
+
     if cached_result is not None:
         logger.info(f"Redis L1 cache hit for analysis {cache_key}")
         result = cached_result
@@ -396,13 +587,13 @@ async def dispatch_to_module_2(
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(MODULE_2_URL, json=profile_dict)
-            
+
             if response.status_code != 200:
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
                     detail=f"Module 2 returned error {response.status_code}: {response.text}"
                 )
-            
+
             graph_data = response.json()
             elapsed_ms = int((time.time() - start_time) * 1000)
 

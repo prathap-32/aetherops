@@ -109,25 +109,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+ROOT_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
+FRONTEND_DIST = os.path.join(ROOT_DIR, "frontend", "dist")
+FRONTEND_ASSETS = os.path.join(FRONTEND_DIST, "assets")
+
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-app.include_router(admin_router)
+if os.path.exists(FRONTEND_ASSETS):
+    app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS), name="react_assets")
 
 static_dir = os.path.join(BASE_DIR, "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+app.include_router(admin_router)
 
-from fastapi import Request
-
-@app.get("/")
-async def root(request: Request):
-    from app.auth import SESSION_COOKIE_NAME, decode_access_token
-    cookie_token = request.cookies.get(SESSION_COOKIE_NAME)
-    if cookie_token and decode_access_token(cookie_token):
-        return RedirectResponse(url="/admin")
-    return RedirectResponse(url="/admin/login?redirect=/admin")
-
+from app.gateway_router import gateway_router
+app.include_router(gateway_router)
 
 
 @app.get("/health", status_code=status.HTTP_200_OK)
@@ -138,3 +137,4 @@ async def health_check():
         "port": 8000,
         "timestamp": time.time()
     }
+
