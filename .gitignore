@@ -35,4 +35,4 @@ Thumbs.db
 .vscode/
 .idea/
 
-fronetend/node_modules
+frontend/node_modules
