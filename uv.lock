@@ -7,9 +7,11 @@ members = [
     "admin-console-service",
     "aether-cloud",
     "architecture-generator-service",
+    "auth-service",
     "cicd-pipeline-service",
     "cloud-deployer-service",
     "finops-optimizer-service",
+    "gateway-service",
     "iac-generator-service",
     "observability-setup-service",
     "project-and-environment-management",
@@ -198,6 +200,23 @@ wheels = [
 ]
 
 [[package]]
+name = "auth-service"
+version = "1.0.0"
+source = { virtual = "services/auth_service" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "pydantic" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.110.0" },
+    { name = "pydantic", specifier = ">=2.6.0" },
+    { name = "uvicorn", specifier = ">=0.28.0" },
+]
+
+[[package]]
 name = "bcrypt"
 version = "5.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -359,6 +378,27 @@ wheels = [
 name = "finops-optimizer-service"
 version = "1.0.0"
 source = { virtual = "services/finops_optimizer" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pytest" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.110.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "pydantic", specifier = ">=2.6.0" },
+    { name = "pytest", specifier = ">=8.0.0" },
+    { name = "uvicorn", specifier = ">=0.28.0" },
+]
+
+[[package]]
+name = "gateway-service"
+version = "1.0.0"
+source = { virtual = "services/gateway" }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
@@ -844,23 +884,6 @@ wheels = [
 ]
 
 [[package]]
-name = "repo-analyzer"
-version = "0.1.0"
-source = { editable = "../repo_analyzer" }
-dependencies = [
-    { name = "pydantic" },
-    { name = "pyyaml" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "pydantic", specifier = ">=2" },
-    { name = "pytest", marker = "extra == 'dev'" },
-    { name = "pyyaml", specifier = ">=6" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "repo-analyzer-service"
 version = "1.0.0"
 source = { virtual = "services/repo_analyzer_service" }
@@ -869,7 +892,6 @@ dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
     { name = "pyyaml" },
-    { name = "repo-analyzer" },
     { name = "rich" },
     { name = "uvicorn" },
 ]
@@ -880,7 +902,6 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "pydantic", specifier = ">=2.6.0" },
     { name = "pyyaml", specifier = ">=6.0.0" },
-    { name = "repo-analyzer", editable = "../repo_analyzer" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "uvicorn", specifier = ">=0.28.0" },
 ]

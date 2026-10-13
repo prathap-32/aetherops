@@ -62,35 +62,38 @@ export async function apiRequest(endpoint, options = {}) {
   return data;
 }
 
+// Auth API points directly to auth microservice (port 7999)
+const AUTH_SERVICE_URL = 'http://localhost:7999';
+
 export const authApi = {
   login: (username, password) =>
-    apiRequest('/api/v1/auth/login', {
+    apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/login`, {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     }),
 
   register: (username, email, password) =>
-    apiRequest('/api/v1/auth/register', {
+    apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/register`, {
       method: 'POST',
       body: JSON.stringify({ username, email, password }),
     }),
 
   oauthCallback: (provider, username, email) =>
-    apiRequest('/api/v1/auth/oauth-callback', {
+    apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/oauth-callback`, {
       method: 'POST',
       body: JSON.stringify({ provider, username, email }),
     }),
 
-  getMe: () => apiRequest('/api/v1/auth/me'),
+  getMe: () => apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/me`),
 
   updateProfile: (username, email) =>
-    apiRequest('/api/v1/auth/profile', {
+    apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/profile`, {
       method: 'PUT',
       body: JSON.stringify({ username, email }),
     }),
 
   logout: () =>
-    apiRequest('/api/v1/auth/logout', { method: 'POST' }).catch(() => {}),
+    apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/logout`, { method: 'POST' }).catch(() => {}),
 };
 
 export const projectsApi = {

@@ -166,42 +166,42 @@ export default function LoginPage({ onLoginSuccess }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden selection:bg-blue-600 selection:text-white">
-      {/* Background Glow Orbs */}
-      <div className="absolute top-0 -left-20 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 -right-20 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-[var(--bg-page)] dark:bg-slate-900 flex flex-col justify-center py-16 sm:px-6 lg:px-8 relative overflow-hidden selection:bg-[var(--accent-primary)] selection:text-white">
+      {/* Background Glow Orbs - Warmer tones */}
+      <div className="absolute top-0 -left-20 w-96 h-96 bg-amber-600/8 dark:bg-amber-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 -right-20 w-96 h-96 bg-orange-600/8 dark:bg-orange-600/10 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="sm:mx-auto sm:w-full sm:max-w-md z-10">
-        <div className="flex items-center justify-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
-            <Shield className="w-6 h-6" />
+      <div className="sm:mx-auto sm:w-full sm:max-w-md z-10 px-4">
+        <div className="flex items-center justify-center gap-4 mb-3">
+          <div className="w-12 h-12 rounded-xl bg-[var(--accent-primary)] flex items-center justify-center text-white shadow-lg shadow-amber-500/25 dark:shadow-amber-500/30">
+            <Shield className="w-7 h-7" />
           </div>
           <div>
-            <h2 className="text-2xl font-black tracking-tight text-white">AETHER CLOUD</h2>
-            <p className="text-[11px] font-medium uppercase tracking-wider text-blue-400">
+            <h2 className="text-3xl font-black tracking-tight text-[var(--text-primary)]">AETHER CLOUD</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--accent-primary)]">
               Autonomous Cloud Platform
             </p>
           </div>
         </div>
-        <p className="mt-3 text-center text-xs text-slate-400">
+        <p className="mt-4 text-center text-sm text-[var(--text-muted)] max-w-sm mx-auto leading-relaxed">
           Decoupled Multi-Service DevOps & Cloud Architecture Engine
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md z-10">
-        <div className="bg-slate-800/80 backdrop-blur-xl py-8 px-6 shadow-2xl rounded-2xl border border-slate-700 sm:px-10">
+      <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-md z-10 px-4">
+        <div className="bg-[var(--bg-surface)] dark:bg-slate-800/80 dark:backdrop-blur-xl py-10 px-8 shadow-[var(--card-shadow)] rounded-2xl border border-[var(--border)] dark:border-slate-700 sm:px-12">
           {/* Tabs: Sign In vs Sign Up */}
-          <div className="flex items-center gap-1 p-1 bg-slate-900/80 rounded-xl mb-6 border border-slate-700/60">
+          <div className="flex items-center gap-2 p-1.5 bg-[var(--bg-subtle)] dark:bg-slate-900/80 rounded-xl mb-8 border border-[var(--border)] dark:border-slate-700/60">
             <button
               type="button"
               onClick={() => {
                 setActiveTab('login');
                 setErrorMessage('');
               }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
+              className={`flex-1 py-3 text-sm font-bold rounded-lg transition ${
                 activeTab === 'login'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-[var(--accent-primary)] text-white shadow-md'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
               Sign In
@@ -212,10 +212,10 @@ export default function LoginPage({ onLoginSuccess }) {
                 setActiveTab('register');
                 setErrorMessage('');
               }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
+              className={`flex-1 py-3 text-sm font-bold rounded-lg transition ${
                 activeTab === 'register'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-[var(--accent-primary)] text-white shadow-md'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
               Create Account
@@ -223,20 +223,20 @@ export default function LoginPage({ onLoginSuccess }) {
           </div>
 
           {errorMessage && (
-            <div className="mb-5 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <div className="mb-6 p-4 rounded-xl bg-[var(--status-error-bg)] border border-red-200 dark:border-rose-500/20 text-[var(--status-error-text)] dark:text-rose-300 text-sm flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 shrink-0" />
               <span>{errorMessage}</span>
             </div>
           )}
 
           {/* Social OAuth Buttons */}
-          <div className="space-y-3 mb-6">
+          <div className="space-y-4 mb-8">
             <button
               type="button"
               onClick={handleGoogleOAuth}
-              className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border border-slate-600 bg-slate-700/50 hover:bg-slate-700 text-xs font-semibold text-white shadow-xs transition cursor-pointer"
+              className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl border border-[var(--border)] dark:border-slate-600 bg-[var(--bg-surface)] dark:bg-slate-700/50 hover:bg-[var(--bg-subtle)] dark:hover:bg-slate-700 text-sm font-semibold text-[var(--text-primary)] dark:text-white shadow-sm transition cursor-pointer"
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path
                   fill="#4285F4"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -260,19 +260,19 @@ export default function LoginPage({ onLoginSuccess }) {
             <button
               type="button"
               onClick={handleGitHubOAuth}
-              className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border border-slate-600 bg-slate-700/50 hover:bg-slate-700 text-xs font-semibold text-white shadow-xs transition cursor-pointer"
+              className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl border border-[var(--border)] dark:border-slate-600 bg-[var(--bg-surface)] dark:bg-slate-700/50 hover:bg-[var(--bg-subtle)] dark:hover:bg-slate-700 text-sm font-semibold text-[var(--text-primary)] dark:text-white shadow-sm transition cursor-pointer"
             >
-              <FolderGit2 className="w-4 h-4 text-white" />
+              <FolderGit2 className="w-5 h-5" />
               <span>Continue with GitHub</span>
             </button>
           </div>
 
-          <div className="relative my-6">
+          <div className="relative my-8">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-700" />
+              <div className="w-full border-t border-[var(--border)] dark:border-slate-700" />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="px-3 bg-slate-800 text-slate-400 font-medium uppercase tracking-wider text-[10px]">
+              <span className="px-4 bg-[var(--bg-surface)] dark:bg-slate-800 text-[var(--text-muted)] font-semibold uppercase tracking-widest text-[11px]">
                 Or with credentials
               </span>
             </div>
@@ -280,36 +280,36 @@ export default function LoginPage({ onLoginSuccess }) {
 
           {/* Sign In Form */}
           {activeTab === 'login' ? (
-            <form onSubmit={handleSignIn} className="space-y-4">
+            <form onSubmit={handleSignIn} className="space-y-6">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
                   Username or Handle
                 </label>
                 <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <User className="w-5 h-5 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     placeholder="e.g. admin or developer"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-medium"
+                    className="w-full h-11 pl-11 pr-4 bg-[var(--bg-surface)] dark:bg-slate-900 border border-[var(--border)] dark:border-slate-700 rounded-xl text-sm text-[var(--text-primary)] dark:text-white placeholder-[var(--text-muted)] dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] font-medium"
                     required
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
                   Password
                 </label>
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Lock className="w-5 h-5 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="password"
                     placeholder="••••••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-medium"
+                    className="w-full h-11 pl-11 pr-4 bg-[var(--bg-surface)] dark:bg-slate-900 border border-[var(--border)] dark:border-slate-700 rounded-xl text-sm text-[var(--text-primary)] dark:text-white placeholder-[var(--text-muted)] dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] font-medium"
                     required
                   />
                 </div>
@@ -319,90 +319,90 @@ export default function LoginPage({ onLoginSuccess }) {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-500/25 transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                  className="w-full h-12 bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-white text-sm font-bold rounded-xl shadow-lg shadow-amber-500/20 dark:shadow-amber-500/25 transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   {isLoading ? (
                     <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <RefreshCw className="w-5 h-5 animate-spin" />
                       Authenticating...
                     </>
                   ) : (
                     <>
                       Sign In to Dashboard
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight className="w-5 h-5" />
                     </>
                   )}
                 </button>
               </div>
 
-              <div className="text-center pt-2">
-                <p className="text-[11px] text-slate-500">
-                  Default Operator: <code className="text-slate-400 font-mono">admin</code> / <code className="text-slate-400 font-mono">admin123</code>
+              <div className="text-center pt-3 border-t border-[var(--border)] dark:border-slate-700">
+                <p className="text-xs text-[var(--text-muted)]">
+                  Default Operator: <code className="text-[var(--text-secondary)] font-mono font-semibold">admin</code> / <code className="text-[var(--text-secondary)] font-mono font-semibold">admin123</code>
                 </p>
               </div>
             </form>
           ) : (
             /* Sign Up Form */
-            <form onSubmit={handleSignUp} className="space-y-4">
+            <form onSubmit={handleSignUp} className="space-y-6">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
                   Username
                 </label>
                 <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <User className="w-5 h-5 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     placeholder="e.g. dev_engineer"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-medium"
+                    className="w-full h-11 pl-11 pr-4 bg-[var(--bg-surface)] dark:bg-slate-900 border border-[var(--border)] dark:border-slate-700 rounded-xl text-sm text-[var(--text-primary)] dark:text-white placeholder-[var(--text-muted)] dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] font-medium"
                     required
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
                   Email Address
                 </label>
                 <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Mail className="w-5 h-5 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="email"
                     placeholder="engineer@company.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-medium"
+                    className="w-full h-11 pl-11 pr-4 bg-[var(--bg-surface)] dark:bg-slate-900 border border-[var(--border)] dark:border-slate-700 rounded-xl text-sm text-[var(--text-primary)] dark:text-white placeholder-[var(--text-muted)] dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] font-medium"
                     required
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
                   Password
                 </label>
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Lock className="w-5 h-5 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="password"
                     placeholder="Minimum 8 characters"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-medium"
+                    className="w-full h-11 pl-11 pr-4 bg-[var(--bg-surface)] dark:bg-slate-900 border border-[var(--border)] dark:border-slate-700 rounded-xl text-sm text-[var(--text-primary)] dark:text-white placeholder-[var(--text-muted)] dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] font-medium"
                     required
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
                   Platform Role
                 </label>
                 <select
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
-                  className="w-full py-2.5 px-3 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-medium"
+                  className="w-full h-11 py-2.5 px-3.5 bg-[var(--bg-surface)] dark:bg-slate-900 border border-[var(--border)] dark:border-slate-700 rounded-xl text-sm text-[var(--text-primary)] dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] font-medium"
                 >
                   <option value="USER">Standard User (Workspace & Projects)</option>
                   <option value="ADMIN">Platform Admin (Includes Admin Console)</option>
@@ -413,17 +413,17 @@ export default function LoginPage({ onLoginSuccess }) {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-500/25 transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                  className="w-full h-12 bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-white text-sm font-bold rounded-xl shadow-lg shadow-amber-500/20 dark:shadow-amber-500/25 transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   {isLoading ? (
                     <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <RefreshCw className="w-5 h-5 animate-spin" />
                       Creating Account...
                     </>
                   ) : (
                     <>
                       Complete Registration
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight className="w-5 h-5" />
                     </>
                   )}
                 </button>
@@ -435,49 +435,49 @@ export default function LoginPage({ onLoginSuccess }) {
 
       {/* Post-OAuth Name Clarification Modal */}
       {showClarificationModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-slate-800 rounded-2xl max-w-md w-full shadow-2xl border border-slate-700 p-6 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-2.5 text-white font-bold text-lg">
-              <Sparkles className="w-5 h-5 text-blue-400" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 dark:bg-slate-950/90 backdrop-blur-md">
+          <div className="bg-[var(--bg-surface)] dark:bg-slate-800 rounded-2xl max-w-md w-full shadow-2xl border border-[var(--border)] dark:border-slate-700 p-8 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 text-[var(--text-primary)] dark:text-white font-bold text-xl mb-2">
+              <Sparkles className="w-6 h-6 text-[var(--accent-primary)]" />
               <span>Confirm Account Handle</span>
             </div>
-            <p className="text-xs text-slate-400 mt-1">
-              Your {oauthProvider.toUpperCase()} identity was authenticated (<span className="text-blue-300 font-mono">{oauthVerifiedEmail}</span>). Please confirm or adjust your display name to persist in database.
+            <p className="text-sm text-[var(--text-muted)] mb-6 leading-relaxed">
+              Your {oauthProvider.toUpperCase()} identity was authenticated (<span className="text-[var(--accent-primary)] font-mono font-semibold">{oauthVerifiedEmail}</span>). Please confirm or adjust your display name to persist in database.
             </p>
 
-            <form onSubmit={handleConfirmClarifiedName} className="mt-5 space-y-4">
+            <form onSubmit={handleConfirmClarifiedName} className="space-y-6">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
                   Display Username / Account Handle
                 </label>
                 <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <User className="w-5 h-5 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={clarifiedName}
                     onChange={(e) => setClarifiedName(e.target.value)}
                     placeholder="Enter preferred handle"
-                    className="w-full pl-9 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                    className="w-full h-11 pl-11 pr-4 bg-[var(--bg-surface)] dark:bg-slate-900 border border-[var(--border)] dark:border-slate-700 rounded-xl text-sm text-[var(--text-primary)] dark:text-white placeholder-[var(--text-muted)] dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] font-medium"
                     required
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-700">
+              <div className="flex items-center justify-end pt-4 border-t border-[var(--border)] dark:border-slate-700">
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-500/25 transition flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full h-12 bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-white text-sm font-bold rounded-xl shadow-lg shadow-amber-500/20 dark:shadow-amber-500/25 transition flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isLoading ? (
                     <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <RefreshCw className="w-5 h-5 animate-spin" />
                       Saving to Database...
                     </>
                   ) : (
                     <>
                       Confirm & Proceed to Dashboard
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight className="w-5 h-5" />
                     </>
                   )}
                 </button>
