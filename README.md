@@ -1,8 +1,55 @@
 # AetherOps AI - Cloud Infrastructure Microservices
 
-This repository contains the microservice implementations for **Module 1 (Requirement Analysis Service)** and **Module 2 (Cloud Architecture Generator)** of the AetherOps AI (formerly *CloudMentor AI*) platform.
+This repository contains the microservice implementations for the AetherOps microservices.
 
-## Microservices Architecture
+## UV-based Workspace (preferred)
+
+This repository uses the `uv` workspace manager. Each service is a separate Python package with its own `pyproject.toml` and `uv` creates isolated virtual environments for each package and syncs dependencies from the manifests.
+
+Quick start (recommended):
+
+1. Install `uv` (if not already installed). Example:
+
+```bash
+pip install uv
+```
+
+2. Sync the workspace and create per-service virtual environments:
+
+```bash
+uv sync
+```
+
+3. Run the unified coordinator (dev entrypoint):
+
+```bash
+uv run python main.py
+```
+
+4. Run a single service (from repo root or inside the service directory):
+
+```bash
+# from repo root
+uv run -C services/requirement_analysis python main.py
+
+# or inside the service directory
+cd services/requirement_analysis
+uv run python main.py
+```
+
+Notes:
+- Each service already contains a `pyproject.toml` with its dependencies. `uv sync` reads these and prepares per-service environments.
+- Tests can be executed with `uv run pytest services/<service_name>/` as shown in the original README.
+
+---
+
+## Legacy (deprecated)
+
+A `requirements.txt` file previously existed for a consolidated pip-style install, but this repository now uses `uv` and the per-service `pyproject.toml` files as the authoritative source of dependencies. Prefer `uv sync` and `uv run` over pip installs at the repo root.
+
+---
+
+## Microservices Architecture (unchanged)
 
 ```text
 aether-cloud/
@@ -30,57 +77,3 @@ aether-cloud/
 │
 └── main.py                        # Unified Microservices Coordinator (dev entrypoint)
 ```
-
----
-
-## Getting Started
-
-### 1. Installation
-This repository uses the `uv` package manager. Install the packages and create virtual environments in the services:
-```bash
-# Set up workspace packages
-uv sync
-```
-
-### 2. Run Both Services Concurrently
-You can launch both services together using the unified coordinator at the root:
-```bash
-uv run python main.py
-```
-* **Module 1** (Requirement Analysis) will run at `http://localhost:8001`
-* **Module 2** (Architecture Generator) will run at `http://localhost:8002`
-
-Alternatively, you can run them independently:
-```bash
-# Run Module 1 only
-cd services/requirement_analysis
-uv run python main.py
-
-# Run Module 2 only
-cd services/architecture_generator
-uv run python main.py
-```
-
----
-
-## API & Testing
-
-### Running Tests
-To run the test suites for both services:
-```bash
-# Test Requirement Analysis (Module 1)
-PYTHONPATH=services/requirement_analysis uv run pytest services/requirement_analysis/
-
-# Test Architecture Generator (Module 2)
-PYTHONPATH=services/architecture_generator uv run pytest services/architecture_generator/
-```
-
-### API Endpoints
-
-#### Module 1: Requirement Analysis (`http://localhost:8001`)
-* `GET /health` - Service status health check.
-* `POST /api/v1/analyze` - Receives scale/SLA targets, outputs computed AWS architecture specifications (`RequirementProfileOutput`).
-
-#### Module 2: Architecture Generator (`http://localhost:8002`)
-* `GET /health` - Service status health check.
-* `POST /api/v1/generate-graph` - Receives `RequirementProfileOutput`, outputs React Flow coordinates and elements (`ReactFlowGraphJSON`).
