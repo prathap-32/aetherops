@@ -1,6 +1,8 @@
 // frontend/src/components/layout/Navbar.jsx
-import React from 'react';
-import { Menu, Search, Plus, FolderKanban, Boxes, ExternalLink, Globe, ChevronDown } from 'lucide-react';
+import React, { useState } from 'react';
+import { Menu, Search, Plus, FolderKanban, Boxes, Key, Copy, Check, User } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { formatAccountId } from '../../services/api';
 
 export default function Navbar({
   activeView,
@@ -10,7 +12,23 @@ export default function Navbar({
   setSearchQuery,
   activeProject,
   activeEnvironment,
+  onOpenAccountModal,
+  onOpenAccount,
 }) {
+  const { user, isAdmin } = useAuth();
+  const [copiedAccount, setCopiedAccount] = useState(false);
+  const handleOpenAccount = onOpenAccountModal || onOpenAccount || (() => {});
+  const initials = (user?.username || 'AO').slice(0, 2).toUpperCase();
+
+  const copyAccountId = () => {
+    const acc = user?.account_id || '109283746519';
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(acc);
+      setCopiedAccount(true);
+      setTimeout(() => setCopiedAccount(false), 2000);
+    }
+  };
+
   const VIEW_TITLES = {
     dashboard: 'Platform Dashboard Overview',
     projects: 'Projects & Workspaces',
@@ -68,17 +86,37 @@ export default function Navbar({
           )}
 
           {/* Default Region Badge */}
-          <div className="hidden lg:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-mono border border-slate-200/80">
+          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-mono border border-slate-200/80">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
             <span>us-east-1 (N. Virginia)</span>
           </div>
         </div>
       </div>
 
-      {/* Center / Right: Search & Actions */}
+      {/* Center / Right: AWS Account ID Showcase, Search & Actions */}
       <div className="flex items-center gap-2 sm:gap-3">
+        {/* Prominent AWS Account ID Showcase */}
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50/90 text-amber-900 text-xs font-mono border border-amber-200/90 shadow-xs">
+          <Key className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+          <span className="font-semibold text-amber-950 hidden xs:inline">Account:</span>
+          <span className="font-bold text-amber-900">
+            {formatAccountId(user?.account_id || '109283746519')}
+          </span>
+          <button
+            onClick={copyAccountId}
+            title={copiedAccount ? 'Copied Account ID!' : 'Copy AWS Account ID'}
+            className="p-1 hover:bg-amber-100 rounded text-amber-700 transition cursor-pointer"
+          >
+            {copiedAccount ? (
+              <Check className="w-3.5 h-3.5 text-emerald-600" />
+            ) : (
+              <Copy className="w-3.5 h-3.5 text-amber-700 hover:text-amber-900" />
+            )}
+          </button>
+        </div>
+
         {/* Search */}
-        <div className="relative w-36 sm:w-60">
+        <div className="relative w-32 sm:w-48 lg:w-56">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
@@ -96,9 +134,39 @@ export default function Navbar({
             className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#1e40af] hover:bg-[#1d4ed8] text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline">New Project</span>
+            <span className="hidden sm:inline">New Project</span>
           </button>
         )}
+
+        {/* Top-Right Corner Account Page & Profile Access Button */}
+        <button
+          onClick={handleOpenAccount}
+          title={`Account: ${user?.username || 'user'} (${formatAccountId(user?.account_id || '109283746519')}) - Click to access Account settings`}
+          className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200/80 border border-slate-200/90 transition group cursor-pointer text-left shrink-0 shadow-xs"
+          aria-label="Open Account Profile & Settings"
+        >
+          <div className="w-7 h-7 rounded-lg bg-[#1e40af] text-white flex items-center justify-center font-bold font-mono text-xs shadow-xs group-hover:scale-105 transition">
+            {initials}
+          </div>
+          <div className="hidden sm:block text-left leading-tight">
+            <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <span>{user?.username || 'User'}</span>
+              <span
+                className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold uppercase border ${
+                  isAdmin
+                    ? 'bg-amber-100 text-amber-900 border-amber-300'
+                    : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                }`}
+              >
+                {user?.role || 'USER'}
+              </span>
+            </div>
+            <div className="text-[10px] font-mono text-slate-500">
+              Account
+            </div>
+          </div>
+          <User className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 sm:hidden" />
+        </button>
       </div>
     </header>
   );

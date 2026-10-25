@@ -1,6 +1,7 @@
 // frontend/src/components/layout/Sidebar.jsx
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { formatAccountId } from '../../services/api';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -79,43 +80,29 @@ export default function Sidebar({
     <div className="flex flex-col h-full justify-between select-none bg-white border-r border-slate-200/80 w-64 shrink-0">
       {/* Top Header & Branding */}
       <div>
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <div
-            onClick={() => navItemClick('dashboard', '/')}
-            className="flex items-center gap-2.5 cursor-pointer"
-          >
-            <div className="w-8 h-8 rounded-lg bg-[#1e40af] text-white flex items-center justify-center font-bold text-sm tracking-tight font-mono shadow-sm">
-              AO
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-semibold text-slate-900 text-sm tracking-tight">AetherOps</span>
-                <span
-                  className={`text-[9px] font-bold uppercase px-1.5 py-0.2 rounded font-mono border ${
-                    isAdmin
-                      ? 'bg-blue-50 text-[#1e40af] border-blue-200'
-                      : 'bg-slate-100 text-slate-600 border-slate-200'
-                  }`}
-                >
-                  {isAdmin ? 'ADMIN' : 'USER'}
-                </span>
-              </div>
-              <div className="text-[10px] font-mono text-emerald-600 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>v2.14.0 // online</span>
-              </div>
-            </div>
-          </div>
-
-          {setMobileOpen && (
-            <button
-              onClick={() => setMobileOpen(false)}
-              className="lg:hidden p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
-              aria-label="Close sidebar"
+        <div className="p-4 border-b border-slate-100">
+          <div className="flex items-center justify-between">
+            <div
+              onClick={() => navItemClick('dashboard', '/')}
+              className="cursor-pointer group flex items-center"
             >
-              <X className="w-5 h-5" />
-            </button>
-          )}
+              <img
+                src="/static/logo/aetherops_light.png"
+                alt="AetherOps"
+                className="h-8 max-w-[190px] object-contain object-left transition-opacity group-hover:opacity-90"
+              />
+            </div>
+
+            {setMobileOpen && (
+              <button
+                onClick={() => setMobileOpen(false)}
+                className="lg:hidden p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 cursor-pointer"
+                aria-label="Close sidebar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Scrollable Navigation Groups */}
@@ -198,33 +185,33 @@ export default function Sidebar({
                     <FileCode2 className={iconClass('repo_analyzer')} />
                     <span>Source Code Analyzer</span>
                   </div>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-800 border border-violet-200">
+                    M3
+                  </span>
                 </button>
                 <button
-                  onClick={() => navItemClick('requirements', '/requirements')}
-                  className={navItemClass('requirements')}
+                  onClick={() => navItemClick('architecture_studio', '/architecture-studio')}
+                  className={navItemClass('architecture_studio')}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Cpu className={iconClass('requirements')} />
-                    <span>Requirement Analysis</span>
+                    <Palette className={iconClass('architecture_studio')} />
+                    <span>Cloud Architecture Studio</span>
                   </div>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 border border-sky-200">
+                    M4
+                  </span>
                 </button>
                 <button
-                  onClick={() => navItemClick('architecture', '/architecture')}
-                  className={navItemClass('architecture')}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Network className={iconClass('architecture')} />
-                    <span>AI Architecture Engine</span>
-                  </div>
-                </button>
-                <button
-                  onClick={() => navItemClick('architecture_designer', '/architecture/designer')}
+                  onClick={() => navItemClick('architecture_designer', '/architecture-designer')}
                   className={navItemClass('architecture_designer')}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Palette className={iconClass('architecture_designer')} />
+                    <Network className={iconClass('architecture_designer')} />
                     <span>Architecture Designer</span>
                   </div>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    Canvas
+                  </span>
                 </button>
                 <button
                   onClick={() => navItemClick('risk_analysis', '/risk-analysis')}
@@ -434,6 +421,9 @@ export default function Sidebar({
               <span className="truncate">{user?.username || 'developer'}</span>
             </div>
             <div className="text-[10px] text-slate-500 truncate">{user?.email || 'user@aetherops.cloud'}</div>
+            <div className="text-[10px] font-mono font-semibold text-amber-700 truncate">
+              AWS: {formatAccountId(user?.account_id || '109283746519')}
+            </div>
           </div>
         </div>
 

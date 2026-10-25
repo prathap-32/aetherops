@@ -8,13 +8,33 @@ from pydantic import BaseModel, field_validator
 PROJECT_TYPES = {
     "web_application",
     "api_service",
-    "data_pipeline",
-    "ml_workload",
-    "static_site",
     "microservices",
+    "data_pipeline",
+    "serverless_backend",
+    "event_driven_pipeline",
+    "data_lakehouse",
+    "ml_workload",
+    "ml_inference_pipeline",
+    "iot_ingestion",
+    "mobile_backend",
+    "containerized_workload",
+    "static_site",
+    "fintech_ledger",
+    "edge_computing",
+    "internal_tool",
 }
 
-ENV_TYPES = {"development", "staging", "production"}
+ENV_TYPES = {
+    "development",
+    "staging",
+    "production",
+    "testing",
+    "qa",
+    "disaster_recovery",
+    "dr",
+    "sandbox",
+    "preview",
+}
 
 # All 39 supported AWS regions (mirrors requirement_analysis)
 AWS_REGIONS = {
@@ -84,10 +104,14 @@ class ProjectUpdate(BaseModel):
 
 
 class EnvironmentCreate(BaseModel):
-    name:        str
-    env_type:    str
-    aws_region:  str
-    description: Optional[str] = None
+    project_id:     Optional[str] = None
+    target_project: Optional[str] = None
+    name:           str
+    env_type:       Optional[str] = None
+    type:           Optional[str] = None
+    aws_region:     Optional[str] = None
+    region:         Optional[str] = None
+    description:    Optional[str] = None
 
     @field_validator("name")
     @classmethod
@@ -97,21 +121,46 @@ class EnvironmentCreate(BaseModel):
             raise ValueError("Environment name cannot be empty.")
         return v
 
-    @field_validator("env_type")
+    @field_validator("env_type", mode="before")
     @classmethod
-    def valid_env_type(cls, v: str) -> str:
-        v = v.strip().lower()
-        if v not in ENV_TYPES:
+    def valid_env_type(cls, v: Optional[str], info) -> str:
+        val = v
+        if not val and hasattr(info, "data"):
+            val = info.data.get("type")
+        if not val:
+            val = "development"
+        s = str(val).strip().lower()
+        mapping = {
+            "dev": "development",
+            "stage": "staging",
+            "staging": "staging",
+            "prod": "production",
+            "production": "production",
+            "test": "testing",
+            "testing": "testing",
+            "qa": "qa",
+            "dr": "disaster_recovery",
+            "disaster_recovery": "disaster_recovery",
+            "sandbox": "sandbox",
+            "preview": "preview",
+        }
+        normalized = mapping.get(s, s)
+        if normalized not in ENV_TYPES:
             raise ValueError(f"env_type must be one of: {sorted(ENV_TYPES)}")
-        return v
+        return normalized
 
-    @field_validator("aws_region")
+    @field_validator("aws_region", mode="before")
     @classmethod
-    def valid_region(cls, v: str) -> str:
-        v = v.strip().lower()
-        if v not in AWS_REGIONS:
-            raise ValueError(f"aws_region '{v}' is not a supported AWS region.")
-        return v
+    def valid_region(cls, v: Optional[str], info) -> str:
+        val = v
+        if not val and hasattr(info, "data"):
+            val = info.data.get("region")
+        if not val:
+            val = "us-east-1"
+        s = str(val).strip().lower()
+        if s not in AWS_REGIONS:
+            raise ValueError(f"aws_region '{s}' is not a supported AWS region (total 39 regions supported).")
+        return s
 
 
 class EnvironmentUpdate(BaseModel):

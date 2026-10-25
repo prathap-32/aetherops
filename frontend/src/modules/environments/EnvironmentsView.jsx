@@ -17,6 +17,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { projectsApi } from '../../services/api';
+import { AWS_REGIONS_39, TIER_TYPES_LIST } from '../../constants/awsRegions';
 
 export default function EnvironmentsView({ onNavigate }) {
   const [projects, setProjects] = useState([]);
@@ -31,7 +32,7 @@ export default function EnvironmentsView({ onNavigate }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalProjectId, setModalProjectId] = useState('');
   const [envName, setEnvName] = useState('');
-  const [envType, setEnvType] = useState('DEV');
+  const [envType, setEnvType] = useState('development');
   const [region, setRegion] = useState('us-east-1');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -83,8 +84,10 @@ export default function EnvironmentsView({ onNavigate }) {
     try {
       await projectsApi.createEnvironment(modalProjectId, {
         name: envName.trim(),
-        type: envType,
-        region: region,
+        env_type: envType.toLowerCase(),
+        type: envType.toLowerCase(),
+        aws_region: region.toLowerCase(),
+        region: region.toLowerCase(),
       });
       setIsModalOpen(false);
       setEnvName('');
@@ -103,20 +106,31 @@ export default function EnvironmentsView({ onNavigate }) {
     const matchesSearch =
       (env.name || env.env_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (env.projectName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (env.region || '').toLowerCase().includes(searchQuery.toLowerCase());
+      (env.region || env.aws_region || '').toLowerCase().includes(searchQuery.toLowerCase());
     return matchesProj && matchesType && matchesSearch;
   });
 
   const getEnvBadgeColor = (type) => {
-    switch ((type || '').toUpperCase()) {
-      case 'PROD':
-      case 'PRODUCTION':
+    const t = (type || '').toLowerCase();
+    switch (t) {
+      case 'prod':
+      case 'production':
         return 'bg-rose-50 text-rose-700 border-rose-200';
-      case 'STAGING':
-      case 'STAGE':
+      case 'staging':
+      case 'stage':
         return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'DEV':
-      case 'DEVELOPMENT':
+      case 'testing':
+      case 'test':
+        return 'bg-purple-50 text-purple-700 border-purple-200';
+      case 'qa':
+        return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+      case 'dr':
+      case 'disaster_recovery':
+        return 'bg-orange-50 text-orange-700 border-orange-200';
+      case 'sandbox':
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      case 'dev':
+      case 'development':
       default:
         return 'bg-blue-50 text-blue-700 border-blue-200';
     }
@@ -372,21 +386,36 @@ export default function EnvironmentsView({ onNavigate }) {
                 <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                   Target Project
                 </label>
-                <select
-                  value={modalProjectId}
-                  onChange={(e) => setModalProjectId(e.target.value)}
-                  className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  required
-                >
-                  {projects.map((p) => {
-                    const pid = p.id || p.project_id;
-                    return (
-                      <option key={pid} value={pid}>
-                        {p.name || p.project_name || pid}
-                      </option>
-                    );
-                  })}
-                </select>
+                {projects.length === 0 ? (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-center justify-between">
+                    <span>No projects found in this workspace yet.</span>
+                    {onNavigate && (
+                      <button
+                        type="button"
+                        onClick={() => { setIsModalOpen(false); onNavigate('projects', '/projects'); }}
+                        className="font-bold underline ml-2 hover:text-amber-950"
+                      >
+                        Create Project First
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <select
+                    value={modalProjectId}
+                    onChange={(e) => setModalProjectId(e.target.value)}
+                    className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    required
+                  >
+                    {projects.map((p) => {
+                      const pid = p.id || p.project_id;
+                      return (
+                        <option key={pid} value={pid}>
+                          {p.name || p.project_name || pid}
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
               </div>
 
               <div>
@@ -403,36 +432,38 @@ export default function EnvironmentsView({ onNavigate }) {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Tier Type
+                    Tier Type ({TIER_TYPES_LIST.length})
                   </label>
                   <select
                     value={envType}
                     onChange={(e) => setEnvType(e.target.value)}
                     className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   >
-                    <option value="DEV">DEV (Development)</option>
-                    <option value="STAGING">STAGING (Testing)</option>
-                    <option value="PROD">PROD (Production)</option>
-                    <option value="DR">DR (Disaster Recovery)</option>
+                    {TIER_TYPES_LIST.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                    AWS Region
+                    AWS Region (Total {AWS_REGIONS_39.length})
                   </label>
                   <select
                     value={region}
                     onChange={(e) => setRegion(e.target.value)}
                     className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   >
-                    <option value="us-east-1">us-east-1 (N. Virginia)</option>
-                    <option value="us-west-2">us-west-2 (Oregon)</option>
-                    <option value="eu-west-1">eu-west-1 (Ireland)</option>
-                    <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
+                    {AWS_REGIONS_39.map((r) => (
+                      <option key={r.value} value={r.value}>
+                        {r.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

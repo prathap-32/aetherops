@@ -63,17 +63,10 @@ $PYTHON -m uvicorn app.main:app --host 0.0.0.0 --port 8003 > /tmp/aether-analyze
 cd ../..
 sleep 1
 
-# 6. Requirement Analysis - Port 8004
-echo -e "${GREEN}[6/14]${NC} Starting Requirement Analysis (Port 8004)..."
-cd services/requirement_analysis
-$PYTHON -m uvicorn app.main:app --host 0.0.0.0 --port 8004 > /tmp/aether-requirements.log 2>&1 &
-cd ../..
-sleep 1
-
-# 7. Architecture Generator - Port 8005
-echo -e "${GREEN}[7/14]${NC} Starting Architecture Generator (Port 8005)..."
+# 6. Cloud Architecture Studio - Port 8004 (Module 4)
+echo -e "${GREEN}[6/14]${NC} Starting Cloud Architecture Studio (Port 8004)..."
 cd services/architecture_generator
-$PYTHON -m uvicorn app.main:app --host 0.0.0.0 --port 8005 > /tmp/aether-architecture.log 2>&1 &
+$PYTHON -m uvicorn app.main:app --host 0.0.0.0 --port 8004 > /tmp/aether-architecture.log 2>&1 &
 cd ../..
 sleep 1
 

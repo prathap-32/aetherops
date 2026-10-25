@@ -789,6 +789,26 @@ async def remove_tenant_member(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# METADATA ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/api/v1/meta/regions")
+async def get_supported_aws_regions():
+    from app.schemas import AWS_REGIONS
+    return {"regions": sorted(list(AWS_REGIONS)), "total": len(AWS_REGIONS)}
+
+@router.get("/api/v1/meta/project-types")
+async def get_supported_project_types():
+    from app.schemas import PROJECT_TYPES
+    return {"project_types": sorted(list(PROJECT_TYPES)), "total": len(PROJECT_TYPES)}
+
+@router.get("/api/v1/meta/env-types")
+async def get_supported_env_types():
+    from app.schemas import ENV_TYPES
+    return {"env_types": sorted(list(ENV_TYPES)), "total": len(ENV_TYPES)}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # PROJECT ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -798,8 +818,9 @@ async def list_projects(
     db: AsyncSession = Depends(get_db),
     ctx: TenantContext = Depends(get_tenant_context),
 ):
-    """Return all projects accessible within the current tenant context, with cache-aside."""
+    """Return projects accessible within the current user's isolated tenant context."""
     owner = ctx.user["username"]
+    user_uuid = ctx.user.get("uuid")
     cache_key = f"{ctx.tenant.id}:{owner}"
 
     cached = await cache_manager.get_projects_list(cache_key)
@@ -807,12 +828,17 @@ async def list_projects(
         return ProjectListOut(projects=cached, total=len(cached))
 
     has_explicit_tenant = bool(request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id"))
-    if ctx.is_platform_admin and not has_explicit_tenant:
+    show_all = request.query_params.get("all") == "true" and ctx.is_platform_admin
+
+    if show_all and not has_explicit_tenant:
         query = select(AetherProject).order_by(AetherProject.created_at.desc())
     else:
+        # Strict user-tenant isolation: only show projects belonging to this user's tenant or owned by this user
         query = select(AetherProject).where(
             (AetherProject.tenant_id == ctx.tenant.id)
             | ((AetherProject.tenant_id.is_(None)) & (AetherProject.owner == owner))
+            | (AetherProject.owner == owner)
+            | ((AetherProject.created_by_user_id.is_not(None)) & (AetherProject.created_by_user_id == user_uuid))
         ).order_by(AetherProject.created_at.desc())
 
     res = await db.execute(query)
@@ -1022,6 +1048,55 @@ async def create_environment(
     return EnvironmentOut(**env.to_dict())
 
 
+@router.get("/api/v1/environments")
+async def list_all_environments(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """List all environments belonging to projects accessible by this tenant."""
+    projects_out = await list_projects(request=request, db=db, ctx=ctx)
+    project_ids = [p.id for p in projects_out.projects]
+    if not project_ids:
+        return {"environments": [], "total": 0}
+
+    res = await db.execute(
+        select(AetherEnvironment)
+        .where(AetherEnvironment.project_id.in_(project_ids))
+        .order_by(AetherEnvironment.created_at.desc())
+    )
+    envs = res.scalars().all()
+    return {"environments": [e.to_dict() for e in envs], "total": len(envs)}
+
+
+@router.post(
+    "/api/v1/environments",
+    response_model=EnvironmentOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_environment_root(
+    payload: EnvironmentCreate,
+    request: Request,
+    project_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Create an environment specifying the target project in the body or query."""
+    target_pid = project_id or payload.project_id or payload.target_project
+    if not target_pid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="target project_id is required in query param or body to create an environment.",
+        )
+    return await create_environment(
+        project_id=target_pid,
+        payload=payload,
+        request=request,
+        db=db,
+        ctx=ctx,
+    )
+
+
 @router.get("/api/v1/projects/{project_id}/environments/{env_id}", response_model=EnvironmentOut)
 async def get_environment(
     project_id: str,
@@ -1139,14 +1214,17 @@ async def _get_project_or_404(
     """
     if isinstance(ctx_or_owner, TenantContext):
         ctx = ctx_or_owner
-        if ctx.is_platform_admin and not ctx.membership:
-            query = select(AetherProject).where(AetherProject.id == project_id)
-        else:
-            query = select(AetherProject).where(
-                AetherProject.id == project_id,
+        owner = ctx.user["username"]
+        user_uuid = ctx.user.get("uuid")
+        query = select(AetherProject).where(
+            AetherProject.id == project_id,
+            (
                 (AetherProject.tenant_id == ctx.tenant.id)
-                | ((AetherProject.tenant_id.is_(None)) & (AetherProject.owner == ctx.user["username"]))
+                | (AetherProject.owner == owner)
+                | ((AetherProject.created_by_user_id.is_not(None)) & (AetherProject.created_by_user_id == user_uuid))
+                | ((AetherProject.tenant_id.is_(None)) & (AetherProject.owner == owner))
             )
+        )
     else:
         owner = str(ctx_or_owner)
         user_role = role or "USER"

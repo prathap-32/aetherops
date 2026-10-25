@@ -1,10 +1,11 @@
 // frontend/src/modules/repo_analyzer/RepoAnalyzerView.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Cpu,
   Search,
   Zap,
   CheckCircle2,
+  AlertCircle,
   AlertTriangle,
   Server,
   Database,
@@ -15,315 +16,963 @@ import {
   Layers,
   Sparkles,
   FileCode,
-  HardDrive
+  HardDrive,
+  Check,
+  Edit3,
+  ShieldCheck,
+  Globe,
+  ChevronRight,
+  Boxes,
+  FolderKanban,
+  GitBranch,
+  ExternalLink,
+  ChevronDown
 } from 'lucide-react';
-import { repoAnalyzerApi } from '../../services/api';
+import { repoAnalyzerApi, projectsApi, connectionsApi } from '../../services/api';
+import { AWS_REGIONS_39 } from '../../constants/awsRegions';
 
 export default function RepoAnalyzerView({ onNavigate }) {
-  const [repoUrl, setRepoUrl] = useState('https://github.com/organization/devops-lab');
-  const [trafficProfile, setTrafficProfile] = useState('MODERATE');
-  const [budgetTier, setBudgetTier] = useState('STANDARD');
-  const [region, setRegion] = useState('us-east-1');
-  const [isScanning, setIsScanning] = useState(false);
-  const [isDispatching, setIsDispatching] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState(null);
-  const [dispatchStatus, setDispatchStatus] = useState(null);
+  // Navigation & Project Context
+  const [projects, setProjects] = useState([]);
+  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [environments, setEnvironments] = useState([]);
+  const [selectedEnvId, setSelectedEnvId] = useState('');
+  const [selectedEnvTier, setSelectedEnvTier] = useState('development');
+  const [connectedGit, setConnectedGit] = useState(null);
 
-  const handleScan = async (e) => {
-    e.preventDefault();
-    if (!repoUrl.trim()) return;
+  // Form Parameters
+  const [repoPath, setRepoPath] = useState('.');
+  const [targetRegion, setTargetRegion] = useState('us-east-1');
+  const [trafficScale, setTrafficScale] = useState('MODERATE');
+  const [budgetTier, setBudgetTier] = useState('STANDARD');
+
+  // State Pipeline: 1 = Initial, 2 = Ready & Scanned, 3 = Accepted & Sized
+  const [workflowStep, setWorkflowStep] = useState(1);
+  const [isScanning, setIsScanning] = useState(false);
+  const [isSizing, setIsSizing] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(null);
+
+  // Scan & Report Results
+  const [readinessResult, setReadinessResult] = useState(null);
+  const [scanReport, setScanReport] = useState(null);
+  const [editableKeyValue, setEditableKeyValue] = useState([]);
+
+  // Final Sizing Output
+  const [sizingOutput, setSizingOutput] = useState(null);
+
+  // Editable AWS Services State for Step 3
+  const [editedComputeService, setEditedComputeService] = useState('Amazon EC2 (Docker Runtime)');
+  const [editedInstanceType, setEditedInstanceType] = useState('t4g.micro');
+  const [editedMinCapacity, setEditedMinCapacity] = useState(1);
+  const [editedAlbEnabled, setEditedAlbEnabled] = useState(false);
+  const [editedDatabaseService, setEditedDatabaseService] = useState('None');
+  const [editedCacheService, setEditedCacheService] = useState('None');
+  const [editedCdnEnabled, setEditedCdnEnabled] = useState(false);
+  const [isRecalculating, setIsRecalculating] = useState(false);
+
+  // Load connected projects and environments
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [projList, gitList] = await Promise.all([
+          projectsApi.list().catch(() => []),
+          connectionsApi.listGit().catch(() => []),
+        ]);
+        setProjects(projList);
+        if (projList.length > 0) {
+          const firstProj = projList[0];
+          const pid = firstProj.id || firstProj.project_id;
+          setSelectedProjectId(pid);
+          loadEnvironments(pid, gitList);
+        }
+      } catch (err) {
+        console.error('Failed to load initial context:', err);
+      }
+    }
+    loadData();
+  }, []);
+
+  const loadEnvironments = async (projectId, gitList = []) => {
+    try {
+      const envList = await projectsApi.listEnvironments(projectId);
+      setEnvironments(envList);
+      if (envList.length > 0) {
+        const firstEnv = envList[0];
+        const eid = firstEnv.id || firstEnv.env_id;
+        setSelectedEnvId(eid);
+        setSelectedEnvTier(firstEnv.type || firstEnv.env_type || 'development');
+
+        // Check if there is an existing git connection for this env
+        const matchGit = gitList.find(
+          (g) => (g.project_id === projectId && g.environment_id === eid) || g.project_id === projectId
+        );
+        if (matchGit) {
+          setConnectedGit(matchGit);
+          if (matchGit.repo_name) {
+            setRepoPath(matchGit.repo_name);
+          } else if (matchGit.repo_url) {
+            setRepoPath(matchGit.repo_url);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load environments:', err);
+    }
+  };
+
+  const handleProjectChange = (e) => {
+    const pid = e.target.value;
+    setSelectedProjectId(pid);
+    loadEnvironments(pid);
+  };
+
+  const handleEnvChange = (e) => {
+    const eid = e.target.value;
+    setSelectedEnvId(eid);
+    const found = environments.find((env) => (env.id || env.env_id) === eid);
+    if (found) {
+      setSelectedEnvTier(found.type || found.env_type || 'development');
+    }
+  };
+
+  // Step 1: Universal Codebase Scan with AST Readiness Check
+  const handleUniversalScan = async (e) => {
+    if (e) e.preventDefault();
+    if (!repoPath.trim()) return;
 
     setIsScanning(true);
-    setAnalysisResult(null);
-    setDispatchStatus(null);
+    setStatusMessage(null);
+    setReadinessResult(null);
+    setScanReport(null);
+    setSizingOutput(null);
 
     try {
-      const payload = {
-        repo_url: repoUrl.trim(),
-        traffic_profile: trafficProfile,
-        budget_tier: budgetTier,
-        target_region: region,
-      };
+      // 1. Check Readiness
+      const readiness = await repoAnalyzerApi.checkReadiness({
+        repo_path: repoPath.trim(),
+        project_id: selectedProjectId,
+        environment_id: selectedEnvId,
+        branch: connectedGit?.branch || 'main',
+      });
+      setReadinessResult(readiness);
 
-      const result = await repoAnalyzerApi.scanAndSize(payload);
-      setAnalysisResult(result);
+      if (!readiness.is_analyzable) {
+        setStatusMessage({
+          type: 'error',
+          text: readiness.message || 'Repository cannot be analyzed. Missing manifests or code files.',
+        });
+        setIsScanning(false);
+        return;
+      }
+
+      // 2. Run Universal Scan & Generate Key:Value Report
+      const report = await repoAnalyzerApi.scanReport({
+        repo_path: repoPath.trim(),
+        project_id: selectedProjectId,
+        environment_id: selectedEnvId,
+        environment_tier: selectedEnvTier,
+        target_region: targetRegion,
+        branch: connectedGit?.branch || 'main',
+      });
+
+      setScanReport(report);
+      setEditableKeyValue(report.key_value_report || []);
+      setWorkflowStep(2);
+      setStatusMessage({
+        type: 'success',
+        text: `Codebase scanned successfully! Found ${report.frameworks?.length || 0} frameworks and ${report.languages?.length || 0} runtimes. Please review and verify below.`,
+      });
     } catch (err) {
-      console.error('Scan API error:', err);
-      setDispatchStatus({
-        type: 'ERROR',
-        message: `Requirement Analysis Engine (Port 8001) error: ${err.message}`,
+      console.error('Scan error:', err);
+      setStatusMessage({
+        type: 'error',
+        text: err.message || 'Universal codebase scan failed. Please verify the target path.',
       });
     } finally {
       setIsScanning(false);
     }
   };
 
-  const handleDispatch = async () => {
-    if (!analysisResult) return;
-    setIsDispatching(true);
+  // Handle User Editing Key:Value item
+  const handleValueChange = (index, newValue) => {
+    setEditableKeyValue((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], value: newValue };
+      return copy;
+    });
+  };
+
+  // Step 2: User Verifies & Accepts Specification -> Triggers Environment-Aware Sizing
+  const handleAcceptAndSize = async () => {
+    setIsSizing(true);
+    setStatusMessage(null);
+
     try {
-      await repoAnalyzerApi.dispatch({
-        repo_url: repoUrl,
-        sizing: analysisResult,
+      // Build verified spec dictionary from user-approved Key:Value pairs
+      const verifiedSpec = {};
+      editableKeyValue.forEach((item) => {
+        verifiedSpec[item.key] = item.value;
       });
-      setDispatchStatus('Architecture topology generated and queued for deployment!');
-      if (onNavigate) {
-        setTimeout(() => onNavigate('architecture'), 1200);
+
+      // Include base technical primitives
+      if (scanReport?.summary_dict) {
+        Object.assign(verifiedSpec, scanReport.summary_dict, verifiedSpec);
       }
+
+      const res = await repoAnalyzerApi.acceptAndSize({
+        repo_path: repoPath.trim(),
+        project_id: selectedProjectId,
+        environment_id: selectedEnvId,
+        environment_tier: selectedEnvTier,
+        target_region: targetRegion,
+        budget_tier: budgetTier,
+        traffic_scale: trafficScale,
+        verified_spec: verifiedSpec,
+      });
+
+      setSizingOutput(res);
+      // Initialize editable fields from sizing response
+      setEditedComputeService(res.compute?.service || 'Amazon EC2 (Docker Runtime)');
+      setEditedInstanceType(res.compute?.instance_class || (res.compute?.service?.includes('ECS') ? '0.25 vCPU / 0.5 GB' : 't4g.micro'));
+      setEditedMinCapacity(res.compute?.min_capacity || 1);
+      setEditedAlbEnabled(Boolean(res.networking?.alb));
+      setEditedDatabaseService(res.database?.service || 'None');
+      setEditedCacheService(res.cache?.service || 'None');
+      setEditedCdnEnabled(Boolean(res.frontend_hosting));
+
+      setWorkflowStep(3);
+      setStatusMessage({
+        type: 'success',
+        text: `Specification accepted! AWS Infrastructure right-sized for ${selectedEnvTier.toUpperCase()} environment via ${res.ai_provider}.`,
+      });
     } catch (err) {
-      setDispatchStatus('Topology queued successfully! Forwarding to Architecture Studio...');
-      if (onNavigate) {
-        setTimeout(() => onNavigate('architecture'), 1200);
-      }
+      console.error('Sizing error:', err);
+      setStatusMessage({
+        type: 'error',
+        text: err.message || 'Failed to size AWS infrastructure.',
+      });
     } finally {
-      setIsDispatching(false);
+      setIsSizing(false);
+    }
+  };
+
+  // Step 3 Customizer: User modifies AWS services and triggers re-analysis
+  const handleRecalculateSizing = async () => {
+    setIsRecalculating(true);
+    setStatusMessage(null);
+
+    try {
+      const res = await repoAnalyzerApi.recalculateSizing({
+        environment_tier: selectedEnvTier,
+        target_region: targetRegion,
+        compute_service: editedComputeService,
+        instance_type: editedInstanceType,
+        min_capacity: Number(editedMinCapacity),
+        max_capacity: Number(editedMinCapacity),
+        multi_az: selectedEnvTier === 'production',
+        alb_enabled: editedAlbEnabled,
+        waf_enabled: selectedEnvTier === 'production',
+        database_service: editedDatabaseService,
+        cache_service: editedCacheService,
+        cdn_enabled: editedCdnEnabled,
+        verified_spec: sizingOutput?.verified_spec_applied || {},
+      });
+
+      setSizingOutput(res);
+      setStatusMessage({
+        type: 'success',
+        text: `Architecture re-analyzed! Updated monthly estimate is $${res.monthly_cost_estimate_usd?.total_estimated_monthly_usd || '0.00'}/month.`,
+      });
+    } catch (err) {
+      console.error('Recalculation error:', err);
+      setStatusMessage({
+        type: 'error',
+        text: err.message || 'Failed to recalculate architecture.',
+      });
+    } finally {
+      setIsRecalculating(false);
+    }
+  };
+
+  // Step 3: Forward to Module 4 (Cloud Architecture Studio)
+  const handleProceedToModule4 = () => {
+    try {
+      localStorage.setItem('aether_latest_sizing', JSON.stringify(sizingOutput));
+    } catch (e) {
+      console.warn('Could not cache sizing in localStorage', e);
+    }
+
+    if (onNavigate) {
+      onNavigate('architecture_studio', {
+        sizingOutput,
+        selectedProjectId,
+        selectedEnvId,
+        selectedEnvTier,
+        targetRegion,
+      });
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Module Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-violet-50 text-violet-700 border border-violet-200">
               Module 3
             </span>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Codebase Analyzer & Sizing</h1>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              Universal Codebase Analyzer &amp; AI Cloud Sizing
+            </h1>
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            Deep AST code inspection to right-size compute, database tiers, and networking profiles.
+            Deterministic AST scan across any language or framework, paired with environment-driven AWS right-sizing.
           </p>
+        </div>
+
+        {/* Workflow Step Indicator */}
+        <div className="flex items-center gap-2">
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${
+              workflowStep === 1
+                ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-2xs'
+                : 'bg-slate-50 text-slate-500 border-slate-200'
+            }`}
+          >
+            <span className="w-4 h-4 rounded-full bg-current/10 flex items-center justify-center text-[10px]">1</span>
+            Scan Codebase
+          </div>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${
+              workflowStep === 2
+                ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-2xs'
+                : workflowStep > 2
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-slate-50 text-slate-500 border-slate-200'
+            }`}
+          >
+            <span className="w-4 h-4 rounded-full bg-current/10 flex items-center justify-center text-[10px]">2</span>
+            Verify &amp; Accept Report
+          </div>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${
+              workflowStep === 3
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-2xs'
+                : 'bg-slate-50 text-slate-500 border-slate-200'
+            }`}
+          >
+            <span className="w-4 h-4 rounded-full bg-current/10 flex items-center justify-center text-[10px]">3</span>
+            AWS Sizing Blueprint
+          </div>
         </div>
       </div>
 
-      {/* Input Form */}
-      <form onSubmit={handleScan} className="bg-white rounded-xl border border-slate-200 shadow-xs p-6 space-y-5">
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-            Repository URL or Workspace Target
-          </label>
-          <div className="relative">
-            <FileCode className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="https://github.com/organization/microservice-api"
-              value={repoUrl}
-              onChange={(e) => setRepoUrl(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono text-xs"
-              required
-            />
+      {/* Global Status Message */}
+      {statusMessage && (
+        <div
+          className={`p-3.5 rounded-xl text-xs flex items-center gap-2.5 border ${
+            statusMessage.type === 'success'
+              ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+              : 'bg-rose-50 text-rose-900 border-rose-200'
+          }`}
+        >
+          {statusMessage.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+          )}
+          <span>{statusMessage.text}</span>
+        </div>
+      )}
+
+      {/* STEP 1: Repository & Environment Context Card */}
+      <form onSubmit={handleUniversalScan} className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="p-4 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px]">
+              1
+            </span>
+            Target Project Environment &amp; Codebase Source
+          </div>
+          {connectedGit && (
+            <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+              <GitBranch className="w-3.5 h-3.5" />
+              <span>Connected: {connectedGit.repo_name || connectedGit.repo_url}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Target Project</label>
+              <select
+                value={selectedProjectId}
+                onChange={handleProjectChange}
+                className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                required
+              >
+                {projects.map((p) => {
+                  const pid = p.id || p.project_id;
+                  return (
+                    <option key={pid} value={pid}>
+                      {p.name || p.project_name || pid}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Target Environment Tier</label>
+              <select
+                value={selectedEnvId}
+                onChange={handleEnvChange}
+                className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                required
+              >
+                {environments.length === 0 ? (
+                  <option value="">No environments found</option>
+                ) : (
+                  environments.map((env) => {
+                    const eid = env.id || env.env_id;
+                    return (
+                      <option key={eid} value={eid}>
+                        {env.name || env.env_name || eid} ({env.type || env.env_type || 'DEV'})
+                      </option>
+                    );
+                  })
+                )}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-medium text-slate-600">
+                Repository Target (Remote GitHub or Local Workspace)
+              </label>
+              {connectedGit && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRepoPath(connectedGit.repo_name || connectedGit.repo_url)}
+                    className="text-[11px] text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 underline"
+                  >
+                    Use Connected: {connectedGit.repo_name || 'GitHub'}
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => setRepoPath('.')}
+                    className="text-[11px] text-slate-500 hover:text-slate-700 font-medium underline"
+                  >
+                    Local Workspace (.)
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="relative">
+              <FileCode className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={repoPath}
+                onChange={(e) => setRepoPath(e.target.value)}
+                placeholder="e.g. prathap-32/Docker_webApp_analogClock, https://github.com/... or ."
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                required
+              />
+            </div>
+            <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500">
+              <span className="flex items-center gap-1 text-emerald-700">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span><strong>Zero-Clone In-Memory Inspection:</strong> Manifests inspected via GitHub API. Zero proprietary code stored on server.</span>
+              </span>
+              {readinessResult?.inspection_mode && (
+                <span className="text-slate-400 font-mono text-[10px] shrink-0">
+                  Mode: {readinessResult.inspection_mode}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">AWS Target Region</label>
+              <select
+                value={targetRegion}
+                onChange={(e) => setTargetRegion(e.target.value)}
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono"
+              >
+                {AWS_REGIONS_39.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.value} ({r.group})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Projected Traffic Profile</label>
+              <select
+                value={trafficScale}
+                onChange={(e) => setTrafficScale(e.target.value)}
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              >
+                <option value="LOW">Low (Dev / Internal Testing)</option>
+                <option value="MODERATE">Moderate (Standard Web Traffic)</option>
+                <option value="HIGH">High (Scale-out Production)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Budget Allocation Tier</label>
+              <select
+                value={budgetTier}
+                onChange={(e) => setBudgetTier(e.target.value)}
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              >
+                <option value="LOW">Frugal / Lean (Cost Minimized)</option>
+                <option value="STANDARD">Standard Production</option>
+                <option value="ENTERPRISE">High Performance / Resilient</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Projected Traffic Profile</label>
-            <select
-              value={trafficProfile}
-              onChange={(e) => setTrafficProfile(e.target.value)}
-              className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            >
-              <option value="LOW">Low (1-50 requests/sec, dev/test)</option>
-              <option value="MODERATE">Moderate (50-500 req/sec, standard prod)</option>
-              <option value="HIGH">High (500-5,000 req/sec, scale-out)</option>
-              <option value="EXTREME">Extreme (5,000+ req/sec, multi-AZ enterprise)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Target Budget Tier</label>
-            <select
-              value={budgetTier}
-              onChange={(e) => setBudgetTier(e.target.value)}
-              className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            >
-              <option value="LEAN">Lean / Frugal (Cost-optimized, burstable)</option>
-              <option value="STANDARD">Standard (Balanced cost & performance)</option>
-              <option value="PERFORMANCE">Performance (Compute/Memory optimized)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1.5">AWS Target Region</label>
-            <select
-              value={region}
-              onChange={(e) => setRegion(e.target.value)}
-              className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            >
-              <option value="us-east-1">us-east-1 (N. Virginia)</option>
-              <option value="us-west-2">us-west-2 (Oregon)</option>
-              <option value="eu-west-1">eu-west-1 (Ireland)</option>
-              <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-end pt-2">
+        <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end">
           <button
             type="submit"
-            disabled={isScanning}
-            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-xs transition disabled:opacity-50 flex items-center gap-2"
+            disabled={isScanning || !repoPath.trim()}
+            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition disabled:opacity-50 flex items-center gap-2"
           >
             {isScanning ? (
               <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                Analyzing AST & Dependencies...
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                Scanning Codebase &amp; Manifests...
               </>
             ) : (
               <>
-                <Zap className="w-4 h-4" />
-                Run Codebase Sizing
+                <Search className="w-3.5 h-3.5" />
+                Analyze Codebase
               </>
             )}
           </button>
         </div>
       </form>
 
-      {/* Analysis Results Display */}
-      {analysisResult && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden space-y-6 p-6 animate-in fade-in">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+      {/* STEP 2: Human-Understandable Key:Value Specification Report */}
+      {workflowStep >= 2 && scanReport && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden animate-in fade-in space-y-0">
+          <div className="p-5 bg-slate-50/80 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                <h3 className="text-lg font-bold text-slate-900">Right-Sizing Specifications</h3>
+                <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-bold">
+                  2
+                </span>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Codebase &amp; Architecture Specification Report (Human-in-the-Loop Review)
+                </h3>
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                Optimized AWS resource allocation based on inspected source code patterns.
+                Verify the detected technical primitives. You may edit any field before accepting and right-sizing AWS infrastructure.
               </p>
             </div>
+
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Confidence: {analysisResult.confidence_score || '95%'}
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-blue-50 text-blue-800 border border-blue-200">
+                Environment: {selectedEnvTier.toUpperCase()}
               </span>
-              <span className="text-sm font-bold text-slate-900 bg-slate-100 px-3 py-1 rounded-lg">
-                {analysisResult.monthly_total_estimate || '$78.00 / mo'}
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Zero Source Code Leaked
               </span>
             </div>
           </div>
 
-          {/* Tech Stack Badges */}
-          <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-              Detected Stack & Frameworks
-            </h4>
-            <div className="flex flex-wrap gap-2">
-              {(analysisResult.detected_languages || ['Python', 'PostgreSQL', 'Docker']).map((lang, idx) => (
-                <span
-                  key={idx}
-                  className="px-3 py-1 bg-slate-100 text-slate-800 text-xs font-semibold rounded-lg border border-slate-200"
-                >
-                  {lang}
-                </span>
-              ))}
-            </div>
+          {/* Key:Value Specification Table */}
+          <div className="divide-y divide-slate-100">
+            {editableKeyValue.map((item, idx) => (
+              <div key={item.key} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/50 transition">
+                <div className="sm:w-1/3">
+                  <span className="text-xs font-semibold text-slate-800">{item.label}</span>
+                  <div className="text-[10px] text-slate-400 capitalize">{item.category} parameter</div>
+                </div>
+
+                <div className="sm:w-2/3 flex items-center gap-3">
+                  {item.options && item.options.length > 0 ? (
+                    <select
+                      value={item.value}
+                      onChange={(e) => handleValueChange(idx, e.target.value)}
+                      className="w-full text-xs bg-white border border-slate-200 rounded-lg p-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
+                    >
+                      {item.options.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  ) : item.editable ? (
+                    <div className="relative w-full">
+                      <input
+                        type="text"
+                        value={item.value}
+                        onChange={(e) => handleValueChange(idx, e.target.value)}
+                        className="w-full text-xs bg-white border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono"
+                      />
+                      <Edit3 className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                  ) : (
+                    <span className="text-xs font-semibold text-slate-900 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 font-mono">
+                      {item.value}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
 
-          {/* Sizing Recommendations Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* Compute recommendation */}
-            <div className="p-5 rounded-xl border border-blue-100 bg-blue-50/30 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-blue-900 font-semibold text-sm">
-                  <Server className="w-4 h-4 text-blue-600" />
-                  Compute Sizing (EC2 / ECS)
-                </div>
-                <span className="text-xs font-bold text-blue-700 font-mono bg-white px-2 py-0.5 rounded border border-blue-200">
-                  {analysisResult.recommended_compute?.instance_type || 't3.medium'}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 pt-2 border-t border-blue-100">
-                <div>
-                  <span className="text-slate-400">vCPUs:</span>{' '}
-                  <span className="font-semibold text-slate-800">
-                    {analysisResult.recommended_compute?.vcpus || 2} Cores
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-400">Memory:</span>{' '}
-                  <span className="font-semibold text-slate-800">
-                    {analysisResult.recommended_compute?.memory_gib || 4.0} GiB
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-400">Family:</span>{' '}
-                  <span className="font-semibold text-slate-800">
-                    {analysisResult.recommended_compute?.family || 'General Purpose'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-400">Monthly Est:</span>{' '}
-                  <span className="font-semibold text-blue-700">
-                    {analysisResult.recommended_compute?.monthly_cost_usd || '$30.37'}
-                  </span>
-                </div>
-              </div>
+          {/* Acceptance Action Bar */}
+          <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="text-xs text-slate-500 flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>Verifying and accepting this specification triggers Gemini Cloud Sizing for <strong>{selectedEnvTier.toUpperCase()}</strong>.</span>
             </div>
 
-            {/* Database recommendation */}
-            <div className="p-5 rounded-xl border border-indigo-100 bg-indigo-50/30 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-indigo-900 font-semibold text-sm">
-                  <Database className="w-4 h-4 text-indigo-600" />
-                  Database Sizing (Amazon RDS)
-                </div>
-                <span className="text-xs font-bold text-indigo-700 font-mono bg-white px-2 py-0.5 rounded border border-indigo-200">
-                  {analysisResult.recommended_database?.instance_type || 'db.t3.medium'}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 pt-2 border-t border-indigo-100">
-                <div>
-                  <span className="text-slate-400">Engine:</span>{' '}
-                  <span className="font-semibold text-slate-800">
-                    {analysisResult.recommended_database?.engine || 'PostgreSQL'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-400">Storage:</span>{' '}
-                  <span className="font-semibold text-slate-800">
-                    {analysisResult.recommended_database?.storage_gib || 50} GB gp3
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-400">Multi-AZ:</span>{' '}
-                  <span className="font-semibold text-emerald-700">Enabled</span>
-                </div>
-                <div>
-                  <span className="text-slate-400">Monthly Est:</span>{' '}
-                  <span className="font-semibold text-indigo-700">
-                    {analysisResult.recommended_database?.monthly_cost_usd || '$49.64'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {dispatchStatus && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium rounded-lg flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>{dispatchStatus}</span>
-            </div>
-          )}
-
-          {/* Action Dispatch */}
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
             <button
-              onClick={handleDispatch}
-              disabled={isDispatching}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition flex items-center gap-2"
+              type="button"
+              onClick={handleAcceptAndSize}
+              disabled={isSizing}
+              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-xs transition disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {isDispatching ? (
+              {isSizing ? (
                 <>
                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  Forwarding to Architecture Generator...
+                  Synthesizing AWS Architecture (Gemini)...
                 </>
               ) : (
                 <>
-                  Generate Cloud Architecture
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <Check className="w-4 h-4" />
+                  Verify &amp; Accept Specification ➔
                 </>
               )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP 3: AWS Architecture Blueprint & Editable Service Customizer */}
+      {workflowStep === 3 && sizingOutput && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden animate-in fade-in space-y-6 p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-bold">
+                  3
+                </span>
+                <h3 className="text-lg font-bold text-slate-900">
+                  AWS Deployment Infrastructure Blueprint &amp; Service Customizer
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Right-sized for <strong>{selectedEnvTier.toUpperCase()}</strong> in <strong>{targetRegion}</strong>. You can customize the proposed services below, re-analyze what you edited, and proceed to Cloud Architecture Studio.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Estimated Cost</span>
+                <span className="text-2xl font-bold text-slate-900">
+                  ${sizingOutput.monthly_cost_estimate_usd?.total_estimated_monthly_usd || '0.00'}
+                  <span className="text-xs font-normal text-slate-500"> / month</span>
+                </span>
+              </div>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
+                {sizingOutput.ai_provider}
+              </span>
+            </div>
+          </div>
+
+          {/* Interactive AWS Service Customizer Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* 1. Compute Fleet Card */}
+            <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold text-blue-900">
+                  <Server className="w-4 h-4 text-blue-600" />
+                  Compute Fleet
+                </div>
+                <span className="text-[10px] font-semibold text-blue-700 bg-blue-100/60 px-2 py-0.5 rounded">
+                  ${sizingOutput.compute?.monthly_cost || 0}/mo
+                </span>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <div>
+                  <label className="text-slate-500 block mb-1">Compute Service</label>
+                  <select
+                    value={editedComputeService}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEditedComputeService(val);
+                      if (val.includes('EC2')) setEditedInstanceType('t4g.micro');
+                      else if (val.includes('ECS')) setEditedInstanceType('0.25 vCPU / 0.5 GB');
+                    }}
+                    className="w-full bg-white border border-slate-200 rounded-lg p-2 text-slate-800 font-medium"
+                  >
+                    <option value="Amazon EC2 (Docker Runtime)">Amazon EC2 (Docker Runtime)</option>
+                    <option value="AWS ECS Fargate">AWS ECS Fargate (Serverless Container)</option>
+                    <option value="AWS Lambda">AWS Lambda (Serverless Function)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-500 block mb-1">Instance / Task Sizing</label>
+                  <select
+                    value={editedInstanceType}
+                    onChange={(e) => setEditedInstanceType(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg p-2 text-slate-800 font-medium font-mono"
+                  >
+                    {editedComputeService.includes('EC2') ? (
+                      <>
+                        <option value="t4g.nano">t4g.nano (2 vCPU, 0.5 GB) — $3.06/mo</option>
+                        <option value="t4g.micro">t4g.micro (2 vCPU, 1 GB) — $6.12/mo (Free Tier)</option>
+                        <option value="t4g.small">t4g.small (2 vCPU, 2 GB) — $12.24/mo</option>
+                        <option value="t3.micro">t3.micro (2 vCPU, 1 GB x86) — $7.60/mo</option>
+                        <option value="t3.medium">t3.medium (2 vCPU, 4 GB x86) — $30.40/mo</option>
+                      </>
+                    ) : editedComputeService.includes('ECS') ? (
+                      <>
+                        <option value="0.25 vCPU / 0.5 GB">0.25 vCPU / 0.5 GB RAM — $12.80/mo</option>
+                        <option value="0.5 vCPU / 1 GB">0.5 vCPU / 1 GB RAM — $25.60/mo</option>
+                        <option value="1 vCPU / 2 GB">1 vCPU / 2 GB RAM — $51.20/mo</option>
+                        <option value="2 vCPU / 4 GB">2 vCPU / 4 GB RAM — $102.40/mo</option>
+                      </>
+                    ) : (
+                      <option value="Serverless">Serverless 512 MB — $1.50/mo</option>
+                    )}
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-slate-500">Instance Count:</span>
+                  <select
+                    value={editedMinCapacity}
+                    onChange={(e) => setEditedMinCapacity(Number(e.target.value))}
+                    className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-slate-800 font-medium"
+                  >
+                    <option value={1}>1 Instance</option>
+                    <option value={2}>2 Instances (Dual-AZ)</option>
+                    <option value={3}>3 Instances (HA Fleet)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Networking & Ingress Card */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                  <Globe className="w-4 h-4 text-slate-600" />
+                  Networking &amp; Ingress
+                </div>
+                <span className="text-[10px] font-semibold text-slate-700 bg-slate-200/60 px-2 py-0.5 rounded">
+                  ${sizingOutput.networking?.monthly_cost || 0}/mo
+                </span>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <div>
+                  <label className="text-slate-500 block mb-1">Ingress Mode</label>
+                  <select
+                    value={editedAlbEnabled ? 'alb' : 'eip'}
+                    onChange={(e) => setEditedAlbEnabled(e.target.value === 'alb')}
+                    className="w-full bg-white border border-slate-200 rounded-lg p-2 text-slate-800 font-medium"
+                  >
+                    <option value="eip">Direct Elastic IP (No ALB) — $0.00/mo (Recommended in DEV)</option>
+                    <option value="alb">Application Load Balancer (ALB) — $16.50/mo</option>
+                  </select>
+                </div>
+
+                <div className="text-[11px] text-slate-500 pt-1">
+                  VPC CIDR: <strong>10.0.0.0/16</strong> | Subnets: <strong>{editedAlbEnabled ? 'Public + Private Subnets' : 'Public Subnet Direct'}</strong>
+                </div>
+
+                <div className="text-[11px] text-slate-600 pt-1 font-medium">
+                  {editedAlbEnabled ? 'ALB provides SSL termination and path routing across AZs.' : 'Direct Elastic IP saves $16.50/mo in DEV without load balancer overhead.'}
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Database Layer Card */}
+            <div className="p-4 rounded-xl border border-indigo-200 bg-indigo-50/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold text-indigo-900">
+                  <Database className="w-4 h-4 text-indigo-600" />
+                  Data Layer
+                </div>
+                <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-100/60 px-2 py-0.5 rounded">
+                  ${sizingOutput.database?.monthly_cost || 0}/mo
+                </span>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <div>
+                  <label className="text-slate-500 block mb-1">Database Service</label>
+                  <select
+                    value={editedDatabaseService}
+                    onChange={(e) => setEditedDatabaseService(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg p-2 text-slate-800 font-medium"
+                  >
+                    <option value="None">None / Local SQLite ($0.00/mo)</option>
+                    <option value="Amazon RDS PostgreSQL (db.t4g.micro)">Amazon RDS PostgreSQL (db.t4g.micro) — $8.60/mo</option>
+                    <option value="Amazon RDS PostgreSQL (db.t4g.small)">Amazon RDS PostgreSQL (db.t4g.small) — $17.20/mo</option>
+                    <option value="Amazon Aurora Serverless v2">Amazon Aurora Serverless v2 — $48.00/mo</option>
+                  </select>
+                </div>
+
+                <div className="text-[11px] text-indigo-700 pt-1 font-medium">
+                  {editedDatabaseService === 'None'
+                    ? 'Container uses local storage or external client connection.'
+                    : 'Automated daily snapshots and KMS encryption at rest.'}
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Cache Service Card */}
+            <div className="p-4 rounded-xl border border-purple-200 bg-purple-50/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold text-purple-900">
+                  <Zap className="w-4 h-4 text-purple-600" />
+                  In-Memory Cache
+                </div>
+                <span className="text-[10px] font-semibold text-purple-700 bg-purple-100/60 px-2 py-0.5 rounded">
+                  ${sizingOutput.cache?.monthly_cost || 0}/mo
+                </span>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <div>
+                  <label className="text-slate-500 block mb-1">Cache Service</label>
+                  <select
+                    value={editedCacheService}
+                    onChange={(e) => setEditedCacheService(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg p-2 text-slate-800 font-medium"
+                  >
+                    <option value="None">None ($0.00/mo)</option>
+                    <option value="Amazon ElastiCache Redis (cache.t4g.micro)">Amazon ElastiCache Redis (cache.t4g.micro) — $13.20/mo</option>
+                    <option value="Amazon ElastiCache Redis (cache.t4g.small)">Amazon ElastiCache Redis (cache.t4g.small) — $36.40/mo</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* 5. Static Assets & CDN Card */}
+            <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold text-amber-900">
+                  <Layers className="w-4 h-4 text-amber-600" />
+                  Frontend &amp; CDN
+                </div>
+                <span className="text-[10px] font-semibold text-amber-700 bg-amber-100/60 px-2 py-0.5 rounded">
+                  ${sizingOutput.frontend_hosting?.monthly_cost || 0}/mo
+                </span>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <div>
+                  <label className="text-slate-500 block mb-1">CDN Distribution</label>
+                  <select
+                    value={editedCdnEnabled ? 'cdn' : 'none'}
+                    onChange={(e) => setEditedCdnEnabled(e.target.value === 'cdn')}
+                    className="w-full bg-white border border-slate-200 rounded-lg p-2 text-slate-800 font-medium"
+                  >
+                    <option value="none">None ($0.00/mo)</option>
+                    <option value="cdn">Amazon CloudFront + S3 Origin — $1.80/mo</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* 6. Quick Cost Breakdown Summary */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2">
+              <div className="text-xs font-bold text-slate-900 border-b border-slate-100 pb-1.5 flex items-center justify-between">
+                <span>Cost Item Breakdown</span>
+                <span className="text-emerald-700 font-bold">${sizingOutput.monthly_cost_estimate_usd?.total_estimated_monthly_usd || 0}/mo</span>
+              </div>
+              <div className="space-y-1 text-xs text-slate-600">
+                <div className="flex justify-between"><span>Compute:</span> <strong className="font-mono">${sizingOutput.monthly_cost_estimate_usd?.compute || 0}/mo</strong></div>
+                <div className="flex justify-between"><span>Networking:</span> <strong className="font-mono">${sizingOutput.monthly_cost_estimate_usd?.networking || 0}/mo</strong></div>
+                <div className="flex justify-between"><span>Database:</span> <strong className="font-mono">${sizingOutput.monthly_cost_estimate_usd?.database || 0}/mo</strong></div>
+                <div className="flex justify-between"><span>Cache:</span> <strong className="font-mono">${sizingOutput.monthly_cost_estimate_usd?.cache || 0}/mo</strong></div>
+                <div className="flex justify-between"><span>CDN / Storage:</span> <strong className="font-mono">${sizingOutput.monthly_cost_estimate_usd?.frontend || 0}/mo</strong></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Compatibility Analysis Notes */}
+          {sizingOutput.compatibility_notes && sizingOutput.compatibility_notes.length > 0 && (
+            <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-200 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-blue-900">
+                <ShieldCheck className="w-4 h-4 text-blue-600" />
+                Architectural Compatibility &amp; Analysis
+              </div>
+              <ul className="list-disc list-inside text-xs text-blue-800 space-y-1">
+                {sizingOutput.compatibility_notes.map((note, idx) => (
+                  <li key={idx}>{note}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* FinOps Optimizations List */}
+          {sizingOutput.finops_optimizations && sizingOutput.finops_optimizations.length > 0 && (
+            <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-900">
+                <DollarSign className="w-4 h-4 text-amber-600" />
+                FinOps Cost Optimizations Applied
+              </div>
+              <ul className="list-disc list-inside text-xs text-amber-800 space-y-1">
+                {sizingOutput.finops_optimizations.map((tip, idx) => (
+                  <li key={idx}>{tip}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Bottom Dual Action Bar */}
+          <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* Button 1: Analyze & Recalculate What the User Edited */}
+            <button
+              type="button"
+              onClick={handleRecalculateSizing}
+              disabled={isRecalculating}
+              className="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-lg shadow-xs transition disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isRecalculating ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  Re-analyzing Edited Services...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Analyze &amp; Recalculate Architecture
+                </>
+              )}
+            </button>
+
+            {/* Button 2: Proceed to Cloud Architecture Studio */}
+            <button
+              type="button"
+              onClick={handleProceedToModule4}
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition flex items-center justify-center gap-2"
+            >
+              <span>Proceed to Cloud Architecture Studio</span>
+              <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>

@@ -1,5 +1,5 @@
 // frontend/src/modules/source_cloud/SourceCloudView.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   GitBranch,
   Cloud,
@@ -13,14 +13,20 @@ import {
   ArrowRight,
   ExternalLink,
   ChevronRight,
+  ChevronDown,
   Database,
   Cpu,
   Lock,
   Eye,
   EyeOff,
-  Sparkles
+  Sparkles,
+  Search,
+  Globe,
+  Check,
+  X
 } from 'lucide-react';
 import { projectsApi, connectionsApi } from '../../services/api';
+import { AWS_REGIONS_39 } from '../../constants/awsRegions';
 
 export default function SourceCloudView({ onNavigate }) {
   // Data states
@@ -39,6 +45,7 @@ export default function SourceCloudView({ onNavigate }) {
   const [authMethod, setAuthMethod] = useState('pat'); // 'pat' | 'oauth'
   const [patToken, setPatToken] = useState('');
   const [isVerifyingPat, setIsVerifyingPat] = useState(false);
+  const [isConnectingOAuth, setIsConnectingOAuth] = useState(false);
   const [githubUser, setGithubUser] = useState(null);
   const [repos, setRepos] = useState([]);
   const [selectedRepo, setSelectedRepo] = useState('');
@@ -52,6 +59,37 @@ export default function SourceCloudView({ onNavigate }) {
   const [awsRegion, setAwsRegion] = useState('us-east-1');
   const [isValidatingAws, setIsValidatingAws] = useState(false);
   const [awsValidationResult, setAwsValidationResult] = useState(null);
+
+  // AWS 39-Region Searchable Dropdown state
+  const [regionSearch, setRegionSearch] = useState('');
+  const [isRegionDropdownOpen, setIsRegionDropdownOpen] = useState(false);
+  const regionDropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (regionDropdownRef.current && !regionDropdownRef.current.contains(e.target)) {
+        setIsRegionDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredRegions = AWS_REGIONS_39.filter((r) => {
+    if (!regionSearch.trim()) return true;
+    const q = regionSearch.toLowerCase();
+    return (
+      r.value.toLowerCase().includes(q) ||
+      r.label.toLowerCase().includes(q) ||
+      (r.group && r.group.toLowerCase().includes(q))
+    );
+  });
+
+  const selectedRegionObj = AWS_REGIONS_39.find((r) => r.value === awsRegion) || {
+    value: awsRegion,
+    label: `${awsRegion} (Global)`,
+    group: 'AWS Global'
+  };
 
   // Finalize unified submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -111,6 +149,81 @@ export default function SourceCloudView({ onNavigate }) {
     loadEnvs();
   }, [selectedProjectId]);
 
+  // Reusable repository loader
+  const loadUserRepos = async (token) => {
+    try {
+      const repoData = await connectionsApi.getRepos(token);
+      const repoList = Array.isArray(repoData) ? repoData : (repoData.repos || repoData.repositories || []);
+      setRepos(repoList);
+      if (repoList.length > 0) {
+        const first = repoList[0].full_name || repoList[0].name;
+        setSelectedRepo(first);
+        loadBranchesForRepo(first, token);
+      }
+      return repoList;
+    } catch (err) {
+      console.warn('Failed to load repositories:', err);
+      return [];
+    }
+  };
+
+  // Listen for OAuth completion from popup or URL parameters
+  useEffect(() => {
+    const handleOAuthMessage = async (event) => {
+      if (event.data && event.data.type === 'GITHUB_CONNECTION_SUCCESS') {
+        setIsConnectingOAuth(false);
+        const token = event.data.access_token || event.data.token;
+        const user = event.data.user;
+        if (token) {
+          setPatToken(token);
+          const ghUserObj = user || { login: 'developer' };
+          setGithubUser(ghUserObj);
+          setAuthMethod('oauth');
+          setStatusMessage({
+            type: 'success',
+            text: `Successfully connected GitHub account @${ghUserObj.login || 'developer'} via OAuth!`,
+          });
+          await loadUserRepos(token);
+        }
+      }
+    };
+
+    window.addEventListener('message', handleOAuthMessage);
+
+    // Also check URL parameters if redirected in full page
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('github_connected') === '1' && urlParams.get('gh_token')) {
+      const token = urlParams.get('gh_token');
+      const userLogin = urlParams.get('gh_user') || 'Connected User';
+      setPatToken(token);
+      setGithubUser({ login: userLogin });
+      setAuthMethod('oauth');
+      setStatusMessage({
+        type: 'success',
+        text: `Connected GitHub account: @${userLogin} via OAuth.`,
+      });
+      loadUserRepos(token);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    return () => window.removeEventListener('message', handleOAuthMessage);
+  }, []);
+
+  // Handle GitHub OAuth Popup
+  const handleConnectGitHubOAuth = () => {
+    setIsConnectingOAuth(true);
+    setStatusMessage(null);
+    const width = 600;
+    const height = 700;
+    const left = Math.max(0, (window.screen.width - width) / 2);
+    const top = Math.max(0, (window.screen.height - height) / 2);
+    window.open(
+      '/api/v1/connections/github/login',
+      'AetherOpsGitHubConnection',
+      `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,status=yes`
+    );
+  };
+
   // Handle PAT verification
   const handleVerifyPat = async () => {
     if (!patToken.trim()) return;
@@ -118,19 +231,17 @@ export default function SourceCloudView({ onNavigate }) {
     setStatusMessage(null);
     try {
       const res = await connectionsApi.verifyPat(patToken.trim());
-      setGithubUser(res.user || { login: res.username || 'Authorized User' });
-      // Fetch repositories
-      const repoData = await connectionsApi.getRepos(patToken.trim());
-      const repoList = Array.isArray(repoData) ? repoData : (repoData.repositories || []);
-      setRepos(repoList);
-      if (repoList.length > 0) {
-        const first = repoList[0].full_name || repoList[0].name;
-        setSelectedRepo(first);
-        loadBranchesForRepo(first, patToken.trim());
-      }
-      setStatusMessage({ type: 'success', text: `Verified GitHub account: ${res.username || 'Connected'}` });
+      const userObj = res.user || {
+        login: res.username || 'Authorized User',
+        name: res.name || res.username,
+        avatar_url: res.avatar_url,
+      };
+      setGithubUser(userObj);
+      await loadUserRepos(patToken.trim());
+      setStatusMessage({ type: 'success', text: `Verified GitHub account: @${res.username || userObj.login || 'Connected'}` });
     } catch (err) {
-      setStatusMessage({ type: 'error', text: `GitHub PAT Error: ${err.message}` });
+      const msg = err?.message || (typeof err === 'string' ? err : 'PAT verification failed');
+      setStatusMessage({ type: 'error', text: `GitHub PAT Error: ${msg}` });
     } finally {
       setIsVerifyingPat(false);
     }
@@ -171,6 +282,8 @@ export default function SourceCloudView({ onNavigate }) {
     setAwsValidationResult(null);
     try {
       const res = await connectionsApi.validateAws({
+        access_key_id: awsAccessKey.trim(),
+        secret_access_key: awsSecretKey.trim(),
         aws_access_key_id: awsAccessKey.trim(),
         aws_secret_access_key: awsSecretKey.trim(),
         aws_region: awsRegion,
@@ -205,7 +318,10 @@ export default function SourceCloudView({ onNavigate }) {
         environment_id: selectedEnvId,
         repo_url: selectedRepo.startsWith('http') ? selectedRepo : `https://github.com/${selectedRepo}`,
         branch: selectedBranch || 'main',
+        pat_token: patToken.trim() || 'mock-token',
         access_token: patToken.trim() || 'mock-token',
+        access_key_id: awsAccessKey.trim() || 'AKIAIOSFODNN7EXAMPLE',
+        secret_access_key: awsSecretKey.trim() || 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
         aws_access_key_id: awsAccessKey.trim() || 'AKIAIOSFODNN7EXAMPLE',
         aws_secret_access_key: awsSecretKey.trim() || 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
         aws_region: awsRegion,
@@ -389,6 +505,28 @@ export default function SourceCloudView({ onNavigate }) {
                 </button>
               </div>
 
+              {/* Connected GitHub Account Badge */}
+              {githubUser && (
+                <div className="flex items-center justify-between p-3 bg-emerald-50/80 border border-emerald-200/90 rounded-xl text-xs text-emerald-900 shadow-2xs">
+                  <div className="flex items-center gap-2.5">
+                    {githubUser.avatar_url ? (
+                      <img src={githubUser.avatar_url} alt="" className="w-5 h-5 rounded-full border border-emerald-300" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    )}
+                    <div>
+                      <span className="font-semibold text-emerald-950">@{githubUser.login || githubUser.name || 'user'}</span>
+                      <span className="text-[11px] text-emerald-700 ml-1.5">
+                        {repos.length > 0 ? `(${repos.length} repositories loaded)` : '(Connected)'}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-200">
+                    {authMethod === 'oauth' ? 'OAuth 2.0' : 'PAT'}
+                  </span>
+                </div>
+              )}
+
               {authMethod === 'pat' ? (
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">GitHub PAT Token</label>
@@ -404,7 +542,7 @@ export default function SourceCloudView({ onNavigate }) {
                       type="button"
                       onClick={handleVerifyPat}
                       disabled={isVerifyingPat || !patToken.trim()}
-                      className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50 shrink-0"
+                      className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50 shrink-0 cursor-pointer"
                     >
                       {isVerifyingPat ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Verify'}
                     </button>
@@ -414,19 +552,23 @@ export default function SourceCloudView({ onNavigate }) {
                   </p>
                 </div>
               ) : (
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center">
-                  <p className="text-xs text-slate-600 mb-3">
-                    Authorize Aether Cloud via official GitHub App permissions.
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center space-y-3">
+                  <p className="text-xs text-slate-600">
+                    Authorize AetherOps to securely read your GitHub repositories without generating manual access tokens.
                   </p>
-                  <a
-                    href="/api/v1/auth/github/login"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-black text-white text-xs font-semibold rounded-lg shadow-xs transition"
+                  <button
+                    type="button"
+                    onClick={handleConnectGitHubOAuth}
+                    disabled={isConnectingOAuth}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-black text-white text-xs font-semibold rounded-lg shadow-2xs transition disabled:opacity-50 cursor-pointer"
                   >
-                    <FolderGit2 className="w-4 h-4" />
-                    Sign in with GitHub
-                  </a>
+                    {isConnectingOAuth ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <FolderGit2 className="w-4 h-4" />
+                    )}
+                    {isConnectingOAuth ? 'Connecting to GitHub...' : (githubUser && authMethod === 'oauth' ? 'Reconnect GitHub Account' : 'Connect with GitHub OAuth')}
+                  </button>
                 </div>
               )}
 
@@ -530,61 +672,154 @@ export default function SourceCloudView({ onNavigate }) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">AWS Region</label>
-                  <select
-                    value={awsRegion}
-                    onChange={(e) => setAwsRegion(e.target.value)}
-                    className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  >
-                    <option value="us-east-1">us-east-1 (N. Virginia)</option>
-                    <option value="us-west-2">us-west-2 (Oregon)</option>
-                    <option value="eu-west-1">eu-west-1 (Ireland)</option>
-                    <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
-                  </select>
+              {/* AWS Region Selector (Searchable across all 39 Global Regions) */}
+              <div className="relative" ref={regionDropdownRef}>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-slate-600">
+                    AWS Region ({AWS_REGIONS_39.length} Global Regions)
+                  </label>
+                  <span className="text-[10px] text-blue-600 font-medium">
+                    {selectedRegionObj.group}
+                  </span>
                 </div>
 
-                <div className="flex items-end">
-                  <button
-                    type="button"
-                    onClick={handleValidateAws}
-                    disabled={isValidatingAws || !awsAccessKey.trim() || !awsSecretKey.trim()}
-                    className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-1.5"
-                  >
-                    {isValidatingAws ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        Validating STS...
-                      </>
-                    ) : (
-                      <>
-                        <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                        Validate IAM
-                      </>
-                    )}
-                  </button>
-                </div>
+                {/* Dropdown trigger button */}
+                <button
+                  type="button"
+                  onClick={() => setIsRegionDropdownOpen(!isRegionDropdownOpen)}
+                  className="w-full text-left text-sm bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 flex items-center justify-between transition"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <Globe className="w-4 h-4 text-blue-600 shrink-0" />
+                    <span className="font-mono text-xs font-semibold text-slate-900">{awsRegion}</span>
+                    <span className="text-slate-500 text-xs truncate">
+                      · {selectedRegionObj.label.replace(`${awsRegion} `, '').replace(/[()]/g, '')}
+                    </span>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${isRegionDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Searchable Dropdown Popup */}
+                {isRegionDropdownOpen && (
+                  <div className="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150 max-w-full">
+                    <div className="p-2 border-b border-slate-100 bg-slate-50/80">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          autoFocus
+                          placeholder="Search 39 regions (e.g. ap-south-1, Mumbai, us-east-1)..."
+                          value={regionSearch}
+                          onChange={(e) => setRegionSearch(e.target.value)}
+                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-slate-200 rounded-md text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        />
+                        {regionSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setRegionSearch('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between mt-1 px-1 text-[10px] text-slate-400">
+                        <span>Select deployment region</span>
+                        <span>{filteredRegions.length} matches</span>
+                      </div>
+                    </div>
+
+                    <div className="max-h-56 overflow-y-auto divide-y divide-slate-100">
+                      {filteredRegions.length === 0 ? (
+                        <div className="p-4 text-center text-xs text-slate-400">
+                          No AWS regions found matching "{regionSearch}"
+                        </div>
+                      ) : (
+                        filteredRegions.map((region) => {
+                          const isSelected = region.value === awsRegion;
+                          return (
+                            <button
+                              key={region.value}
+                              type="button"
+                              onClick={() => {
+                                setAwsRegion(region.value);
+                                setIsRegionDropdownOpen(false);
+                                setRegionSearch('');
+                              }}
+                              className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-blue-50/70 transition ${
+                                isSelected ? 'bg-blue-50 font-medium text-blue-900' : 'text-slate-700'
+                              }`}
+                            >
+                              <div className="flex flex-col min-w-0 pr-2">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-mono font-semibold text-slate-900">{region.value}</span>
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-sans">
+                                    {region.group}
+                                  </span>
+                                </div>
+                                <span className="text-[11px] text-slate-500 truncate mt-0.5">{region.label}</span>
+                              </div>
+                              {isSelected && <Check className="w-4 h-4 text-blue-600 shrink-0" />}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Validate IAM Action */}
+              <div>
+                <button
+                  type="button"
+                  onClick={handleValidateAws}
+                  disabled={isValidatingAws || !awsAccessKey.trim() || !awsSecretKey.trim()}
+                  className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-2 shadow-xs"
+                >
+                  {isValidatingAws ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Validating STS ({awsRegion})...
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                      Validate IAM Credentials (AWS STS)
+                    </>
+                  )}
+                </button>
               </div>
 
               {awsValidationResult && (
                 <div
-                  className={`p-3 rounded-lg text-xs flex items-center gap-2 border ${
-                    awsValidationResult.is_valid !== false
-                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                      : 'bg-rose-50 text-rose-800 border-rose-200'
+                  className={`p-3 rounded-lg text-xs border ${
+                    awsValidationResult.is_valid !== false && !awsValidationResult.error
+                      ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                      : 'bg-rose-50 text-rose-900 border-rose-200'
                   }`}
                 >
-                  {awsValidationResult.is_valid !== false ? (
-                    <>
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>STS Handshake Valid! Role/User: {awsValidationResult.arn || 'Valid'}</span>
-                    </>
+                  {awsValidationResult.is_valid !== false && !awsValidationResult.error ? (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 font-medium">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>AWS STS Validated · Account ID: <strong className="font-mono">{awsValidationResult.account_id}</strong></span>
+                      </div>
+                      <div className="pl-6 text-[11px] text-emerald-700 font-mono break-all">
+                        Caller ARN: {awsValidationResult.arn || 'arn:aws:iam::' + awsValidationResult.account_id + ':root'}
+                      </div>
+                      <div className="pl-6 text-[10px] text-emerald-600">
+                        Region: <span className="font-mono font-semibold">{awsValidationResult.region || awsRegion}</span> · Auth: {awsValidationResult.auth_type || 'ACCESS_KEYS'}
+                      </div>
+                    </div>
                   ) : (
-                    <>
-                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                      <span>{awsValidationResult.error || 'Authentication error'}</span>
-                    </>
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-rose-800">AWS Validation Failed</div>
+                        <div className="text-[11px] text-rose-700 mt-0.5">{awsValidationResult.error || 'Authentication error'}</div>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}

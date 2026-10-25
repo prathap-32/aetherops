@@ -2,21 +2,24 @@
 
 ## 🚀 Start Services
 
-### Option 1: Start Both (Auth + Gateway)
+### Option 1: Start Core Microservices (Auth + Dashboard + Projects)
 ```bash
-cd /home/ren/Proj/1/aetherops
 ./start-both.sh
 ```
 
-### Option 2: Manual Start
+### Option 2: Run Microservices Separately and Independently
 ```bash
-# Terminal 1 - Gateway (Frontend)
-cd /home/ren/Proj/1/aetherops/services/gateway
-/home/ren/Proj/1/aetherops/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Terminal 1 - Auth Service (Port 7999)
+cd services/auth_service
+../../.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 7999
 
-# Terminal 2 - Auth Service (API)
-cd /home/ren/Proj/1/aetherops/services/auth_service
-/home/ren/Proj/1/aetherops/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 7999
+# Terminal 2 - Dashboard & API Gateway (Port 8000)
+cd services/gateway
+../../.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+# Terminal 3 - Project Management (Port 8001)
+cd services/project_and_environment_management
+../../.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
 ```
 
 ## 🌐 Access Application
@@ -31,7 +34,10 @@ Open browser: **http://localhost:8000**
 
 Run automated tests:
 ```bash
-cd /home/ren/Proj/1/aetherops
+# Test Auth + Gateway + Project Manager end-to-end:
+./test-core-flow.sh
+
+# Test Auth service API flow:
 ./test-auth-flow.sh
 ```
 

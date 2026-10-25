@@ -17,12 +17,8 @@ import {
   Server,
 } from 'lucide-react';
 
-const PROJECT_TYPES = [
-  { value: 'web_application', label: 'Web App', icon: '🌐' },
-  { value: 'api_service', label: 'API Service', icon: '⚡' },
-  { value: 'microservices', label: 'Microservices', icon: '🧩' },
-  { value: 'data_pipeline', label: 'Data Pipeline', icon: '📊' },
-];
+import { PROJECT_TYPES_LIST as PROJECT_TYPES } from '../../constants/awsRegions';
+
 
 export default function ProjectsView({
   searchQuery,
@@ -497,21 +493,26 @@ export default function ProjectsView({
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-700">Project Type</label>
-                <div className="grid grid-cols-2 gap-2">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Project Type <span className="text-slate-400 font-normal">({PROJECT_TYPES.length} available types)</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
                   {PROJECT_TYPES.map((t) => (
                     <button
                       key={t.value}
                       type="button"
                       onClick={() => setNewType(t.value)}
-                      className={`flex items-center gap-2 p-2.5 rounded-xl text-xs font-semibold border transition text-left ${
+                      title={t.desc}
+                      className={`flex items-center gap-2 p-2 rounded-xl text-xs font-semibold border transition text-left ${
                         newType === t.value
-                          ? 'border-[#1e40af] bg-blue-50/70 text-[#1e40af] shadow-xs'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                          ? 'border-[#1e40af] bg-blue-50/70 text-[#1e40af] shadow-xs ring-1 ring-blue-500/30'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50/50'
                       }`}
                     >
-                      <span className="text-base">{t.icon}</span>
-                      <span className="truncate">{t.label}</span>
+                      <span className="text-base shrink-0">{t.icon}</span>
+                      <div className="truncate">
+                        <div className="truncate">{t.label}</div>
+                      </div>
                     </button>
                   ))}
                 </div>

@@ -17,6 +17,13 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Auto-start if not running
+if ! curl -s http://127.0.0.1:8000/health >/dev/null || ! curl -s http://127.0.0.1:7999/health >/dev/null; then
+    echo "Services not running. Starting via ./start-both.sh..."
+    "$(dirname "$0")/start-both.sh"
+    sleep 3
+fi
+
 # Test 1: Check Gateway Health (Port 8000)
 echo "Test 1: Gateway Health Check (Port 8000)"
 GATEWAY_HEALTH=$(curl -s http://localhost:8000/health)

@@ -25,8 +25,20 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from rich.logging import RichHandler
 
-from app.schemas import ScanRequest, ScanResponse, DispatchRequest, DispatchResponse
+from app.schemas import (
+    ScanRequest, ScanResponse, DispatchRequest, DispatchResponse,
+    ReadinessRequest, ReadinessResponse, KeyValueReportItem,
+    ScanReportRequest, ScanReportResponse,
+    AcceptAndSizeRequest, AwsSizingOutput,
+    RecalculateSizingRequest
+)
 from app.scanner_engine import scan_repository
+from app.universal_scanner import (
+    check_readiness, run_universal_scan,
+    is_remote_target, resolve_repo_target,
+    check_remote_readiness, run_remote_universal_scan
+)
+from app.gemini_sizer import gemini_sizer, recalculate_custom_aws_sizing
 
 
 # ---------------------------------------------------------------------------
@@ -103,13 +115,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-ROOT_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
-FRONTEND_DIST = os.path.join(ROOT_DIR, "frontend", "dist")
-FRONTEND_ASSETS = os.path.join(FRONTEND_DIST, "assets")
-
-if os.path.exists(FRONTEND_ASSETS):
-    app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS), name="react_assets")
-
 # Static assets — shared fonts + Tailwind from the services directory
 static_dir = os.path.join(BASE_DIR, "static")
 if os.path.exists(static_dir):
@@ -132,18 +137,43 @@ async def global_exception_handler(request, exc: Exception):
 # Routes
 # ---------------------------------------------------------------------------
 
+@app.api_route("/app", methods=["GET", "POST", "HEAD"])
+@app.api_route("/app/{rest:path}", methods=["GET", "POST", "HEAD"])
+async def deny_browser_dashboard_access():
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={
+            "status": "DENIED",
+            "code": 403,
+            "detail": "Direct browser access to microservice port 8003 is denied. The AetherOps Dashboard is exclusively hosted on Port 8000.",
+            "service": "repo-analyzer-service",
+            "port": 8003,
+            "dashboard_url": "http://localhost:8000",
+        },
+    )
+
+
 @app.get("/")
 async def root(request: Request):
     accept = request.headers.get("accept", "")
     if "text/html" in accept:
-        index_path = os.path.join(FRONTEND_DIST, "index.html")
-        if os.path.exists(index_path):
-            return FileResponse(index_path)
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={
+                "status": "DENIED",
+                "code": 403,
+                "detail": "Direct browser access to microservice port 8003 is denied. The AetherOps Dashboard is exclusively hosted on Port 8000.",
+                "service": "repo-analyzer-service",
+                "port": 8003,
+                "dashboard_url": "http://localhost:8000",
+            },
+        )
     return {
         "service": "AetherOps AI — Module 3: Repository Analyzer Service",
         "version": "1.0.0",
+        "port": 8003,
+        "type": "BACKEND_MICROSERVICE",
         "endpoints": {
-            "app_console":   "/app",
             "health":        "/health",
             "scan":          "/api/v1/repo/scan",
             "scan_and_size": "/api/v1/repo/scan-and-size",
@@ -164,21 +194,11 @@ async def health_check():
     }
 
 
-@app.get("/app", response_class=HTMLResponse)
-@app.get("/app/{rest:path}", response_class=HTMLResponse)
-async def serve_module3_ui():
-    """Interactive React Console UI for Module 3."""
-    index_path = os.path.join(FRONTEND_DIST, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    from app.module3_page import get_module3_page_html
-    return HTMLResponse(content=get_module3_page_html())
-
-
-def validate_safe_repo_path(raw_path: str) -> Path:
+def validate_safe_repo_path(raw_path: str, must_exist: bool = True) -> Path:
     """
     Validate that raw_path points to an existing directory and does not traverse
     into forbidden system directories or sensitive credential stores.
+    Bypasses filesystem check if target is a remote Git repository.
     """
     from pathlib import Path
     if not raw_path or not str(raw_path).strip():
@@ -186,6 +206,9 @@ def validate_safe_repo_path(raw_path: str) -> Path:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Repository path cannot be empty.",
         )
+    if is_remote_target(raw_path):
+        return Path(raw_path)
+
     try:
         repo_path = Path(raw_path).expanduser().resolve()
     except Exception as exc:
@@ -236,17 +259,140 @@ def validate_safe_repo_path(raw_path: str) -> Path:
                 detail="Repository path is outside permitted workspace roots.",
             )
 
-    if not repo_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Path does not exist: {raw_path}",
-        )
-    if not repo_path.is_dir():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Path is not a directory: {raw_path}",
-        )
+    if must_exist:
+        if not repo_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Path does not exist: {raw_path}",
+            )
+        if not repo_path.is_dir():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Path is not a directory: {raw_path}",
+            )
     return repo_path
+
+
+@app.post("/api/v1/repo/readiness", response_model=ReadinessResponse, status_code=status.HTTP_200_OK)
+async def repo_readiness_endpoint(payload: ReadinessRequest):
+    """
+    Pre-flight AST readiness check: verify repository is valid, readable,
+    and contains recognized application manifests or source code before
+    running full analysis or consuming AI tokens.
+    Seamlessly handles both remote GitHub repositories (in-memory zero-clone)
+    and local filesystem directories.
+    """
+    target_info = await resolve_repo_target(
+        raw_target=payload.repo_path,
+        project_id=payload.project_id,
+        environment_id=payload.environment_id,
+    )
+    if target_info.get("is_remote"):
+        res = await check_remote_readiness(
+            owner=target_info["owner"],
+            repo=target_info["repo"],
+            branch=payload.branch or target_info.get("branch", "main"),
+            token=payload.github_token,
+        )
+        return ReadinessResponse(**res)
+
+    repo_path = validate_safe_repo_path(payload.repo_path, must_exist=False)
+    res = check_readiness(repo_path)
+    return ReadinessResponse(**res)
+
+
+@app.post("/api/v1/repo/scan-report", response_model=ScanReportResponse, status_code=status.HTTP_200_OK)
+async def repo_scan_report_endpoint(payload: ScanReportRequest):
+    """
+    Universal Polyglot Codebase Scan: inspects any language, framework,
+    manifests, and container files. Produces a human-understandable
+    Key:Value report for user review and acceptance.
+    Supports both remote GitHub repos (zero-clone in-memory) and local paths.
+    """
+    target_info = await resolve_repo_target(
+        raw_target=payload.repo_path,
+        project_id=payload.project_id,
+        environment_id=payload.environment_id,
+    )
+    if target_info.get("is_remote"):
+        readiness = await check_remote_readiness(
+            owner=target_info["owner"],
+            repo=target_info["repo"],
+            branch=payload.branch or target_info.get("branch", "main"),
+            token=payload.github_token,
+        )
+        if not readiness["is_analyzable"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=readiness["message"],
+            )
+        report = await run_remote_universal_scan(
+            owner=target_info["owner"],
+            repo=target_info["repo"],
+            branch=payload.branch or target_info.get("branch", "main"),
+            token=payload.github_token,
+            environment_tier=payload.environment_tier,
+            target_region=payload.target_region,
+        )
+        return ScanReportResponse(**report)
+
+    repo_path = validate_safe_repo_path(payload.repo_path, must_exist=True)
+    readiness = check_readiness(repo_path)
+    if not readiness["is_analyzable"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=readiness["message"],
+        )
+
+    report = run_universal_scan(
+        repo_path=repo_path,
+        environment_tier=payload.environment_tier,
+        target_region=payload.target_region,
+    )
+    return ScanReportResponse(**report)
+
+
+@app.post("/api/v1/repo/accept-and-size", response_model=AwsSizingOutput, status_code=status.HTTP_200_OK)
+async def repo_accept_and_size_endpoint(payload: AcceptAndSizeRequest):
+    """
+    Accepts user-verified Key:Value specification and selected Project Environment
+    (DEV, STAGING, or PROD). Synthesizes right-sized AWS deployment infrastructure
+    using Google Gemini 2.0 Flash (with SHA-256 caching and automated offline fallback).
+    """
+    sizing = await gemini_sizer.size_architecture(
+        verified_spec=payload.verified_spec,
+        environment_tier=payload.environment_tier,
+        target_region=payload.target_region,
+        budget_tier=payload.budget_tier,
+        traffic_scale=payload.traffic_scale,
+        ha_level=payload.ha_level,
+    )
+    return AwsSizingOutput(**sizing)
+
+
+@app.post("/api/v1/repo/recalculate-sizing", response_model=AwsSizingOutput, status_code=status.HTTP_200_OK)
+async def repo_recalculate_sizing_endpoint(payload: RecalculateSizingRequest):
+    """
+    Recalculates AWS cloud infrastructure costs, sizing parameters, and validates
+    architectural compatibility when a user modifies their recommended services.
+    """
+    sizing = recalculate_custom_aws_sizing(
+        environment_tier=payload.environment_tier,
+        target_region=payload.target_region,
+        compute_service=payload.compute_service,
+        instance_type=payload.instance_type,
+        min_capacity=payload.min_capacity,
+        max_capacity=payload.max_capacity,
+        multi_az=payload.multi_az,
+        alb_enabled=payload.alb_enabled,
+        waf_enabled=payload.waf_enabled,
+        database_service=payload.database_service,
+        cache_service=payload.cache_service,
+        cdn_enabled=payload.cdn_enabled,
+        verified_spec=payload.verified_spec,
+    )
+    return AwsSizingOutput(**sizing)
+
 
 
 @app.post("/api/v1/repo/scan", status_code=status.HTTP_200_OK)

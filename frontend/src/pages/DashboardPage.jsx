@@ -35,9 +35,11 @@ const PATH_VIEW_MAP = {
   '/environments': 'environments',
   '/source-connection': 'source_cloud',
   '/source-analysis': 'repo_analyzer',
-  '/requirements': 'requirements',
-  '/architecture': 'architecture',
+  '/requirements': 'repo_analyzer',
+  '/architecture': 'architecture_studio',
   '/architecture/designer': 'architecture_designer',
+  '/architecture-designer': 'architecture_designer',
+  '/architecture-studio': 'architecture_studio',
   '/risk-analysis': 'risk_analysis',
   '/architecture/validation': 'architecture_validation',
   '/security': 'security',
@@ -49,6 +51,7 @@ const PATH_VIEW_MAP = {
   '/optimization': 'optimization',
   '/audit': 'audit',
   '/documentation': 'docs',
+  '/account': 'settings',
   '/settings': 'settings',
   '/admin': 'admin',
 };
@@ -59,9 +62,9 @@ const VIEW_PATH_MAP = {
   environments: '/environments',
   source_cloud: '/source-connection',
   repo_analyzer: '/source-analysis',
-  requirements: '/requirements',
-  architecture: '/architecture',
-  architecture_designer: '/architecture/designer',
+  architecture_studio: '/architecture-studio',
+  architecture: '/architecture-studio',
+  architecture_designer: '/architecture-designer',
   risk_analysis: '/risk-analysis',
   architecture_validation: '/architecture/validation',
   security: '/security',
@@ -73,6 +76,7 @@ const VIEW_PATH_MAP = {
   optimization: '/optimization',
   audit: '/audit',
   docs: '/documentation',
+  account: '/account',
   settings: '/settings',
   admin: '/admin',
 };
@@ -95,7 +99,9 @@ export default function DashboardPage() {
 
   const [activeView, setActiveView] = useState(getInitialView);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(() => {
+    return typeof window !== 'undefined' && window.location.pathname.startsWith('/account');
+  });
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -139,6 +145,9 @@ export default function DashboardPage() {
     const handleLocationChange = () => {
       const pathname = window.location.pathname.replace(/\/$/, '') || '/';
       const resolvedView = PATH_VIEW_MAP[pathname] || window.location.hash.replace('#', '');
+      if (pathname === '/account' || resolvedView === 'account') {
+        setIsAccountModalOpen(true);
+      }
       if (resolvedView) {
         if (resolvedView === 'admin' && !isAdmin) {
           window.history.pushState(null, '', '/projects');
@@ -157,12 +166,22 @@ export default function DashboardPage() {
     };
   }, [isAdmin]);
 
-  const handleNavigate = (viewKey, targetPath) => {
+  const [navState, setNavState] = useState(null);
+
+  const handleNavigate = (viewKey, targetPathOrState, extraState) => {
     if (viewKey === 'admin' && !isAdmin) {
       alert('Access Restricted: The Admin Console is only accessible by platform administrators.');
       return;
     }
-    const path = targetPath || VIEW_PATH_MAP[viewKey] || `/${viewKey}`;
+    let path = VIEW_PATH_MAP[viewKey] || `/${viewKey}`;
+    if (typeof targetPathOrState === 'string' && targetPathOrState.startsWith('/')) {
+      path = targetPathOrState;
+      if (extraState) {
+        setNavState(extraState);
+      }
+    } else if (typeof targetPathOrState === 'object' && targetPathOrState !== null) {
+      setNavState(targetPathOrState);
+    }
     try {
       window.history.pushState(null, '', path);
     } catch (e) {
@@ -210,13 +229,6 @@ export default function DashboardPage() {
           />
         );
       case 'repo_analyzer':
-        return (
-          <RepoAnalyzerView
-            onNavigate={handleNavigate}
-            activeProject={activeProject}
-            activeEnvironment={activeEnvironment}
-          />
-        );
       case 'requirements':
         return (
           <RepoAnalyzerView
@@ -225,16 +237,27 @@ export default function DashboardPage() {
             activeEnvironment={activeEnvironment}
           />
         );
+      case 'architecture_studio':
       case 'architecture':
         return (
           <ArchitectureView
             onNavigate={handleNavigate}
             activeProject={activeProject}
             activeEnvironment={activeEnvironment}
+            navState={navState}
+            user={user}
           />
         );
       case 'architecture_designer':
-        return <ArchitectureDesigner onNavigate={handleNavigate} />;
+        return (
+          <ArchitectureDesigner
+            onNavigate={handleNavigate}
+            activeProject={activeProject}
+            activeEnvironment={activeEnvironment}
+            navState={navState}
+            user={user}
+          />
+        );
       case 'risk_analysis':
         return <RiskEngineView onNavigate={handleNavigate} />;
       case 'architecture_validation':
@@ -297,6 +320,8 @@ export default function DashboardPage() {
             handleNavigate('projects', '/projects');
             setIsCreateProjectModalOpen(true);
           }}
+          onOpenAccountModal={() => setIsAccountModalOpen(true)}
+          onOpenAccount={() => setIsAccountModalOpen(true)}
           activeProject={activeProject}
           activeEnvironment={activeEnvironment}
         />

@@ -26,6 +26,9 @@ export function AuthProvider({ children }) {
             username: me.username,
             email: me.email,
             role: me.role || 'USER',
+            uuid: me.uuid,
+            account_id: me.account_id,
+            account_id_formatted: me.account_id_formatted,
           };
           setUser(updatedUser);
           setStoredSession(activeToken, updatedUser);
@@ -53,10 +56,14 @@ export function AuthProvider({ children }) {
 
   const login = async (username, password) => {
     const data = await authApi.login(username, password);
+    const u = data.user || data;
     const authUser = {
-      username: data.username,
-      email: data.email || `${data.username}@aetherops.cloud`,
-      role: data.role || 'ADMIN',
+      username: u.username,
+      email: u.email || `${u.username}@aetherops.local`,
+      role: u.role || 'USER',
+      uuid: u.uuid,
+      account_id: u.account_id,
+      account_id_formatted: u.account_id_formatted,
     };
     setStoredSession(data.token, authUser);
     setUser(authUser);
@@ -65,11 +72,15 @@ export function AuthProvider({ children }) {
   };
 
   const register = async (username, email, password, role = 'USER') => {
-    const data = await authApi.register(username, email, password);
+    const data = await authApi.register(username, email, password, role);
+    const u = data.user || data;
     const authUser = {
-      username: data.username,
-      email: data.email || email,
-      role: data.role || role,
+      username: u.username,
+      email: u.email || email,
+      role: u.role || role,
+      uuid: u.uuid,
+      account_id: u.account_id,
+      account_id_formatted: u.account_id_formatted,
     };
     setStoredSession(data.token, authUser);
     setUser(authUser);
@@ -79,10 +90,14 @@ export function AuthProvider({ children }) {
 
   const completeOAuth = async (provider, username, email) => {
     const data = await authApi.oauthCallback(provider, username, email);
+    const u = data.user || data;
     const authUser = {
-      username: data.username,
-      email: email || `${data.username}@${provider}.oauth`,
-      role: data.role || 'USER',
+      username: u.username,
+      email: email || `${u.username}@${provider}.oauth`,
+      role: u.role || 'USER',
+      uuid: u.uuid,
+      account_id: u.account_id,
+      account_id_formatted: u.account_id_formatted,
     };
     setStoredSession(data.token, authUser);
     setUser(authUser);
@@ -92,10 +107,15 @@ export function AuthProvider({ children }) {
 
   const updateProfile = async (newUsername) => {
     const data = await authApi.updateProfile(newUsername, user?.email);
+    const u = data.user || data;
     const updated = {
-      username: data.username,
-      email: data.email || user?.email,
-      role: data.role || user?.role || 'USER',
+      ...user,
+      username: u.username || newUsername,
+      email: u.email || user?.email,
+      role: u.role || user?.role || 'USER',
+      uuid: u.uuid || user?.uuid,
+      account_id: u.account_id || user?.account_id,
+      account_id_formatted: u.account_id_formatted || user?.account_id_formatted,
     };
     setStoredSession(data.token || token, updated);
     setUser(updated);
@@ -108,6 +128,12 @@ export function AuthProvider({ children }) {
       await authApi.logout();
     } finally {
       clearStoredSession();
+      try {
+        localStorage.removeItem('aether_architecture_designer_state');
+        localStorage.removeItem('aether_latest_sizing');
+        localStorage.removeItem('aether_active_project');
+        localStorage.removeItem('aether_active_env');
+      } catch (e) {}
       setUser(null);
       setToken('');
     }

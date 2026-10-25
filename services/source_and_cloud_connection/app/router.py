@@ -373,8 +373,11 @@ async def github_verify_pat(
     Validates a GitHub Personal Access Token against GitHub API.
     Returns username and scope permissions.
     """
+    token_to_verify = payload.effective_token
+    if not token_to_verify:
+        raise HTTPException(status_code=400, detail="Personal Access Token (pat_token or token) is required.")
     try:
-        data = await verify_pat_token(payload.pat_token)
+        data = await verify_pat_token(token_to_verify)
         return GitHubVerifyPatResponse(**data)
     except ValueError as val_err:
         raise HTTPException(status_code=400, detail=str(val_err))

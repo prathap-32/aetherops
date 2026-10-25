@@ -17,9 +17,11 @@ import {
   ExternalLink,
   Plus,
 } from 'lucide-react';
-import { projectsApi, connectionsApi } from '../../services/api';
+import { projectsApi, connectionsApi, formatAccountId } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 export default function DashboardOverview({ onNavigate, onOpenCreateProject }) {
+  const { user } = useAuth();
   const [projects, setProjects] = useState([]);
   const [connections, setConnections] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,9 +51,9 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject }) {
 
     // Probe essential microservices
     const services = [
-      { id: 'admin', name: 'Control Plane (8000)', url: '/health' },
-      { id: 'pm', name: 'Project Manager (8009)', url: '/api/v1/projects' },
-      { id: 'sc', name: 'Source Connection (8010)', url: '/api/v1/connections' },
+      { id: 'admin', name: 'Gateway (8000)', url: '/health' },
+      { id: 'auth', name: 'Auth Authority (7999)', url: '/api/v1/auth/health' },
+      { id: 'pm', name: 'Project Manager (8001)', url: '/api/v1/projects' },
     ];
 
     services.forEach(async (s) => {
@@ -77,11 +79,11 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject }) {
       {/* Platform Banner */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#0f172a] via-[#1e293b] to-[#1e3a8a] text-white p-6 sm:p-8 shadow-xl border border-slate-700">
         <div className="relative z-10 max-w-3xl space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[11px] font-mono border border-blue-400/30">
-              UNIFIED CLOUD PLATFORM
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-mono border border-amber-400/30 font-bold">
+              AWS ACCOUNT: {formatAccountId(user?.account_id || '109283746519')}
             </span>
-            <span className="text-xs text-slate-400 font-mono">Microservices Fleet Orchestrator</span>
+            <span className="text-xs text-slate-300 font-mono">Microservices Fleet Orchestrator</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
             Autonomous Cloud Infrastructure Operations

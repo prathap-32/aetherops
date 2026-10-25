@@ -84,6 +84,7 @@ async def create_personal_workspace_for_user(
     db: AsyncSession,
     user_uuid: str,
     username: str,
+    tenant_id_override: Optional[str] = None,
 ) -> Tenant:
     """
     Create or retrieve a default personal workspace for a user with TENANT_OWNER membership.
@@ -110,7 +111,7 @@ async def create_personal_workspace_for_user(
 
     # 2. Concurrency-safe creation using deterministic slug
     try:
-        tenant_id = str(uuid.uuid4())
+        tenant_id = tenant_id_override or str(uuid.uuid4())
         tenant = Tenant(
             id=tenant_id,
             name=f"{clean_name}'s Workspace",
@@ -183,6 +184,15 @@ async def get_tenant_context(
             )
         )
         tenant = res.scalar_one_or_none()
+        if not tenant:
+            # Lazily provision personal workspace for authenticated user if matching token tenant
+            try:
+                tenant = await create_personal_workspace_for_user(
+                    db, user_uuid, user_name, tenant_id_override=tenant_id_header
+                )
+            except Exception:
+                pass
+
         if not tenant:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

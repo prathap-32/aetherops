@@ -3,7 +3,7 @@ Pydantic schemas for Module 3 — Repository Analyzer Service.
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Any, Dict, List
 from pydantic import BaseModel, Field
 
 
@@ -83,3 +83,120 @@ class DispatchResponse(BaseModel):
     scan_result: dict
     parsed_input: dict
     sizing_data: dict
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Module 3 Universal Analyzer & User Acceptance Schemas
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ReadinessRequest(BaseModel):
+    repo_path: str = Field(..., description="Repository path, workspace directory, or GitHub repo URL/slug")
+    project_id: Optional[str] = None
+    environment_id: Optional[str] = None
+    branch: Optional[str] = "main"
+    github_token: Optional[str] = None
+
+
+class ReadinessResponse(BaseModel):
+    is_analyzable: bool
+    status: str = "READY"  # READY | NOT_ANALYZABLE | PATH_NOT_FOUND
+    message: str
+    files_count: int = 0
+    detected_manifests: list[str] = Field(default_factory=list)
+    detected_extensions: list[str] = Field(default_factory=list)
+    suggestions: list[str] = Field(default_factory=list)
+    is_remote: bool = False
+    inspection_mode: str = "LOCAL_FILESYSTEM"  # LOCAL_FILESYSTEM | IN_MEMORY_ZERO_CLONE
+
+
+class KeyValueReportItem(BaseModel):
+    key: str
+    label: str
+    value: Any
+    category: str = "runtime"  # architecture | runtime | database | network | container
+    confidence: str = "HIGH"   # HIGH | MEDIUM | LOW
+    editable: bool = True
+    options: Optional[list[str]] = None
+
+
+class ScanReportRequest(BaseModel):
+    repo_path: str = Field(..., description="Repository path, workspace directory, or GitHub repo URL/slug")
+    project_id: Optional[str] = None
+    environment_id: Optional[str] = None
+    branch: Optional[str] = "main"
+    github_token: Optional[str] = None
+    environment_tier: str = Field(default="development", description="development | staging | production")
+    target_region: str = Field(default="us-east-1")
+
+
+class ScanReportResponse(BaseModel):
+    status: str = "SUCCESS"
+    repo_path: str
+    repo_name: str
+    environment_tier: str
+    target_region: str
+    workload_type: str
+    key_value_report: list[KeyValueReportItem]
+    summary_dict: dict[str, Any]
+    languages: list[str]
+    frameworks: list[str]
+    databases: list[str]
+    ports: list[int]
+    has_dockerfile: bool
+    is_monorepo: bool
+    requires_user_acceptance: bool = True
+    is_remote: bool = False
+    inspection_mode: str = "LOCAL_FILESYSTEM"  # LOCAL_FILESYSTEM | IN_MEMORY_ZERO_CLONE
+
+
+class AcceptAndSizeRequest(BaseModel):
+    repo_path: Optional[str] = Field(default="", description="Repository identifier or path")
+    project_id: Optional[str] = None
+    environment_id: Optional[str] = None
+    environment_tier: str = Field(default="development", description="development | staging | production")
+    target_region: str = Field(default="us-east-1")
+    budget_tier: str = Field(default="STANDARD", description="LOW | STANDARD | ENTERPRISE")
+    traffic_scale: str = Field(default="MODERATE", description="LOW | MODERATE | HIGH")
+    ha_level: str = Field(default="AUTO", description="AUTO | SINGLE_AZ | MULTI_AZ")
+    verified_spec: dict[str, Any] = Field(
+        ...,
+        description="The Key:Value specification verified and accepted by the user",
+    )
+
+
+class AwsSizingOutput(BaseModel):
+    status: str = "SUCCESS"
+    environment_tier: str
+    target_region: str
+    ai_provider: str = "gemini-2.5-flash"
+    cached: bool = False
+    verified_spec_applied: dict[str, Any]
+    recommended_services: list[dict[str, Any]]
+    compute: dict[str, Any]
+    database: dict[str, Any]
+    cache: Optional[dict[str, Any]] = None
+    frontend_hosting: Optional[dict[str, Any]] = None
+    networking: dict[str, Any]
+    monthly_cost_estimate_usd: dict[str, Any]
+    finops_optimizations: list[str]
+    deployment_readiness: dict[str, Any]
+    module4_payload: dict[str, Any]
+    compatibility_notes: Optional[list[str]] = Field(default_factory=list)
+
+
+class RecalculateSizingRequest(BaseModel):
+    environment_tier: str = Field(default="development", description="development | staging | production")
+    target_region: str = Field(default="us-east-1")
+    compute_service: str = Field(default="Amazon EC2 (Docker Runtime)")
+    instance_type: str = Field(default="t4g.micro")
+    min_capacity: int = Field(default=1, ge=1, le=10)
+    max_capacity: int = Field(default=1, ge=1, le=20)
+    multi_az: bool = Field(default=False)
+    alb_enabled: bool = Field(default=False)
+    waf_enabled: bool = Field(default=False)
+    database_service: str = Field(default="None")
+    cache_service: str = Field(default="None")
+    cdn_enabled: bool = Field(default=False)
+    verified_spec: Optional[dict[str, Any]] = Field(default_factory=dict)
+
+

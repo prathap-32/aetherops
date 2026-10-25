@@ -49,7 +49,14 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import httpx
+import jwt
 from rich.logging import RichHandler
+
+JWT_SECRET_KEY = os.getenv(
+    "JWT_SECRET_KEY",
+    "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master"
+)
+JWT_ALGORITHM = "HS256"
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
@@ -89,27 +96,27 @@ logger = logging.getLogger("aether-gateway")
 
 # Microservices Upstream Routing Map
 UPSTREAM_MAP = {
+    # Port 7999: Dedicated Auth Service (API Only, Google/GitHub OAuth, Tenant & Account Authority)
+    "auth": os.getenv("AUTH_SERVICE_URL", "http://127.0.0.1:7999"),
+    "auth_google": os.getenv("AUTH_SERVICE_URL", "http://127.0.0.1:7999"),
+    "auth_github": os.getenv("AUTH_SERVICE_URL", "http://127.0.0.1:7999"),
+
     # Port 8001: Project & Environment Management
     "projects": os.getenv("PM_SERVICE_URL", "http://127.0.0.1:8001"),
     "auth_pm": os.getenv("PM_SERVICE_URL", "http://127.0.0.1:8001"),
-    "auth_google": os.getenv("GOOGLE_AUTH_SERVICE_URL", "http://127.0.0.1:8001"),
 
     # Port 8002: Source & Cloud Connection
     "connections": os.getenv("SC_SERVICE_URL", "http://127.0.0.1:8002"),
     "cloud": os.getenv("SC_SERVICE_URL", "http://127.0.0.1:8002"),
     "github": os.getenv("SC_SERVICE_URL", "http://127.0.0.1:8002"),
     "source": os.getenv("SC_SERVICE_URL", "http://127.0.0.1:8002"),
-    "auth_github": os.getenv("GITHUB_AUTH_SERVICE_URL", "http://127.0.0.1:8002"),
 
     # Port 8003: Source Code Analyzer
     "analyzer": os.getenv("REPO_ANALYZER_SERVICE_URL", "http://127.0.0.1:8003"),
 
-    # Port 8004: Requirement Analysis Engine
-    "repo": os.getenv("REQ_SERVICE_URL", "http://127.0.0.1:8004"),
-    "requirements": os.getenv("REQ_SERVICE_URL", "http://127.0.0.1:8004"),
-
-    # Port 8005: Architecture Graph Generator
-    "architecture": os.getenv("ARCH_SERVICE_URL", "http://127.0.0.1:8005"),
+    # Port 8004: Cloud Architecture Studio (Module 4)
+    "architecture": os.getenv("ARCH_SERVICE_URL", "http://127.0.0.1:8004"),
+    "studio": os.getenv("ARCH_SERVICE_URL", "http://127.0.0.1:8004"),
 
     # Port 8006: IaC / Terraform Generator
     "iac": os.getenv("IAC_SERVICE_URL", "http://127.0.0.1:8006"),
@@ -176,6 +183,19 @@ app.add_middleware(
 if os.path.exists(FRONTEND_ASSETS):
     app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS), name="react_assets")
 
+ROOT_STATIC = os.path.join(ROOT_DIR, "static")
+if os.path.exists(ROOT_STATIC):
+    app.mount("/static", StaticFiles(directory=ROOT_STATIC), name="root_static")
+
+
+@app.api_route("/favicon.ico", methods=["GET", "HEAD"])
+@app.api_route("/favicon.png", methods=["GET", "HEAD"])
+async def get_favicon():
+    fav_path = os.path.join(ROOT_DIR, "static", "logo", "logo.png")
+    if os.path.exists(fav_path):
+        return FileResponse(fav_path, media_type="image/png")
+    return Response(status_code=404)
+
 
 def _get_shell_response():
     """Serves the compiled SPA shell index.html."""
@@ -213,6 +233,50 @@ async def _proxy_to_upstream(
     req_headers["x-forwarded-for"] = client_ip
     req_headers["x-forwarded-proto"] = request.url.scheme
     req_headers["x-forwarded-host"] = request.headers.get("host", "localhost:8000")
+
+    # Enforce multi-tenant isolation and verify account_id & tenant_id on data/action requests
+    auth_header = request.headers.get("authorization", "")
+    x_admin_key = request.headers.get("x-admin-key", "")
+    token = ""
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+    elif x_admin_key:
+        token = x_admin_key.strip()
+
+    if token:
+        try:
+            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+            token_account_id = payload.get("account_id")
+            token_tenant_id = payload.get("tenant_id")
+            token_user_id = payload.get("uuid")
+            token_user_role = payload.get("role")
+
+            req_account_id = request.headers.get("x-account-id")
+            req_tenant_id = request.headers.get("x-tenant-id")
+
+            # Validate that caller isn't spoofing another account or tenant
+            if req_account_id and token_account_id and req_account_id != token_account_id:
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={"detail": "Tenant isolation violation: Account ID mismatch with authenticated session."},
+                )
+            if req_tenant_id and token_tenant_id and req_tenant_id != token_tenant_id:
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={"detail": "Tenant isolation violation: Tenant ID mismatch with authenticated session."},
+                )
+
+            # Propagate verified identity headers upstream
+            if token_account_id:
+                req_headers["x-account-id"] = token_account_id
+            if req_tenant_id:
+                req_headers["x-tenant-id"] = req_tenant_id
+            if token_user_id:
+                req_headers["x-user-id"] = token_user_id
+            if token_user_role:
+                req_headers["x-user-role"] = token_user_role
+        except Exception:
+            pass
 
     body = None
     if request.method not in ("GET", "HEAD"):
@@ -308,11 +372,11 @@ async def proxy_github_auth(path: str, request: Request):
 
 @app.api_route(
     "/api/admin",
-    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]
 )
 @app.api_route(
     "/api/admin/{subpath:path}",
-    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]
 )
 async def proxy_admin_api(request: Request, subpath: str = ""):
     target_path = f"/api/admin/{subpath}".rstrip("/") if subpath else "/api/admin"
@@ -325,37 +389,39 @@ async def proxy_admin_api(request: Request, subpath: str = ""):
 
 @app.api_route(
     "/api/v1/{module}",
-    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]
 )
 @app.api_route(
     "/api/v1/{module}/{subpath:path}",
-    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]
 )
 async def proxy_microservice_api(module: str, request: Request, subpath: str = ""):
     """Dispatches /api/v1/{module}/* requests to the correct independent microservice."""
     target_path = f"/api/v1/{module}/{subpath}".rstrip("/")
 
     if module == "auth":
-        if subpath.startswith("github"):
-            upstream = UPSTREAM_MAP["auth_github"]
-        elif subpath.startswith("google"):
-            upstream = UPSTREAM_MAP["auth_google"]
-        else:
-            upstream = UPSTREAM_MAP["auth_pm"]
+        upstream = UPSTREAM_MAP["auth"]
 
-    elif module in ("projects", "tenants", "workspaces"):
+    elif module == "connections" and (
+        subpath.startswith("github/login")
+        or subpath.startswith("github/callback")
+        or subpath.startswith("github/oauth")
+    ):
+        upstream = UPSTREAM_MAP["auth"]
+
+    elif module in ("projects", "tenants", "workspaces", "environments", "meta"):
         upstream = UPSTREAM_MAP["projects"]
 
     elif module in ("connections", "cloud", "github", "source"):
         upstream = UPSTREAM_MAP["connections"]
 
-    elif module in ("analyzer", "repo-analyzer"):
+    elif module in ("analyzer", "repo-analyzer", "repo"):
         upstream = UPSTREAM_MAP["analyzer"]
 
-    elif module in ("repo", "requirements", "analyze", "catalog", "recommendation"):
+    elif module in ("requirements", "analyze", "catalog", "recommendation"):
         upstream = UPSTREAM_MAP["repo"]
 
-    elif module in ("architecture", "generate-graph"):
+    elif module in ("architecture", "generate-graph", "studio", "cloud-architecture-studio"):
         upstream = UPSTREAM_MAP["architecture"]
 
     elif module in ("iac", "terraform"):
@@ -415,6 +481,10 @@ PAGE_ROUTES = [
     "/requirements",
     "/architecture",
     "/architecture/{rest:path}",
+    "/architecture-studio",
+    "/architecture-studio/{rest:path}",
+    "/architecture-designer",
+    "/architecture-designer/{rest:path}",
     "/risk-analysis",
     "/architecture/validation",
     "/security",
@@ -427,6 +497,7 @@ PAGE_ROUTES = [
     "/audit",
     "/documentation",
     "/login",
+    "/account",
     "/settings",
     "/admin",
 ]

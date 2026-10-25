@@ -17,8 +17,8 @@ Legend:
 | # | Service | Port | Status | Completion | Priority | Notes |
 |---|---------|------|--------|------------|----------|-------|
 | 1 | **Gateway** | 8000 | ✅ | 100% | Core | Frontend serving + API proxy |
-| 2 | **Auth Service** | 7999 | ✅ | 90% | Core | Login/register (mock JWT) |
-| 3 | **Project Manager** | 8001 | 🟢 | 70% | Core | CRUD works, needs tenancy |
+| 2 | **Auth Service** | 7999 | ✅ | 95% | Core | Login/register with JWT auth |
+| 3 | **Project Manager** | 8001 | ✅ | 100% | Core | Multi-tenant isolation, 39 AWS regions, 16 project types, environments CRUD |
 | 4 | **Source Connector** | 8002 | 🟢 | 60% | Core | GitHub ✅, OAuth incomplete |
 | 5 | **Admin Console** | 8012 | 🟢 | 50% | Low | Basic admin ops working |
 | 6 | **Requirements** | 8004 | 🟡 | 40% | High | Catalog ✅, analysis basic |
@@ -102,24 +102,24 @@ Monitoring:    █░░░░░░░░░░░░░░░░░░░   5%
 ---
 
 ### ✅ 2. Auth Service (Port 7999)
-**Status**: Production Ready (with mock tokens)  
-**Completion**: 90%
+**Status**: Production Ready (Signed JWT + bcrypt)  
+**Completion**: 95%
 
 **What Works**:
-- ✅ User login (POST /api/v1/auth/login)
-- ✅ User registration (POST /api/v1/auth/register)
-- ✅ Get current user (GET /api/v1/auth/me)
-- ✅ Google OAuth endpoint
-- ✅ GitHub OAuth endpoint
-- ✅ CORS for port 8000
-- ✅ API-only (no frontend)
+- ✅ User login (POST /api/v1/auth/login) with real signed HS256 JWT tokens
+- ✅ User registration (POST /api/v1/auth/register) with bcrypt password hashing
+- ✅ Get current user profile (GET /api/v1/auth/me) with token validation
+- ✅ Logout (POST /api/v1/auth/logout)
+- ✅ Profile update (PUT/PATCH /api/v1/auth/profile)
+- ✅ Google & GitHub OAuth endpoints
+- ✅ Full cross-service authentication with Project Manager (Port 8001)
+- ✅ CORS configured for Gateway (Port 8000)
+- ✅ API-only microservice (no frontend HTML)
 
 **What's Missing**:
-- ⚠️ Real JWT tokens (currently mock)
-- ⚠️ Database persistence
-- ⚠️ OAuth callback completion
-- ⚠️ Password hashing (bcrypt)
-- ⚠️ Token refresh mechanism
+- ⚠️ PostgreSQL persistence (currently in-memory dictionary)
+- ⚠️ External OAuth provider exchange
+- ⚠️ Refresh token rotation
 
 **Test Accounts**:
 ```
@@ -127,7 +127,7 @@ Username: admin | Password: admin123
 Username: user  | Password: user123
 ```
 
-**Tech Stack**: FastAPI, Pydantic
+**Tech Stack**: FastAPI, PyJWT, bcrypt, Pydantic
 
 ---
 
@@ -489,11 +489,13 @@ curl http://localhost:7999/health  # Auth
 curl http://localhost:8001/health  # Projects
 
 # Start services
-./start-both.sh                    # Auth + Gateway
+./start-both.sh                    # Core services (Auth 7999, Gateway 8000, Projects 8001)
 ./start-all-services.sh            # All 14 services
+./stop-all-services.sh             # Stop running services
 
-# Test auth flow
-./test-auth-flow.sh
+# Test services
+./test-auth-flow.sh                # Test Auth + Gateway flow
+./test-core-flow.sh                # Test end-to-end Auth + Gateway + Project Manager
 
 # Access application
 open http://localhost:8000

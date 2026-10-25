@@ -109,16 +109,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-ROOT_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
-FRONTEND_DIST = os.path.join(ROOT_DIR, "frontend", "dist")
-FRONTEND_ASSETS = os.path.join(FRONTEND_DIST, "assets")
-
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-
-if os.path.exists(FRONTEND_ASSETS):
-    app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS), name="react_assets")
-
 static_dir = os.path.join(BASE_DIR, "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
@@ -128,11 +118,30 @@ app.include_router(admin_router)
 
 @app.get("/")
 async def root(request: Request):
-    from app.auth import SESSION_COOKIE_NAME, decode_access_token
-    cookie_token = request.cookies.get(SESSION_COOKIE_NAME)
-    if cookie_token and decode_access_token(cookie_token):
-        return RedirectResponse(url="/admin")
-    return RedirectResponse(url="/admin/login?redirect=/admin", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={
+                "status": "DENIED",
+                "code": 403,
+                "detail": "Direct browser access to microservice port 8012 is denied. The AetherOps Dashboard is exclusively hosted on Port 8000.",
+                "service": "admin-console-service",
+                "port": 8012,
+                "dashboard_url": "http://localhost:8000",
+            },
+        )
+    return {
+        "service": "AetherOps AI — Module 12: Admin Console",
+        "version": "1.0.0",
+        "port": 8012,
+        "type": "BACKEND_MICROSERVICE",
+        "endpoints": {
+            "health": "/health",
+            "admin_api": "/api/admin",
+            "docs": "/docs",
+        },
+    }
 
 
 @app.get("/health", status_code=status.HTTP_200_OK)

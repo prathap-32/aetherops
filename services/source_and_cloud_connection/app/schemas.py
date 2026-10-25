@@ -1,7 +1,7 @@
 # services/source_and_cloud_connection/app/schemas.py
 from __future__ import annotations
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 VALID_CONNECTION_STATUSES = {"PENDING", "CONNECTED", "FAILED", "DISCONNECTED"}
 VALID_CLOUD_AUTH_TYPES = {"ACCESS_KEYS", "IAM_ROLE_ARN", "IAM_ARN", "IAM_USER_ARN"}
@@ -121,7 +121,12 @@ class ConnectionListOut(BaseModel):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class GitHubVerifyPatRequest(BaseModel):
-    pat_token: str
+    pat_token: Optional[str] = None
+    token: Optional[str] = None
+
+    @property
+    def effective_token(self) -> str:
+        return (self.pat_token or self.token or "").strip()
 
 
 class GitHubVerifyPatResponse(BaseModel):
@@ -174,9 +179,23 @@ class AwsValidateRequest(BaseModel):
     aws_region:         str = "us-east-1"
     access_key_id:      Optional[str] = None
     secret_access_key:  Optional[str] = None
+    aws_access_key_id:  Optional[str] = None
+    aws_secret_access_key: Optional[str] = None
     session_token:      Optional[str] = None
     role_arn:           Optional[str] = None
     external_id:        Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("access_key_id") and data.get("aws_access_key_id"):
+                data["access_key_id"] = data["aws_access_key_id"]
+            if not data.get("secret_access_key") and data.get("aws_secret_access_key"):
+                data["secret_access_key"] = data["aws_secret_access_key"]
+            if not data.get("aws_region") and data.get("region"):
+                data["aws_region"] = data["region"]
+        return data
 
     @field_validator("auth_type")
     @classmethod
@@ -187,6 +206,11 @@ class AwsValidateRequest(BaseModel):
         if v in ("IAM_ARN", "IAM_USER_ARN"):
             return "IAM_ROLE_ARN"
         return v
+
+    @field_validator("aws_region")
+    @classmethod
+    def valid_aws_region(cls, v: str) -> str:
+        return v.strip().lower() if v else "us-east-1"
 
 
 class AwsValidateResponse(BaseModel):
@@ -213,9 +237,23 @@ class CloudConnectionCreate(BaseModel):
     aws_region:         str = "us-east-1"
     access_key_id:      Optional[str] = None
     secret_access_key:  Optional[str] = None
+    aws_access_key_id:  Optional[str] = None
+    aws_secret_access_key: Optional[str] = None
     session_token:      Optional[str] = None
     role_arn:           Optional[str] = None
     external_id:        Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("access_key_id") and data.get("aws_access_key_id"):
+                data["access_key_id"] = data["aws_access_key_id"]
+            if not data.get("secret_access_key") and data.get("aws_secret_access_key"):
+                data["secret_access_key"] = data["aws_secret_access_key"]
+            if not data.get("aws_region") and data.get("region"):
+                data["aws_region"] = data["region"]
+        return data
 
     @field_validator("auth_type")
     @classmethod
@@ -288,6 +326,7 @@ class UnifiedFinalizeRequest(BaseModel):
     git_auth_type:      str = "PAT"   # OAUTH | PAT | MANUAL
     github_user:        Optional[str] = None
     pat_token:          Optional[str] = None
+    access_token:       Optional[str] = None
     pat_label:          Optional[str] = None
 
     # Cloud (AWS)
@@ -296,9 +335,23 @@ class UnifiedFinalizeRequest(BaseModel):
     aws_region:         str = "us-east-1"
     access_key_id:      Optional[str] = None
     secret_access_key:  Optional[str] = None
+    aws_access_key_id:  Optional[str] = None
+    aws_secret_access_key: Optional[str] = None
     session_token:      Optional[str] = None
     role_arn:           Optional[str] = None
     external_id:        Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("access_key_id") and data.get("aws_access_key_id"):
+                data["access_key_id"] = data["aws_access_key_id"]
+            if not data.get("secret_access_key") and data.get("aws_secret_access_key"):
+                data["secret_access_key"] = data["aws_secret_access_key"]
+            if not data.get("pat_token") and data.get("access_token"):
+                data["pat_token"] = data["access_token"]
+        return data
 
     @field_validator("cloud_auth_type")
     @classmethod

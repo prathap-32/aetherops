@@ -6,7 +6,6 @@ import {
   Mail,
   User,
   ArrowRight,
-  CheckCircle2,
   AlertCircle,
   RefreshCw,
   FolderGit2,
@@ -16,10 +15,10 @@ import {
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage({ onLoginSuccess }) {
-  const { login, register, completeOAuth, updateProfile, setSessionManually } = useAuth();
+  const { login, register, updateProfile, setSessionManually } = useAuth();
 
   const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register'
-  const [username, setUsername] = useState('');
+  const [loginId, setLoginId] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('USER'); // 'USER' | 'ADMIN'
@@ -32,6 +31,16 @@ export default function LoginPage({ onLoginSuccess }) {
   const [oauthVerifiedEmail, setOauthVerifiedEmail] = useState('');
   const [clarifiedName, setClarifiedName] = useState('');
   const [pendingToken, setPendingToken] = useState('');
+
+  // Strictly ensure light theme on document body
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
+      document.body.classList.remove('dark');
+      document.body.classList.add('light');
+    }
+  }, []);
 
   // Listen for OAuth messages from popup window
   useEffect(() => {
@@ -65,20 +74,21 @@ export default function LoginPage({ onLoginSuccess }) {
     const userParam = params.get('username');
     const emailParam = params.get('email');
     const roleParam = params.get('role') || 'USER';
+    const accountIdParam = params.get('account_id') || '';
 
     if (token && userParam) {
       const authUser = {
         username: userParam,
         email: emailParam || `${userParam}@oauth.local`,
         role: roleParam,
+        account_id: accountIdParam,
       };
       setSessionManually(token, authUser);
       setPendingToken(token);
-      setOauthProvider('Google');
+      setOauthProvider('OAuth');
       setOauthVerifiedEmail(authUser.email);
       setClarifiedName(userParam);
       setShowClarificationModal(true);
-      // Clean query string from browser bar
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, [setSessionManually]);
@@ -86,17 +96,17 @@ export default function LoginPage({ onLoginSuccess }) {
   const handleSignIn = async (e) => {
     e.preventDefault();
     setErrorMessage('');
-    if (!username.trim() || !password) {
-      setErrorMessage('Please enter both username and password.');
+    if (!loginId.trim() || !password) {
+      setErrorMessage('Please enter your Login ID (Username, Email, or 12-digit Account ID) and password.');
       return;
     }
 
     setIsLoading(true);
     try {
-      await login(username.trim(), password);
+      await login(loginId.trim(), password);
       if (onLoginSuccess) onLoginSuccess();
     } catch (err) {
-      setErrorMessage(err.message || 'Login failed. Invalid username or credentials.');
+      setErrorMessage(err.message || 'Login failed. Invalid Login ID or credentials.');
     } finally {
       setIsLoading(false);
     }
@@ -105,14 +115,14 @@ export default function LoginPage({ onLoginSuccess }) {
   const handleSignUp = async (e) => {
     e.preventDefault();
     setErrorMessage('');
-    if (!username.trim() || !email.trim() || !password) {
+    if (!loginId.trim() || !email.trim() || !password) {
       setErrorMessage('Please complete all registration fields.');
       return;
     }
 
     setIsLoading(true);
     try {
-      await register(username.trim(), email.trim(), password, role);
+      await register(loginId.trim(), email.trim(), password, role);
       if (onLoginSuccess) onLoginSuccess();
     } catch (err) {
       setErrorMessage(err.message || 'Registration failed. Username may already be in use.');
@@ -132,7 +142,6 @@ export default function LoginPage({ onLoginSuccess }) {
       `width=${w},height=${h},top=${top},left=${left},scrollbars=yes,status=no,resizable=yes`
     );
     if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-      // Popups blocked by browser; navigate in current window
       window.location.href = url;
     }
   };
@@ -145,19 +154,16 @@ export default function LoginPage({ onLoginSuccess }) {
     openOAuthPopup('/api/v1/auth/github/login', 'github_oauth');
   };
 
-  // Submit Post-OAuth Name Clarification to persist into PostgreSQL
   const handleConfirmClarifiedName = async (e) => {
     e.preventDefault();
     if (!clarifiedName.trim()) return;
 
     setIsLoading(true);
     try {
-      // Persist chosen handle to DB profile
       await updateProfile(clarifiedName.trim());
       setShowClarificationModal(false);
       if (onLoginSuccess) onLoginSuccess();
     } catch (err) {
-      // Fallback: continue into dashboard with verified name
       setShowClarificationModal(false);
       if (onLoginSuccess) onLoginSuccess();
     } finally {
@@ -166,42 +172,36 @@ export default function LoginPage({ onLoginSuccess }) {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg-page)] dark:bg-slate-900 flex flex-col justify-center py-16 sm:px-6 lg:px-8 relative overflow-hidden selection:bg-[var(--accent-primary)] selection:text-white">
-      {/* Background Glow Orbs - Warmer tones */}
-      <div className="absolute top-0 -left-20 w-96 h-96 bg-amber-600/8 dark:bg-amber-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 -right-20 w-96 h-96 bg-orange-600/8 dark:bg-orange-600/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden select-none">
+      {/* Subtle Warm Amber Glow Orbs (Light Theme Only) */}
+      <div className="absolute top-0 -left-20 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 -right-20 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="sm:mx-auto sm:w-full sm:max-w-md z-10 px-4">
-        <div className="flex items-center justify-center gap-4 mb-3">
-          <div className="w-12 h-12 rounded-xl bg-[var(--accent-primary)] flex items-center justify-center text-white shadow-lg shadow-amber-500/25 dark:shadow-amber-500/30">
-            <Shield className="w-7 h-7" />
-          </div>
-          <div>
-            <h2 className="text-3xl font-black tracking-tight text-[var(--text-primary)]">AETHER CLOUD</h2>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--accent-primary)]">
-              Autonomous Cloud Platform
-            </p>
-          </div>
+      <div className="sm:mx-auto sm:w-full sm:max-w-md z-10 px-4 text-center">
+        {/* AetherOps Brand Image */}
+        <div className="flex justify-center mb-4">
+          <img
+            src="/static/logo/aetherops_light.png"
+            alt="AetherOps"
+            className="h-12 max-w-[260px] object-contain drop-shadow-xs"
+          />
         </div>
-        <p className="mt-4 text-center text-sm text-[var(--text-muted)] max-w-sm mx-auto leading-relaxed">
-          Decoupled Multi-Service DevOps & Cloud Architecture Engine
-        </p>
       </div>
 
-      <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-md z-10 px-4">
-        <div className="bg-[var(--bg-surface)] dark:bg-slate-800/80 dark:backdrop-blur-xl py-10 px-8 shadow-[var(--card-shadow)] rounded-2xl border border-[var(--border)] dark:border-slate-700 sm:px-12">
-          {/* Tabs: Sign In vs Sign Up */}
-          <div className="flex items-center gap-2 p-1.5 bg-[var(--bg-subtle)] dark:bg-slate-900/80 rounded-xl mb-8 border border-[var(--border)] dark:border-slate-700/60">
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md z-10 px-4">
+        <div className="bg-white py-8 px-6 shadow-xl shadow-slate-200/60 rounded-2xl border border-slate-200/90 sm:px-10">
+          {/* Tabs: Sign In vs Create Account */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl mb-6 border border-slate-200">
             <button
               type="button"
               onClick={() => {
                 setActiveTab('login');
                 setErrorMessage('');
               }}
-              className={`flex-1 py-3 text-sm font-bold rounded-lg transition ${
+              className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition ${
                 activeTab === 'login'
-                  ? 'bg-[var(--accent-primary)] text-white shadow-md'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Sign In
@@ -212,10 +212,10 @@ export default function LoginPage({ onLoginSuccess }) {
                 setActiveTab('register');
                 setErrorMessage('');
               }}
-              className={`flex-1 py-3 text-sm font-bold rounded-lg transition ${
+              className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition ${
                 activeTab === 'register'
-                  ? 'bg-[var(--accent-primary)] text-white shadow-md'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Create Account
@@ -223,20 +223,20 @@ export default function LoginPage({ onLoginSuccess }) {
           </div>
 
           {errorMessage && (
-            <div className="mb-6 p-4 rounded-xl bg-[var(--status-error-bg)] border border-red-200 dark:border-rose-500/20 text-[var(--status-error-text)] dark:text-rose-300 text-sm flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 shrink-0" />
+            <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{errorMessage}</span>
             </div>
           )}
 
-          {/* Social OAuth Buttons */}
-          <div className="space-y-4 mb-8">
+          {/* Social OAuth Providers */}
+          <div className="space-y-3 mb-6">
             <button
               type="button"
               onClick={handleGoogleOAuth}
-              className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl border border-[var(--border)] dark:border-slate-600 bg-[var(--bg-surface)] dark:bg-slate-700/50 hover:bg-[var(--bg-subtle)] dark:hover:bg-slate-700 text-sm font-semibold text-[var(--text-primary)] dark:text-white shadow-sm transition cursor-pointer"
+              className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-800 shadow-xs transition cursor-pointer"
             >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path
                   fill="#4285F4"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -260,56 +260,59 @@ export default function LoginPage({ onLoginSuccess }) {
             <button
               type="button"
               onClick={handleGitHubOAuth}
-              className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl border border-[var(--border)] dark:border-slate-600 bg-[var(--bg-surface)] dark:bg-slate-700/50 hover:bg-[var(--bg-subtle)] dark:hover:bg-slate-700 text-sm font-semibold text-[var(--text-primary)] dark:text-white shadow-sm transition cursor-pointer"
+              className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-800 shadow-xs transition cursor-pointer"
             >
-              <FolderGit2 className="w-5 h-5" />
+              <FolderGit2 className="w-4 h-4 text-slate-800" />
               <span>Continue with GitHub</span>
             </button>
           </div>
 
-          <div className="relative my-8">
+          <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-[var(--border)] dark:border-slate-700" />
+              <div className="w-full border-t border-slate-200" />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="px-4 bg-[var(--bg-surface)] dark:bg-slate-800 text-[var(--text-muted)] font-semibold uppercase tracking-widest text-[11px]">
+              <span className="px-3 bg-white text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
                 Or with credentials
               </span>
             </div>
           </div>
 
-          {/* Sign In Form */}
+          {/* Sign In Form with Login ID */}
           {activeTab === 'login' ? (
-            <form onSubmit={handleSignIn} className="space-y-6">
+            <form onSubmit={handleSignIn} className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-                  Username or Handle
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Login ID (Username, Email, or 12-Digit Account ID)
                 </label>
                 <div className="relative">
-                  <User className="w-5 h-5 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    placeholder="e.g. admin or developer"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="w-full h-11 pl-11 pr-4 bg-[var(--bg-surface)] dark:bg-slate-900 border border-[var(--border)] dark:border-slate-700 rounded-xl text-sm text-[var(--text-primary)] dark:text-white placeholder-[var(--text-muted)] dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] font-medium"
+                    placeholder="e.g. admin, user@company.com, or 109283746519"
+                    value={loginId}
+                    onChange={(e) => setLoginId(e.target.value)}
+                    className="w-full h-10 pl-9 pr-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600 font-medium"
                     required
                   />
                 </div>
+                <p className="mt-1 text-[10px] text-slate-500">
+                  Use your Username, Email, or AWS-style 12-digit Account ID
+                </p>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Password
                 </label>
                 <div className="relative">
-                  <Lock className="w-5 h-5 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="password"
                     placeholder="••••••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full h-11 pl-11 pr-4 bg-[var(--bg-surface)] dark:bg-slate-900 border border-[var(--border)] dark:border-slate-700 rounded-xl text-sm text-[var(--text-primary)] dark:text-white placeholder-[var(--text-muted)] dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] font-medium"
+                    className="w-full h-10 pl-9 pr-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600 font-medium"
                     required
                   />
                 </div>
@@ -319,111 +322,126 @@ export default function LoginPage({ onLoginSuccess }) {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full h-12 bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-white text-sm font-bold rounded-xl shadow-lg shadow-amber-500/20 dark:shadow-amber-500/25 transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                  className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md shadow-amber-500/20 transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   {isLoading ? (
                     <>
-                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      <RefreshCw className="w-4 h-4 animate-spin" />
                       Authenticating...
                     </>
                   ) : (
                     <>
-                      Sign In to Dashboard
-                      <ArrowRight className="w-5 h-5" />
+                      Sign In to Console
+                      <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
               </div>
 
-              <div className="text-center pt-3 border-t border-[var(--border)] dark:border-slate-700">
-                <p className="text-xs text-[var(--text-muted)]">
-                  Default Operator: <code className="text-[var(--text-secondary)] font-mono font-semibold">admin</code> / <code className="text-[var(--text-secondary)] font-mono font-semibold">admin123</code>
+              <div className="text-center pt-3 border-t border-slate-100">
+                <p className="text-[11px] text-slate-500">
+                  Default Operator:{' '}
+                  <code className="text-slate-700 font-mono font-bold bg-slate-100 px-1 py-0.5 rounded">
+                    admin
+                  </code>{' '}
+                  /{' '}
+                  <code className="text-slate-700 font-mono font-bold bg-slate-100 px-1 py-0.5 rounded">
+                    admin123
+                  </code>
+                </p>
+                <p className="text-[10px] text-amber-700 font-mono mt-1 font-semibold">
+                  AWS Account ID: 1092-8374-6519
                 </p>
               </div>
             </form>
           ) : (
-            /* Sign Up Form */
-            <form onSubmit={handleSignUp} className="space-y-6">
+            /* Create Account Form */
+            <form onSubmit={handleSignUp} className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
-                  Username
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Account Username / Handle
                 </label>
                 <div className="relative">
-                  <User className="w-5 h-5 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    placeholder="e.g. dev_engineer"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="w-full h-11 pl-11 pr-4 bg-[var(--bg-surface)] dark:bg-slate-900 border border-[var(--border)] dark:border-slate-700 rounded-xl text-sm text-[var(--text-primary)] dark:text-white placeholder-[var(--text-muted)] dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] font-medium"
+                    placeholder="e.g. cloud_engineer"
+                    value={loginId}
+                    onChange={(e) => setLoginId(e.target.value)}
+                    className="w-full h-10 pl-9 pr-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600 font-medium"
                     required
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Email Address
                 </label>
                 <div className="relative">
-                  <Mail className="w-5 h-5 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="email"
                     placeholder="engineer@company.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full h-11 pl-11 pr-4 bg-[var(--bg-surface)] dark:bg-slate-900 border border-[var(--border)] dark:border-slate-700 rounded-xl text-sm text-[var(--text-primary)] dark:text-white placeholder-[var(--text-muted)] dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] font-medium"
+                    className="w-full h-10 pl-9 pr-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600 font-medium"
                     required
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Password
                 </label>
                 <div className="relative">
-                  <Lock className="w-5 h-5 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="password"
                     placeholder="Minimum 8 characters"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full h-11 pl-11 pr-4 bg-[var(--bg-surface)] dark:bg-slate-900 border border-[var(--border)] dark:border-slate-700 rounded-xl text-sm text-[var(--text-primary)] dark:text-white placeholder-[var(--text-muted)] dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] font-medium"
+                    className="w-full h-10 pl-9 pr-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600 font-medium"
                     required
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Platform Role
                 </label>
                 <select
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
-                  className="w-full h-11 py-2.5 px-3.5 bg-[var(--bg-surface)] dark:bg-slate-900 border border-[var(--border)] dark:border-slate-700 rounded-xl text-sm text-[var(--text-primary)] dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] font-medium"
+                  className="w-full h-10 px-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-amber-600 font-medium"
                 >
-                  <option value="USER">Standard User (Workspace & Projects)</option>
+                  <option value="USER">Standard User (Workspace &amp; Projects)</option>
                   <option value="ADMIN">Platform Admin (Includes Admin Console)</option>
                 </select>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-800 flex items-center gap-2">
+                <Key className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>A 12-digit AWS-style Account ID will be allocated automatically upon registration.</span>
               </div>
 
               <div className="pt-2">
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full h-12 bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-white text-sm font-bold rounded-xl shadow-lg shadow-amber-500/20 dark:shadow-amber-500/25 transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                  className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md shadow-amber-500/20 transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   {isLoading ? (
                     <>
-                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      <RefreshCw className="w-4 h-4 animate-spin" />
                       Creating Account...
                     </>
                   ) : (
                     <>
                       Complete Registration
-                      <ArrowRight className="w-5 h-5" />
+                      <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
@@ -433,51 +451,53 @@ export default function LoginPage({ onLoginSuccess }) {
         </div>
       </div>
 
-      {/* Post-OAuth Name Clarification Modal */}
+      {/* Post-OAuth Name Clarification Modal (Pure Light Theme) */}
       {showClarificationModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 dark:bg-slate-950/90 backdrop-blur-md">
-          <div className="bg-[var(--bg-surface)] dark:bg-slate-800 rounded-2xl max-w-md w-full shadow-2xl border border-[var(--border)] dark:border-slate-700 p-8 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-3 text-[var(--text-primary)] dark:text-white font-bold text-xl mb-2">
-              <Sparkles className="w-6 h-6 text-[var(--accent-primary)]" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 p-6 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-2 text-slate-900 font-bold text-base mb-1.5">
+              <Sparkles className="w-5 h-5 text-amber-600" />
               <span>Confirm Account Handle</span>
             </div>
-            <p className="text-sm text-[var(--text-muted)] mb-6 leading-relaxed">
-              Your {oauthProvider.toUpperCase()} identity was authenticated (<span className="text-[var(--accent-primary)] font-mono font-semibold">{oauthVerifiedEmail}</span>). Please confirm or adjust your display name to persist in database.
+            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+              Authenticated via {oauthProvider} (
+              <span className="text-amber-700 font-mono font-semibold">{oauthVerifiedEmail}</span>
+              ). Please confirm your display name:
             </p>
 
-            <form onSubmit={handleConfirmClarifiedName} className="space-y-6">
+            <form onSubmit={handleConfirmClarifiedName} className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Display Username / Account Handle
                 </label>
                 <div className="relative">
-                  <User className="w-5 h-5 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={clarifiedName}
                     onChange={(e) => setClarifiedName(e.target.value)}
                     placeholder="Enter preferred handle"
-                    className="w-full h-11 pl-11 pr-4 bg-[var(--bg-surface)] dark:bg-slate-900 border border-[var(--border)] dark:border-slate-700 rounded-xl text-sm text-[var(--text-primary)] dark:text-white placeholder-[var(--text-muted)] dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40 focus:border-[var(--accent-primary)] font-medium"
+                    className="w-full h-10 pl-9 pr-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600 font-medium"
                     required
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-end pt-4 border-t border-[var(--border)] dark:border-slate-700">
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-end">
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full h-12 bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-white text-sm font-bold rounded-xl shadow-lg shadow-amber-500/20 dark:shadow-amber-500/25 transition flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full h-10 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isLoading ? (
                     <>
-                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      <RefreshCw className="w-4 h-4 animate-spin" />
                       Saving to Database...
                     </>
                   ) : (
                     <>
-                      Confirm & Proceed to Dashboard
-                      <ArrowRight className="w-5 h-5" />
+                      Confirm &amp; Proceed to Dashboard
+                      <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </button>

@@ -165,8 +165,8 @@ async def validate_aws_access_keys(
     if len(key_id) < 16 or len(key_id) > 128:
         raise ValueError(f"Invalid AWS Access Key ID length ({len(key_id)}). Expected 16-128 characters.")
 
-    # Check for known test / mock patterns or test flag
-    is_test_key = "EXAMPLE" in key_id or "TEST" in key_id or "0000" in key_id or len(secret) < 10
+    # Only treat the explicit mock placeholder as simulated test key
+    is_test_key = ("AKIAIOSFODNN7EXAMPLE" in key_id) or ("MOCK" in key_id and len(key_id) < 18)
 
     if is_test_key:
         mock_acc = "123456789012"
@@ -182,7 +182,60 @@ async def validate_aws_access_keys(
             "simulated": True,
         }
 
-    # Attempt live STS GetCallerIdentity with SigV4
+    # 1. Primary Attempt: Official AWS Boto3 SDK (most accurate & handles all 39 regions)
+    try:
+        import boto3
+        from botocore.config import Config
+        from botocore.exceptions import ClientError, EndpointConnectionError, ParamValidationError
+
+        boto_cfg = Config(
+            connect_timeout=8,
+            read_timeout=8,
+            retries={"max_attempts": 1},
+        )
+        boto_kwargs = {
+            "aws_access_key_id": key_id,
+            "aws_secret_access_key": secret,
+            "region_name": region,
+            "config": boto_cfg,
+        }
+        if session_token:
+            boto_kwargs["aws_session_token"] = session_token
+
+        sts_client = boto3.client("sts", **boto_kwargs)
+        caller = sts_client.get_caller_identity()
+
+        acc = str(caller.get("Account", "")).strip()
+        arn = str(caller.get("Arn", "")).strip()
+        uid = str(caller.get("UserId", "")).strip()
+
+        if acc and acc != "000000000000":
+            return {
+                "valid": True,
+                "provider": "AWS",
+                "auth_type": "ACCESS_KEYS",
+                "account_id": acc,
+                "arn": arn or f"arn:aws:iam::{acc}:root",
+                "user_id": uid or key_id,
+                "region": region,
+                "masked_key": mask_access_key(key_id),
+                "simulated": False,
+            }
+        else:
+            raise ValueError(f"AWS STS returned invalid account ID: '{acc}'")
+
+    except ClientError as ce:
+        err_code = ce.response.get("Error", {}).get("Code", "AuthenticationError")
+        err_msg = ce.response.get("Error", {}).get("Message", str(ce))
+        raise ValueError(f"AWS STS Authentication Failed ({err_code}): {err_msg}")
+    except ParamValidationError as pe:
+        raise ValueError(f"Invalid AWS credential parameters: {pe}")
+    except EndpointConnectionError as ece:
+        logger.warning(f"Boto3 endpoint connection error ({ece}). Trying direct HTTPS SigV4 fallback...")
+    except Exception as be:
+        logger.warning(f"Boto3 STS call failed ({be}). Trying direct HTTPS SigV4 fallback...")
+
+    # 2. Secondary Attempt: Pure-Python SigV4 with enhanced multi-namespace XML parser
     try:
         now = datetime.datetime.utcnow()
         amz_date = now.strftime("%Y%m%dT%H%M%SZ")
@@ -191,6 +244,7 @@ async def validate_aws_access_keys(
         host = f"sts.{region}.amazonaws.com" if region != "us-east-1" else "sts.amazonaws.com"
         endpoint = f"https://{host}/"
         service = "sts"
+        signing_region = region if region != "us-east-1" else "us-east-1"
         payload = "Action=GetCallerIdentity&Version=2011-06-15"
 
         canonical_uri = "/"
@@ -211,10 +265,10 @@ async def validate_aws_access_keys(
         canonical_request = f"POST\n{canonical_uri}\n{canonical_querystring}\n{canonical_headers}\n{signed_headers}\n{payload_hash}"
 
         algorithm = "AWS4-HMAC-SHA256"
-        credential_scope = f"{date_stamp}/{region}/{service}/aws4_request"
+        credential_scope = f"{date_stamp}/{signing_region}/{service}/aws4_request"
         string_to_sign = f"{algorithm}\n{amz_date}\n{credential_scope}\n{hashlib.sha256(canonical_request.encode('utf-8')).hexdigest()}"
 
-        signing_key = _get_signature_key(secret, date_stamp, region, service)
+        signing_key = _get_signature_key(secret, date_stamp, signing_region, service)
         signature = hmac.new(signing_key, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
 
         auth_header = f"{algorithm} Credential={key_id}/{credential_scope}, SignedHeaders={signed_headers}, Signature={signature}"
@@ -227,59 +281,77 @@ async def validate_aws_access_keys(
         if session_token:
             req_headers["X-Amz-Security-Token"] = session_token
 
-        async with httpx.AsyncClient(timeout=4.0) as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(endpoint, data=payload, headers=req_headers)
 
         if resp.status_code == 200:
-            root = ET.fromstring(resp.text)
-            ns = {"sts": "https://sts.amazonaws.com/doc/2011-06-15/"}
-            result = root.find("sts:GetCallerIdentityResult", ns) or root.find(".//GetCallerIdentityResult")
-            if result is not None:
-                acc_el = result.find("sts:Account", ns) or result.find(".//Account")
-                arn_el = result.find("sts:Arn", ns) or result.find(".//Arn")
-                uid_el = result.find("sts:UserId", ns) or result.find(".//UserId")
-                account_id = acc_el.text if acc_el is not None else "000000000000"
-                arn = arn_el.text if arn_el is not None else f"arn:aws:iam::{account_id}:user/verified"
-                user_id = uid_el.text if uid_el is not None else key_id
+            account_id = None
+            arn = None
+            user_id = None
 
-                return {
-                    "valid": True,
-                    "provider": "AWS",
-                    "auth_type": "ACCESS_KEYS",
-                    "account_id": account_id,
-                    "arn": arn,
-                    "user_id": user_id,
-                    "region": region,
-                    "masked_key": mask_access_key(key_id),
-                    "simulated": False,
-                }
+            try:
+                root = ET.fromstring(resp.text)
+                for elem in root.iter():
+                    clean_tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+                    if clean_tag == "Account" and elem.text and elem.text.strip():
+                        account_id = elem.text.strip()
+                    elif clean_tag == "Arn" and elem.text and elem.text.strip():
+                        arn = elem.text.strip()
+                    elif clean_tag == "UserId" and elem.text and elem.text.strip():
+                        user_id = elem.text.strip()
+            except Exception as e:
+                logger.warning(f"Error parsing STS XML with ElementTree: {e}")
+
+            if not account_id:
+                m_acc = re.search(r"<Account>(\d{12})</Account>", resp.text)
+                if m_acc:
+                    account_id = m_acc.group(1)
+
+            if not arn:
+                m_arn = re.search(r"<Arn>([^<]+)</Arn>", resp.text)
+                if m_arn:
+                    arn = m_arn.group(1)
+
+            if not user_id:
+                m_uid = re.search(r"<UserId>([^<]+)</UserId>", resp.text)
+                if m_uid:
+                    user_id = m_uid.group(1)
+
+            if not account_id and arn:
+                m_arn_acc = re.search(r":(\d{12}):", arn)
+                if m_arn_acc:
+                    account_id = m_arn_acc.group(1)
+
+            if not account_id or account_id == "000000000000":
+                raise ValueError(f"Could not extract valid AWS Account ID from STS response: {resp.text[:150]}")
+
+            return {
+                "valid": True,
+                "provider": "AWS",
+                "auth_type": "ACCESS_KEYS",
+                "account_id": account_id,
+                "arn": arn or f"arn:aws:iam::{account_id}:root",
+                "user_id": user_id or key_id,
+                "region": region,
+                "masked_key": mask_access_key(key_id),
+                "simulated": False,
+            }
 
         # If AWS returned an error code
-        err_msg = "AWS STS authentication failed."
+        err_msg = f"AWS STS returned HTTP {resp.status_code}"
         try:
             root = ET.fromstring(resp.text)
-            err_el = root.find(".//Message") or root.find(".//Code")
-            if err_el is not None and err_el.text:
-                err_msg = f"AWS Error ({resp.status_code}): {err_el.text}"
+            for elem in root.iter():
+                clean_tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+                if clean_tag == "Message" and elem.text:
+                    err_msg = elem.text.strip()
+                    break
         except Exception:
             err_msg = f"AWS STS returned HTTP {resp.status_code}: {resp.text[:200]}"
-        raise ValueError(err_msg)
+        raise ValueError(f"AWS Authentication Failed: {err_msg}")
 
     except httpx.RequestError as exc:
-        logger.warning(f"AWS STS network probe timed out / failed ({exc}). Falling back to format verification.")
-        mock_acc = "123456789012"
-        return {
-            "valid": True,
-            "provider": "AWS",
-            "auth_type": "ACCESS_KEYS",
-            "account_id": mock_acc,
-            "arn": f"arn:aws:iam::{mock_acc}:user/aether-deployer",
-            "user_id": f"AIDA{key_id[-8:]}",
-            "region": region,
-            "masked_key": mask_access_key(key_id),
-            "simulated": True,
-            "note": "Verified offline (STS connection unreachable)",
-        }
+        raise ValueError(f"Unable to reach AWS STS endpoint ({host}): {exc}. Please verify network connectivity.")
 
 
 def validate_iam_arn(
