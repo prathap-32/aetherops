@@ -1162,7 +1162,9 @@ export default function ArchitectureDesigner({ onNavigate, activeProject, active
       setEdges(synthesized.edges);
       setToastMessage({
         type: 'success',
-        text: 'Architecture diagram synthesized from Cloud Architecture Studio output!',
+        text: navState?.autoValidated
+          ? '✓ Architecture Validated (AWS Well-Architected Compliant) — Diagram loaded into Designer!'
+          : 'Architecture diagram synthesized from Cloud Architecture Studio output!',
       });
       setTimeout(() => setToastMessage(null), 5000);
     }

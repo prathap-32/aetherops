@@ -17,6 +17,7 @@ POSTGRES_PORT     = os.getenv("POSTGRES_PORT", "5432")
 POSTGRES_DB       = os.getenv("POSTGRES_DB", "aether_catalog")
 RAW_DATABASE_URL  = os.getenv("DATABASE_URL", "")
 ECHO_SQL          = os.getenv("ECHO_SQL", "False").lower() in ("true", "1", "yes")
+ENVIRONMENT       = os.getenv("AETHER_ENV", os.getenv("ENVIRONMENT", "development")).lower()
 
 Base = declarative_base()
 
@@ -149,9 +150,16 @@ async def get_db() -> AsyncSession:
         await pg_session.execute(text("SELECT tenant_id FROM sc_git_connections LIMIT 1"))
         pg_ok = True
     except Exception as exc:
+        if ENVIRONMENT == "production":
+            if pg_session:
+                await pg_session.close()
+            raise RuntimeError(
+                f"FATAL: PostgreSQL database connection failed in production ({exc}). Silent SQLite fallback is strictly prohibited."
+            )
         logger.warning(f"PostgreSQL container unavailable or pre-migration ({exc}), failing over to SQLite.")
         if pg_session:
             await pg_session.close()
+            pg_session = None
 
     if pg_ok and pg_session:
         try:

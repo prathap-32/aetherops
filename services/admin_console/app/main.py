@@ -2,6 +2,7 @@
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import time
 import logging
@@ -101,9 +102,18 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "ALLOWED_ORIGINS",
+        "http://localhost:8000,http://127.0.0.1:8000,http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -118,30 +128,11 @@ app.include_router(admin_router)
 
 @app.get("/")
 async def root(request: Request):
-    accept = request.headers.get("accept", "")
-    if "text/html" in accept:
-        return JSONResponse(
-            status_code=status.HTTP_403_FORBIDDEN,
-            content={
-                "status": "DENIED",
-                "code": 403,
-                "detail": "Direct browser access to microservice port 8012 is denied. The AetherOps Dashboard is exclusively hosted on Port 8000.",
-                "service": "admin-console-service",
-                "port": 8012,
-                "dashboard_url": "http://localhost:8000",
-            },
-        )
-    return {
-        "service": "AetherOps AI — Module 12: Admin Console",
-        "version": "1.0.0",
-        "port": 8012,
-        "type": "BACKEND_MICROSERVICE",
-        "endpoints": {
-            "health": "/health",
-            "admin_api": "/api/admin",
-            "docs": "/docs",
-        },
-    }
+    from app.auth import SESSION_COOKIE_NAME, decode_access_token
+    cookie_token = request.cookies.get(SESSION_COOKIE_NAME)
+    if cookie_token and decode_access_token(cookie_token):
+        return RedirectResponse(url="/admin")
+    return RedirectResponse(url="/admin/login?redirect=/admin", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/health", status_code=status.HTTP_200_OK)

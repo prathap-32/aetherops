@@ -42,9 +42,10 @@ export default function LoginPage({ onLoginSuccess }) {
     }
   }, []);
 
-  // Listen for OAuth messages from popup window
+  // Listen for OAuth messages from popup window (validating origin to prevent cross-site message injection)
   useEffect(() => {
     const handleOAuthMessage = async (event) => {
+      if (event.origin !== window.location.origin) return;
       if (!event.data) return;
       if (
         event.data.type === 'GOOGLE_OAUTH_SUCCESS' ||

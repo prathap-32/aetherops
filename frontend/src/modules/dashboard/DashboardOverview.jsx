@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import {
   FolderKanban,
   Boxes,
+  Layers,
   GitBranch,
   FileCode2,
   Network,
@@ -199,14 +200,15 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject }) {
           <p className="text-xs text-slate-500">Follow the standard engineering workflow from source repo to monitored production</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-2.5">
           {[
             { step: '1', title: 'Projects', desc: 'Create workspace', view: 'projects', path: '/projects', icon: FolderKanban },
-            { step: '2', title: 'Connect Repo', desc: 'Link GitHub source', view: 'source_cloud', path: '/source-connection', icon: GitBranch },
-            { step: '3', title: 'Analyze Code', desc: 'Deterministic AST scan', view: 'repo_analyzer', path: '/source-analysis', icon: FileCode2 },
-            { step: '4', title: 'AI Topology', desc: 'Generate architecture', view: 'architecture', path: '/architecture', icon: Network },
-            { step: '5', title: 'Terraform IaC', desc: 'Synthesize HCL files', view: 'iac', path: '/terraform', icon: Code2 },
-            { step: '6', title: 'Deploy & APM', desc: 'Operate in cloud', view: 'monitoring', path: '/monitoring', icon: Rocket },
+            { step: '2', title: 'Environments', desc: 'Configure fleets', view: 'environments', path: '/environments', icon: Layers },
+            { step: '3', title: 'Connect Repo', desc: 'Link GitHub & AWS', view: 'source_cloud', path: '/source-connection', icon: GitBranch },
+            { step: '4', title: 'Analyze Code', desc: 'Tech stack scan', view: 'repo_analyzer', path: '/source-analysis', icon: FileCode2 },
+            { step: '5', title: 'Cloud Studio', desc: 'AWS Sizing & Designer', view: 'architecture_studio', path: '/architecture-studio', icon: Network },
+            { step: '6', title: 'Terraform IaC', desc: 'Synthesize HCL', view: 'iac', path: '/terraform', icon: Code2 },
+            { step: '7', title: 'Deploy & APM', desc: 'Operate in cloud', view: 'monitoring', path: '/monitoring', icon: Rocket },
           ].map((item) => {
             const Icon = item.icon;
             return (

@@ -54,7 +54,7 @@ class TenantContext:
         Deny-by-default role validation.
         Allows platform super admin to bypass tenant-level role restrictions for platform ops/auditing.
         """
-        if self.is_platform_admin and (self.user.get("role") in PLATFORM_SUPER_ADMIN_ROLES or self.user.get("username") in ("admin", "root_admin")):
+        if self.is_platform_admin and self.user.get("role") in PLATFORM_SUPER_ADMIN_ROLES:
             return
 
         if not self.membership:
@@ -99,13 +99,14 @@ async def create_personal_workspace_for_user(
         select(Tenant)
         .join(TenantMembership, Tenant.id == TenantMembership.tenant_id)
         .where(
-            (TenantMembership.user_id == user_identifier) | (TenantMembership.user_id == clean_name),
+            (TenantMembership.user_id == clean_name)
+            | (Tenant.slug.like(f"personal-{slugify(clean_name)}%")),
             Tenant.tenant_type == "PERSONAL",
             TenantMembership.role == "OWNER",
         )
     )
     res = await db.execute(existing_query)
-    existing_tenant = res.scalar_one_or_none()
+    existing_tenant = res.scalars().first()
     if existing_tenant:
         return existing_tenant
 
@@ -156,10 +157,7 @@ async def get_tenant_context(
     """
     user_name = admin.get("username", "")
     user_uuid = admin.get("uuid") or user_name
-    is_platform_super_admin = (
-        admin.get("role") in PLATFORM_SUPER_ADMIN_ROLES
-        or user_name in ("admin", "root_admin")
-    )
+    is_platform_super_admin = admin.get("role") in PLATFORM_SUPER_ADMIN_ROLES
 
     path_tenant_id = None
     if "/api/v1/tenants/" in request.url.path:
@@ -212,7 +210,7 @@ async def get_tenant_context(
                 (TenantMembership.user_id == user_uuid) | (TenantMembership.user_id == user_name),
             )
         )
-        membership = mem_res.scalar_one_or_none()
+        membership = mem_res.scalars().first()
 
         if not membership:
             if is_platform_super_admin:

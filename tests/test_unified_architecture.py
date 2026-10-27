@@ -231,6 +231,13 @@ async def test_profile_update_and_session_refresh():
         me_data = me_resp.json()
         assert me_data.get("username") == "root_admin"
 
+        # Cleanup: restore username to admin
+        await client.put(
+            f"{MAIN_APP_URL}/api/v1/auth/profile",
+            json={"username": "admin", "email": "admin@aetherops.local"},
+            headers={"Authorization": f"Bearer {new_token}"}
+        )
+
 
 @pytest.mark.asyncio
 async def test_gateway_unknown_module_404():

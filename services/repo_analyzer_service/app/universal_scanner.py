@@ -152,9 +152,12 @@ def is_remote_target(raw_target: str) -> bool:
     s = raw_target.strip()
     if s.startswith(("http://", "https://", "git@")):
         return True
-    if "/" in s and not os.path.exists(s):
+    if s.startswith((".", "/", "~")):
+        return False
+    expanded = os.path.expanduser(s)
+    if "/" in s and not os.path.exists(expanded):
         return True
-    if not os.path.exists(s) and not s.startswith((".", "/", "~")):
+    if not os.path.exists(expanded):
         return True
     return False
 
@@ -238,7 +241,7 @@ async def resolve_repo_target(
             async with httpx.AsyncClient(timeout=3.0) as client:
                 res = await client.get(
                     "http://localhost:8002/api/v1/connections",
-                    headers={"X-Admin-Key": "aetherops-secret-admin-key"},
+                    headers={"X-Admin-Key": os.getenv("ADMIN_API_KEY", "aetherops-secret-admin-key")},
                 )
                 if res.status_code == 200:
                     data = res.json()

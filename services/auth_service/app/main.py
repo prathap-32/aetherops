@@ -15,6 +15,8 @@ import time
 import uuid
 import datetime
 import secrets
+import hmac
+import hashlib
 import logging
 import sqlite3
 from typing import Optional, Dict, Any
@@ -44,10 +46,33 @@ if os.path.exists(ENV_PATH):
                 if k not in os.environ:
                     os.environ[k] = v
 
-JWT_SECRET_KEY = os.getenv(
-    "JWT_SECRET_KEY",
-    "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master"
-)
+ENVIRONMENT = os.getenv("AETHER_ENV", os.getenv("ENVIRONMENT", "development")).lower()
+INSECURE_DEV_JWT_SECRETS = {
+    "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master",
+    "secret",
+    "changeme",
+    "admin",
+    "default",
+    "test",
+    "dev",
+}
+
+
+def validate_production_secrets(env: Optional[str] = None, secret: Optional[str] = None) -> None:
+    target_env = (env or os.getenv("AETHER_ENV", os.getenv("ENVIRONMENT", "development"))).lower()
+    target_secret = secret if secret is not None else os.getenv("JWT_SECRET_KEY")
+    if target_env == "production":
+        if not target_secret or target_secret in INSECURE_DEV_JWT_SECRETS:
+            raise RuntimeError("FATAL: JWT_SECRET_KEY must be explicitly configured with a secure non-default secret in production.")
+
+
+raw_jwt_key = os.getenv("JWT_SECRET_KEY")
+validate_production_secrets()
+if ENVIRONMENT == "production":
+    JWT_SECRET_KEY = raw_jwt_key
+else:
+    JWT_SECRET_KEY = raw_jwt_key or "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master"
+
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "8"))
 
@@ -120,54 +145,60 @@ def init_db():
     # Check for admin user
     c.execute("SELECT id FROM users WHERE username = 'admin'")
     if not c.fetchone():
-        admin_pw_hash = bcrypt.hashpw(b"admin123", bcrypt.gensalt(rounds=10)).decode()
-        now = datetime.datetime.utcnow().isoformat()
-        admin_acc_id = "109283746519"
-        admin_tenant_id = "tenant-000000000001"
-        c.execute("""
-        INSERT INTO tenants (id, name, account_id, tenant_type, created_at)
-        VALUES (?, ?, ?, ?, ?)
-        """, (admin_tenant_id, "Admin Workspace", admin_acc_id, "PERSONAL", now))
+        if ENVIRONMENT == "production":
+            logger.info("Production mode: default 'admin' account seeding is disabled.")
+        else:
+            admin_pw_hash = bcrypt.hashpw(b"admin123", bcrypt.gensalt(rounds=10)).decode()
+            now = datetime.datetime.utcnow().isoformat()
+            admin_acc_id = "109283746519"
+            admin_tenant_id = "tenant-000000000001"
+            c.execute("""
+            INSERT OR IGNORE INTO tenants (id, name, account_id, tenant_type, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """, (admin_tenant_id, "Admin Workspace", admin_acc_id, "PERSONAL", now))
 
-        c.execute("""
-        INSERT INTO users (uuid, username, email, password_hash, role, account_id, tenant_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            "00000000-0000-0000-0000-000000000001",
-            "admin",
-            "admin@aetherops.local",
-            admin_pw_hash,
-            "ADMIN",
-            admin_acc_id,
-            admin_tenant_id,
-            now
-        ))
+            c.execute("""
+            INSERT OR REPLACE INTO users (uuid, username, email, password_hash, role, account_id, tenant_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                "00000000-0000-0000-0000-000000000001",
+                "admin",
+                "admin@aetherops.local",
+                admin_pw_hash,
+                "ADMIN",
+                admin_acc_id,
+                admin_tenant_id,
+                now
+            ))
 
     # Check for standard user
     c.execute("SELECT id FROM users WHERE username = 'user'")
     if not c.fetchone():
-        user_pw_hash = bcrypt.hashpw(b"user123", bcrypt.gensalt(rounds=10)).decode()
-        now = datetime.datetime.utcnow().isoformat()
-        user_acc_id = "987654321098"
-        user_tenant_id = "tenant-000000000002"
-        c.execute("""
-        INSERT INTO tenants (id, name, account_id, tenant_type, created_at)
-        VALUES (?, ?, ?, ?, ?)
-        """, (user_tenant_id, "User Workspace", user_acc_id, "PERSONAL", now))
+        if ENVIRONMENT == "production":
+            logger.info("Production mode: default 'user' account seeding is disabled.")
+        else:
+            user_pw_hash = bcrypt.hashpw(b"user123", bcrypt.gensalt(rounds=10)).decode()
+            now = datetime.datetime.utcnow().isoformat()
+            user_acc_id = "987654321098"
+            user_tenant_id = "tenant-000000000002"
+            c.execute("""
+            INSERT OR IGNORE INTO tenants (id, name, account_id, tenant_type, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """, (user_tenant_id, "User Workspace", user_acc_id, "PERSONAL", now))
 
-        c.execute("""
-        INSERT INTO users (uuid, username, email, password_hash, role, account_id, tenant_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            "00000000-0000-0000-0000-000000000002",
-            "user",
-            "user@aetherops.local",
-            user_pw_hash,
-            "USER",
-            user_acc_id,
-            user_tenant_id,
-            now
-        ))
+            c.execute("""
+            INSERT OR REPLACE INTO users (uuid, username, email, password_hash, role, account_id, tenant_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                "00000000-0000-0000-0000-000000000002",
+                "user",
+                "user@aetherops.local",
+                user_pw_hash,
+                "USER",
+                user_acc_id,
+                user_tenant_id,
+                now
+            ))
 
     conn.commit()
     conn.close()
@@ -222,9 +253,6 @@ def find_user_by_login_id(cursor, login_id: str):
 def _verify_password(plain_password: str, stored_hash: Optional[str]) -> bool:
     if not stored_hash:
         return False
-    # Backwards compatibility for plain text seed check
-    if stored_hash == plain_password:
-        return True
     try:
         return bcrypt.checkpw(plain_password.encode(), stored_hash.encode())
     except Exception:
@@ -258,31 +286,6 @@ def _create_jwt_token(
 def _decode_jwt_token(token: str) -> Optional[Dict[str, Any]]:
     if not token:
         return None
-    if token.startswith("mock_token_"):
-        parts = token.split("_")
-        uname = parts[2] if len(parts) > 2 else "admin"
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE username = ?", (uname,))
-        row = c.fetchone()
-        conn.close()
-        if row:
-            return {
-                "sub": row["username"],
-                "role": row["role"],
-                "email": row["email"],
-                "uuid": row["uuid"],
-                "account_id": row["account_id"],
-                "tenant_id": row["tenant_id"],
-            }
-        return {
-            "sub": uname,
-            "role": "ADMIN",
-            "email": f"{uname}@aetherops.local",
-            "uuid": str(uuid.uuid4()),
-            "account_id": "109283746519",
-            "tenant_id": "tenant-000000000001",
-        }
     try:
         return jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
     except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
@@ -435,19 +438,34 @@ async def register(req: RegisterRequest):
     }
 
 
+def _get_request_auth_payload(request: Request) -> Optional[Dict[str, Any]]:
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:].strip() if auth_header.startswith("Bearer ") else ""
+    if token:
+        payload = _decode_jwt_token(token)
+        if payload:
+            return payload
+    x_admin_key = request.headers.get("X-Admin-Key", "")
+    if x_admin_key:
+        configured_admin_key = os.getenv("ADMIN_API_KEY", "aetherops-secret-admin-key")
+        if ENVIRONMENT == "production" and (not configured_admin_key or configured_admin_key == "aetherops-secret-admin-key"):
+            return None
+        if secrets.compare_digest(x_admin_key.strip(), configured_admin_key):
+            return {
+                "sub": "admin",
+                "role": "ADMIN",
+                "account_id": "109283746519",
+                "tenant_id": "tenant-000000000001",
+                "uuid": "00000000-0000-0000-0000-000000000001",
+                "email": "admin@aetherops.local",
+            }
+    return None
+
+
 @app.get("/api/v1/auth/me")
 async def get_me(request: Request):
     """Returns authenticated user profile showcasing AWS Account ID."""
-    auth_header = request.headers.get("Authorization", "")
-    x_admin_key = request.headers.get("X-Admin-Key", "")
-
-    token = ""
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:].strip()
-    elif x_admin_key:
-        token = x_admin_key.strip()
-
-    payload = _decode_jwt_token(token)
+    payload = _get_request_auth_payload(request)
     if not payload:
         return JSONResponse(status_code=401, content={"detail": "Invalid or expired token"})
 
@@ -484,11 +502,7 @@ async def verify_tenant_access(req: VerifyTenantRequest, request: Request):
     Validates that the provided account_id and hidden tenant_id match
     the authenticated session before allowing sensitive actions or data queries.
     """
-    auth_header = request.headers.get("Authorization", "")
-    x_admin_key = request.headers.get("X-Admin-Key", "")
-    token = auth_header[7:].strip() if auth_header.startswith("Bearer ") else x_admin_key.strip()
-
-    payload = _decode_jwt_token(token)
+    payload = _get_request_auth_payload(request)
     if not payload:
         return JSONResponse(status_code=401, content={"detail": "Unauthorized: Session token missing or invalid."})
 
@@ -511,11 +525,7 @@ async def verify_tenant_access(req: VerifyTenantRequest, request: Request):
 @app.put("/api/v1/auth/profile")
 @app.patch("/api/v1/auth/profile")
 async def update_profile(req: ProfileUpdateRequest, request: Request):
-    auth_header = request.headers.get("Authorization", "")
-    x_admin_key = request.headers.get("X-Admin-Key", "")
-    token = auth_header[7:].strip() if auth_header.startswith("Bearer ") else x_admin_key.strip()
-
-    payload = _decode_jwt_token(token)
+    payload = _get_request_auth_payload(request)
     if not payload:
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
 
@@ -548,6 +558,8 @@ async def update_profile(req: ProfileUpdateRequest, request: Request):
     return {
         "status": "ok",
         "token": new_token,
+        "username": user["username"],
+        "email": user["email"],
         "user": {
             "username": user["username"],
             "email": user["email"],
@@ -669,11 +681,21 @@ def _oauth_success_html(provider: str, token: str, user: Dict[str, Any]) -> str:
       localStorage.setItem('aether_user', JSON.stringify(payload.user));
     }} catch(e) {{}}
 
+    let targetOrigin = window.location.origin;
+    try {{
+      if (window.opener && window.opener.origin) {{
+        const allowedOrigins = [window.location.origin, 'http://localhost:8000', 'http://127.0.0.1:8000'];
+        if (allowedOrigins.includes(window.opener.origin)) {{
+          targetOrigin = window.opener.origin;
+        }}
+      }}
+    }} catch(e) {{}}
+
     if (window.opener && !window.opener.closed) {{
-      window.opener.postMessage(payload, '*');
+      window.opener.postMessage(payload, targetOrigin);
       setTimeout(() => window.close(), 500);
     }} else {{
-      window.location.href = 'http://localhost:8000/?token={token}&username={u_name}&email={u_email}&role={u_role}&account_id={u_account}';
+      window.location.href = 'http://localhost:8000/';
     }}
   </script>
 </body>
@@ -703,12 +725,80 @@ def _oauth_error_html(title: str, detail: str) -> str:
 </html>"""
 
 
+_ACTIVE_OAUTH_STATES: Dict[str, float] = {}
+
+
+def generate_oauth_state(prefix: str = "login") -> str:
+    """
+    Generates a cryptographically signed, timestamped OAuth state parameter.
+    Immune to CSRF forgery and tracked in memory with a 15-minute TTL.
+    """
+    now = time.time()
+    # Prune stale states (> 15 mins)
+    stale = [k for k, exp in _ACTIVE_OAUTH_STATES.items() if now - exp > 900]
+    for k in stale:
+        _ACTIVE_OAUTH_STATES.pop(k, None)
+
+    rnd = secrets.token_hex(16)
+    ts = str(int(now))
+    raw = f"{prefix}:{rnd}:{ts}"
+    sig = hmac.new(JWT_SECRET_KEY.encode(), raw.encode(), hashlib.sha256).hexdigest()[:16]
+    state = f"{raw}:{sig}"
+    _ACTIVE_OAUTH_STATES[state] = now
+    _ACTIVE_OAUTH_STATES[f"{prefix}:{rnd}"] = now
+    return state
+
+
+def verify_oauth_state(state: Optional[str], stored_cookie_state: Optional[str] = None) -> bool:
+    """
+    Validates OAuth state parameter via multiple defense-in-depth checks:
+    1. Direct match with stored HttpOnly cookie.
+    2. In-memory active OAuth token cache (< 15 mins).
+    3. Server-side HMAC cryptographic signature verification.
+    """
+    if not state:
+        return False
+
+    # 1. Direct cookie match
+    if stored_cookie_state and secrets.compare_digest(state, stored_cookie_state):
+        return True
+
+    # 2. In-memory active states
+    if state in _ACTIVE_OAUTH_STATES:
+        issued_at = _ACTIVE_OAUTH_STATES.pop(state, None)
+        if issued_at and (time.time() - issued_at) < 900:
+            return True
+
+    parts = state.split(":")
+    if len(parts) >= 2:
+        short_key = f"{parts[0]}:{parts[1]}"
+        if short_key in _ACTIVE_OAUTH_STATES:
+            issued_at = _ACTIVE_OAUTH_STATES.pop(short_key, None)
+            if issued_at and (time.time() - issued_at) < 900:
+                return True
+
+    # 3. HMAC signature check (fallback when cookies are partitioned or dropped across redirects)
+    if len(parts) == 4:
+        prefix, rnd, ts, sig = parts
+        try:
+            timestamp = int(ts)
+            if abs(time.time() - timestamp) < 900:
+                expected_raw = f"{prefix}:{rnd}:{ts}"
+                expected_sig = hmac.new(JWT_SECRET_KEY.encode(), expected_raw.encode(), hashlib.sha256).hexdigest()[:16]
+                if secrets.compare_digest(sig, expected_sig):
+                    return True
+        except (ValueError, TypeError):
+            pass
+
+    return False
+
+
 @app.api_route("/api/v1/auth/google/login", methods=["GET", "HEAD"])
 @app.api_route("/auth/google/login", methods=["GET", "HEAD"])
 async def google_login(request: Request, redirect_uri: Optional[str] = None):
     """Initiates Google OAuth 2.0 flow with authorized redirect_uri."""
     cb = redirect_uri or GOOGLE_REDIRECT_URI
-    state = secrets.token_hex(16)
+    state = generate_oauth_state("login")
     scope = "openid email profile"
     google_url = (
         f"https://accounts.google.com/o/oauth2/v2/auth"
@@ -721,8 +811,11 @@ async def google_login(request: Request, redirect_uri: Optional[str] = None):
     )
 
     if "application/json" in request.headers.get("accept", ""):
-        return {"url": google_url, "redirect": google_url}
-    return RedirectResponse(google_url, status_code=307)
+        resp = JSONResponse({"url": google_url, "redirect": google_url})
+    else:
+        resp = RedirectResponse(google_url, status_code=307)
+    resp.set_cookie("oauth_state_google", state, httponly=True, samesite="lax", max_age=600, path="/")
+    return resp
 
 
 @app.get("/api/v1/auth/google/callback")
@@ -738,6 +831,10 @@ async def google_callback(
         return HTMLResponse(_oauth_error_html("Google OAuth Canceled", error), status_code=400)
     if not code:
         return HTMLResponse(_oauth_error_html("Google OAuth Error", "Missing authorization code from Google."), status_code=400)
+
+    stored_state = request.cookies.get("oauth_state_google")
+    if not verify_oauth_state(state, stored_state):
+        return HTMLResponse(_oauth_error_html("OAuth Security Error", "Invalid or missing OAuth state parameter. Potential CSRF attack prevented."), status_code=400)
 
     cb = GOOGLE_REDIRECT_URI
     try:
@@ -815,7 +912,9 @@ async def google_callback(
     user_dict = dict(user)
     conn.close()
 
-    return HTMLResponse(_oauth_success_html("Google", token, user_dict))
+    resp = HTMLResponse(_oauth_success_html("Google", token, user_dict))
+    resp.delete_cookie("oauth_state_google", path="/")
+    return resp
 
 
 @app.api_route("/api/v1/auth/github/login", methods=["GET", "HEAD"])
@@ -823,7 +922,7 @@ async def google_callback(
 async def github_login(request: Request, redirect_uri: Optional[str] = None):
     """Initiates GitHub OAuth flow."""
     cb = redirect_uri or GITHUB_OAUTH_REDIRECT_URI
-    state = f"login:{secrets.token_hex(16)}"
+    state = generate_oauth_state("login")
     scope = "user:email read:user"
     github_url = (
         f"https://github.com/login/oauth/authorize"
@@ -834,8 +933,11 @@ async def github_login(request: Request, redirect_uri: Optional[str] = None):
     )
 
     if "application/json" in request.headers.get("accept", ""):
-        return {"url": github_url, "redirect": github_url}
-    return RedirectResponse(github_url, status_code=307)
+        resp = JSONResponse({"url": github_url, "redirect": github_url})
+    else:
+        resp = RedirectResponse(github_url, status_code=307)
+    resp.set_cookie("oauth_state_github", state, httponly=True, samesite="lax", max_age=600, path="/")
+    return resp
 
 
 @app.get("/api/v1/auth/github/callback")
@@ -851,6 +953,11 @@ async def github_callback(
         return HTMLResponse(_oauth_error_html("GitHub OAuth Canceled", error), status_code=400)
     if not code:
         return HTMLResponse(_oauth_error_html("GitHub OAuth Error", "Missing authorization code from GitHub."), status_code=400)
+
+    stored_state = request.cookies.get("oauth_state_conn_github") or request.cookies.get("oauth_state_github")
+    if not verify_oauth_state(state, stored_state):
+        logger.warning(f"GitHub OAuth state validation failed. state={state}, cookies={list(request.cookies.keys())}")
+        return HTMLResponse(_oauth_error_html("OAuth Security Error", "Invalid or missing OAuth state parameter. Potential CSRF attack prevented."), status_code=400)
 
     cb = GITHUB_OAUTH_REDIRECT_URI
     try:
@@ -907,7 +1014,10 @@ async def github_callback(
 
     # If this was a Module 2 Connection flow (intent=connect), return connection success HTML
     if state and (state.startswith("connect") or state.startswith("repo")):
-        return HTMLResponse(_github_connection_success_html(access_token, gh_user))
+        resp = HTMLResponse(_github_connection_success_html(access_token, gh_user))
+        resp.delete_cookie("oauth_state_conn_github", path="/")
+        resp.delete_cookie("oauth_state_github", path="/")
+        return resp
 
     conn = get_db_connection()
     c = conn.cursor()
@@ -953,7 +1063,10 @@ async def github_callback(
     user_dict = dict(user)
     conn.close()
 
-    return HTMLResponse(_oauth_success_html("GitHub", token, user_dict))
+    resp = HTMLResponse(_oauth_success_html("GitHub", token, user_dict))
+    resp.delete_cookie("oauth_state_github", path="/")
+    resp.delete_cookie("oauth_state_conn_github", path="/")
+    return resp
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1053,11 +1166,21 @@ def _github_connection_success_html(token: str, gh_user: Dict[str, Any]) -> str:
       localStorage.setItem('aether_gh_user', JSON.stringify(payload.user));
     }} catch(e) {{}}
 
+    let targetOrigin = window.location.origin;
+    try {{
+      if (window.opener && window.opener.origin) {{
+        const allowedOrigins = [window.location.origin, 'http://localhost:8000', 'http://127.0.0.1:8000'];
+        if (allowedOrigins.includes(window.opener.origin)) {{
+          targetOrigin = window.opener.origin;
+        }}
+      }}
+    }} catch(e) {{}}
+
     if (window.opener && !window.opener.closed) {{
-      window.opener.postMessage(payload, '*');
+      window.opener.postMessage(payload, targetOrigin);
       setTimeout(() => window.close(), 700);
     }} else {{
-      window.location.href = 'http://localhost:8000/source-connection?github_connected=1&gh_token={token}&gh_user={u_login}';
+      window.location.href = 'http://localhost:8000/source-connection?github_connected=1';
     }}
   </script>
 </body>
@@ -1072,7 +1195,7 @@ async def connections_github_login(request: Request, redirect_uri: Optional[str]
     Requests 'repo,read:user,user:email' scope.
     """
     cb = redirect_uri or GITHUB_CONNECTION_REDIRECT_URI
-    state = f"connect:{secrets.token_hex(16)}"
+    state = generate_oauth_state("connect")
     scope = "repo,read:user,user:email"
     github_url = (
         f"https://github.com/login/oauth/authorize"
@@ -1083,8 +1206,12 @@ async def connections_github_login(request: Request, redirect_uri: Optional[str]
     )
 
     if "application/json" in request.headers.get("accept", ""):
-        return {"url": github_url, "redirect": github_url}
-    return RedirectResponse(github_url, status_code=307)
+        resp = JSONResponse({"url": github_url, "redirect": github_url})
+    else:
+        resp = RedirectResponse(github_url, status_code=307)
+    resp.set_cookie("oauth_state_conn_github", state, httponly=True, samesite="lax", max_age=600, path="/")
+    resp.set_cookie("oauth_state_github", state, httponly=True, samesite="lax", max_age=600, path="/")
+    return resp
 
 
 @app.api_route("/api/v1/connections/github/callback", methods=["GET", "HEAD"])
@@ -1104,6 +1231,11 @@ async def connections_github_callback(
         return HTMLResponse(_oauth_error_html("GitHub Connection Canceled", err_msg), status_code=400)
     if not code:
         return HTMLResponse(_oauth_error_html("GitHub Connection Error", "Missing authorization code from GitHub."), status_code=400)
+
+    stored_state = request.cookies.get("oauth_state_conn_github") or request.cookies.get("oauth_state_github")
+    if not verify_oauth_state(state, stored_state):
+        logger.warning(f"Connection OAuth state validation failed. state={state}, cookies={list(request.cookies.keys())}")
+        return HTMLResponse(_oauth_error_html("OAuth Security Error", "Invalid or missing OAuth state parameter. Potential CSRF attack prevented."), status_code=400)
 
     cb = GITHUB_CONNECTION_REDIRECT_URI
     try:
@@ -1139,7 +1271,10 @@ async def connections_github_callback(
         logger.error(f"GitHub Connection OAuth exchange failed: {e}")
         return HTMLResponse(_oauth_error_html("GitHub Connection Failed", str(e)), status_code=400)
 
-    return HTMLResponse(_github_connection_success_html(access_token, gh_user))
+    resp = HTMLResponse(_github_connection_success_html(access_token, gh_user))
+    resp.delete_cookie("oauth_state_conn_github", path="/")
+    resp.delete_cookie("oauth_state_github", path="/")
+    return resp
 
 
 @app.get("/")

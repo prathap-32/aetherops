@@ -17,6 +17,7 @@ POSTGRES_PORT     = os.getenv("POSTGRES_PORT", "5432")
 POSTGRES_DB       = os.getenv("POSTGRES_DB", "aether_catalog")
 RAW_DATABASE_URL  = os.getenv("DATABASE_URL", "")
 ECHO_SQL          = os.getenv("ECHO_SQL", "False").lower() in ("true", "1", "yes")
+ENVIRONMENT       = os.getenv("AETHER_ENV", os.getenv("ENVIRONMENT", "development")).lower()
 
 Base = declarative_base()
 
@@ -116,34 +117,47 @@ def get_pg_sessionmaker():
 # ── DB Init ───────────────────────────────────────────────────────────────────
 
 async def init_projects_db():
-    """Create all tables in SQLite (primary) and PostgreSQL (failover)."""
+    """Create all tables in SQLite (development/test) or PostgreSQL (production/runtime)."""
     import app.models  # noqa: F401 — registers ORM models onto Base.metadata
 
-    # 1. SQLite (always)
-    eng = get_sqlite_engine()
-    async with eng.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        for table, col, col_type in [
-            ("aether_projects", "tenant_id", "VARCHAR(36)"),
-            ("aether_projects", "created_by_user_id", "VARCHAR(36)"),
-            ("aether_environments", "tenant_id", "VARCHAR(36)"),
-            ("aether_environments", "created_by_user_id", "VARCHAR(36)"),
-        ]:
-            try:
-                await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
-            except Exception:
-                pass
-    logger.info("projects.db initialised (SQLite WAL).")
+    # 1. SQLite (only for testing or development)
+    if IS_TESTING or ENVIRONMENT != "production":
+        eng = get_sqlite_engine()
+        async with eng.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            for table, col, col_type in [
+                ("aether_projects", "tenant_id", "VARCHAR(36)"),
+                ("aether_projects", "created_by_user_id", "VARCHAR(36)"),
+                ("aether_environments", "tenant_id", "VARCHAR(36)"),
+                ("aether_environments", "created_by_user_id", "VARCHAR(36)"),
+            ]:
+                try:
+                    await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
+                except Exception:
+                    pass
+        logger.info("projects.db initialised (SQLite WAL).")
 
-    # 2. PostgreSQL (best-effort, skip in tests)
+    # 2. PostgreSQL (primary durable store)
     if not IS_TESTING:
         try:
             pg = get_pg_engine()
             async with pg.begin() as conn:
                 await conn.execute(text('CREATE SCHEMA IF NOT EXISTS "project_manager"'))
                 await conn.run_sync(Base.metadata.create_all)
+                for table, col, col_type in [
+                    ("aether_projects", "tenant_id", "VARCHAR(36)"),
+                    ("aether_projects", "created_by_user_id", "VARCHAR(36)"),
+                    ("aether_environments", "tenant_id", "VARCHAR(36)"),
+                    ("aether_environments", "created_by_user_id", "VARCHAR(36)"),
+                ]:
+                    try:
+                        await conn.execute(text(f'ALTER TABLE "project_manager".{table} ADD COLUMN IF NOT EXISTS {col} {col_type}'))
+                    except Exception:
+                        pass
             logger.info("PostgreSQL schema 'project_manager' initialised.")
         except Exception as exc:
+            if ENVIRONMENT == "production":
+                raise RuntimeError(f"FATAL: PostgreSQL database initialization failed in production: {exc}")
             logger.warning(f"PostgreSQL init deferred: {exc}")
 
 
@@ -180,9 +194,16 @@ async def get_db() -> AsyncSession:
         await pg_session.execute(text("SELECT tenant_id FROM aether_projects LIMIT 1"))
         pg_ok = True
     except Exception as exc:
-        logger.warning(f"PostgreSQL container unavailable or pre-migration ({exc}), failing over to SQLite.")
+        if ENVIRONMENT == "production":
+            if pg_session:
+                await pg_session.close()
+            raise RuntimeError(
+                f"FATAL: PostgreSQL database connection failed in production ({exc}). Silent SQLite fallback is strictly prohibited."
+            )
+        logger.warning(f"PostgreSQL container unavailable or pre-migration ({exc}), failing over to SQLite for development.")
         if pg_session:
             await pg_session.close()
+            pg_session = None
 
     if pg_ok and pg_session:
         try:

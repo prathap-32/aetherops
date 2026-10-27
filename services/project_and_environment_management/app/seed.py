@@ -6,7 +6,7 @@ import datetime
 from sqlalchemy import select
 
 from app.database import init_projects_db, get_sqlite_sessionmaker
-from app.models import AetherProject, AetherEnvironment
+from app.models import AetherProject, AetherEnvironment, Tenant, TenantMembership
 
 logger = logging.getLogger("project-manager-seeder")
 
@@ -21,6 +21,29 @@ async def seed_initial_data():
 
     async with sf() as session:
         try:
+            # Ensure admin workspace exists
+            t_res = await session.execute(select(Tenant).where(Tenant.id == "tenant-000000000001"))
+            if not t_res.scalar_one_or_none():
+                session.add(Tenant(
+                    id="tenant-000000000001",
+                    name="Admin's Workspace",
+                    slug="personal-admin-tenant-000000000001",
+                    tenant_type="PERSONAL",
+                    status="ACTIVE",
+                    created_at=datetime.datetime.utcnow(),
+                    updated_at=datetime.datetime.utcnow(),
+                ))
+                session.add(TenantMembership(
+                    id=str(uuid.uuid4()),
+                    tenant_id="tenant-000000000001",
+                    user_id="admin",
+                    role="OWNER",
+                    status="ACTIVE",
+                    created_at=datetime.datetime.utcnow(),
+                    updated_at=datetime.datetime.utcnow(),
+                ))
+                await session.commit()
+
             res = await session.execute(select(AetherProject).limit(1))
             if res.scalar_one_or_none() is not None:
                 logger.info("projects.db already has data — skipping seed.")
@@ -34,6 +57,7 @@ async def seed_initial_data():
                 description="E-commerce application with microservices architecture and AWS RDS backend.",
                 project_type="web_application",
                 owner="admin",
+                tenant_id="tenant-000000000001",
                 status="ACTIVE",
                 environment_count=2,
                 created_at=datetime.datetime.utcnow(),

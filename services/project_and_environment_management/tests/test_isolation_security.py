@@ -117,12 +117,12 @@ async def test_project_cross_tenant_isolation_and_cache_bypass(client):
 
 @pytest.mark.anyio
 async def test_super_admin_can_view_all_projects(client):
-    """Verify super admin retains administrative oversight across all projects."""
+    """Verify super admin retains administrative oversight across all projects via explicit audit view."""
     admin_login = await client.post("/api/v1/auth/login", json={"username": "admin", "password": "AetherOps@2026!"})
     assert admin_login.status_code == 200
     headers_admin = {"Authorization": f"Bearer {admin_login.json()['token']}"}
 
-    all_projs = await client.get("/api/v1/projects", headers=headers_admin)
+    all_projs = await client.get("/api/v1/projects?all=true", headers=headers_admin)
     assert all_projs.status_code == 200
     names = [p["name"] for p in all_projs.json()["projects"]]
     assert f"AliceConf_{UID}" in names

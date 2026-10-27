@@ -86,8 +86,8 @@ export async function apiRequest(endpoint, options = {}) {
   return data;
 }
 
-// Auth API points directly to auth microservice (port 7999)
-const AUTH_SERVICE_URL = 'http://localhost:7999';
+// Auth API routed through central API Gateway (Port 8000)
+const AUTH_SERVICE_URL = '';
 
 export const authApi = {
   login: (username, password) =>

@@ -218,6 +218,7 @@ export default function DashboardPage() {
             activeProject={activeProject}
             activeEnvironment={activeEnvironment}
             onSelectEnvironment={selectEnvironment}
+            navState={navState}
           />
         );
       case 'source_cloud':
@@ -226,6 +227,7 @@ export default function DashboardPage() {
             onNavigate={handleNavigate}
             activeProject={activeProject}
             activeEnvironment={activeEnvironment}
+            navState={navState}
           />
         );
       case 'repo_analyzer':
@@ -235,6 +237,7 @@ export default function DashboardPage() {
             onNavigate={handleNavigate}
             activeProject={activeProject}
             activeEnvironment={activeEnvironment}
+            navState={navState}
           />
         );
       case 'architecture_studio':

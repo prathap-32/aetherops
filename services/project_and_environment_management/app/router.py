@@ -508,7 +508,7 @@ async def list_user_tenants(
     """List all tenants accessible to the current user with their membership role."""
     user_name = admin.get("username", "")
     user_uuid = admin.get("uuid") or user_name
-    is_platform_admin = admin.get("role") == "SUPER_ADMIN" or user_name in ("admin", "root_admin")
+    is_platform_admin = admin.get("role") == "SUPER_ADMIN"
 
     mem_query = (
         select(TenantMembership, Tenant)
@@ -1228,7 +1228,7 @@ async def _get_project_or_404(
     else:
         owner = str(ctx_or_owner)
         user_role = role or "USER"
-        if user_role == "SUPER_ADMIN" or owner in ("admin", "root_admin"):
+        if user_role == "SUPER_ADMIN":
             query = select(AetherProject).where(AetherProject.id == project_id)
         else:
             query = select(AetherProject).where(

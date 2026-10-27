@@ -42,6 +42,7 @@ Responsibilities:
 import os
 import time
 import logging
+import secrets
 from typing import Optional
 from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -52,10 +53,32 @@ import httpx
 import jwt
 from rich.logging import RichHandler
 
-JWT_SECRET_KEY = os.getenv(
-    "JWT_SECRET_KEY",
-    "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master"
-)
+ENVIRONMENT = os.getenv("AETHER_ENV", os.getenv("ENVIRONMENT", "development")).lower()
+INSECURE_DEV_JWT_SECRETS = {
+    "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master",
+    "secret",
+    "changeme",
+    "admin",
+    "default",
+    "test",
+    "dev",
+}
+
+
+def validate_production_secrets(env: Optional[str] = None, secret: Optional[str] = None) -> None:
+    target_env = (env or os.getenv("AETHER_ENV", os.getenv("ENVIRONMENT", "development"))).lower()
+    target_secret = secret if secret is not None else os.getenv("JWT_SECRET_KEY")
+    if target_env == "production":
+        if not target_secret or target_secret in INSECURE_DEV_JWT_SECRETS:
+            raise RuntimeError("FATAL: JWT_SECRET_KEY must be explicitly configured with a secure non-default secret in production.")
+
+
+raw_jwt_key = os.getenv("JWT_SECRET_KEY")
+validate_production_secrets()
+if ENVIRONMENT == "production":
+    JWT_SECRET_KEY = raw_jwt_key
+else:
+    JWT_SECRET_KEY = raw_jwt_key or "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master"
 JWT_ALGORITHM = "HS256"
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -156,6 +179,36 @@ EXCLUDE_HEADERS = {
     "upgrade",
 }
 
+UNTRUSTED_IDENTITY_HEADERS = {
+    "x-account-id",
+    "x-accountid",
+    "x-tenant-id",
+    "x-tenantid",
+    "x-user-id",
+    "x-userid",
+    "x-user-uuid",
+    "x-user-role",
+    "x-user-roles",
+    "x-roles",
+    "x-role",
+    "x-auth-type",
+    "x-user-email",
+    "x-authenticated-user",
+}
+
+PUBLIC_API_PREFIXES = (
+    "/api/v1/auth/login",
+    "/api/v1/auth/register",
+    "/api/v1/auth/google",
+    "/api/v1/auth/github",
+    "/auth/google",
+    "/auth/github",
+    "/api/v1/connections/github/login",
+    "/api/v1/connections/github/callback",
+    "/api/v1/connections/github/oauth",
+    "/api/v1/meta",
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -171,9 +224,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "ALLOWED_ORIGINS",
+        "http://localhost:8000,http://127.0.0.1:8000,http://localhost:7999,http://127.0.0.1:7999,http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -226,57 +288,92 @@ async def _proxy_to_upstream(
 
     req_headers = {}
     for k, v in request.headers.items():
-        if k.lower() not in EXCLUDE_HEADERS:
-            req_headers[k] = v
+        k_lower = k.lower()
+        if k_lower not in EXCLUDE_HEADERS and k_lower not in UNTRUSTED_IDENTITY_HEADERS:
+            req_headers[k_lower] = v
 
     client_ip = request.client.host if request.client else "127.0.0.1"
     req_headers["x-forwarded-for"] = client_ip
     req_headers["x-forwarded-proto"] = request.url.scheme
     req_headers["x-forwarded-host"] = request.headers.get("host", "localhost:8000")
 
-    # Enforce multi-tenant isolation and verify account_id & tenant_id on data/action requests
+    normalized_path = "/" + upstream_path.lstrip("/")
+    is_public = (
+        any(normalized_path == p or normalized_path.startswith(p + "/") for p in PUBLIC_API_PREFIXES)
+        or normalized_path.endswith("/health")
+        or normalized_path == "/health"
+    )
+
+    # Extract bearer token or X-Admin-Key
     auth_header = request.headers.get("authorization", "")
     x_admin_key = request.headers.get("x-admin-key", "")
     token = ""
     if auth_header.startswith("Bearer "):
         token = auth_header[7:].strip()
-    elif x_admin_key:
-        token = x_admin_key.strip()
 
+    decoded_payload = None
     if token:
         try:
-            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-            token_account_id = payload.get("account_id")
-            token_tenant_id = payload.get("tenant_id")
-            token_user_id = payload.get("uuid")
-            token_user_role = payload.get("role")
-
-            req_account_id = request.headers.get("x-account-id")
-            req_tenant_id = request.headers.get("x-tenant-id")
-
-            # Validate that caller isn't spoofing another account or tenant
-            if req_account_id and token_account_id and req_account_id != token_account_id:
-                return JSONResponse(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    content={"detail": "Tenant isolation violation: Account ID mismatch with authenticated session."},
-                )
-            if req_tenant_id and token_tenant_id and req_tenant_id != token_tenant_id:
-                return JSONResponse(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    content={"detail": "Tenant isolation violation: Tenant ID mismatch with authenticated session."},
-                )
-
-            # Propagate verified identity headers upstream
-            if token_account_id:
-                req_headers["x-account-id"] = token_account_id
-            if req_tenant_id:
-                req_headers["x-tenant-id"] = req_tenant_id
-            if token_user_id:
-                req_headers["x-user-id"] = token_user_id
-            if token_user_role:
-                req_headers["x-user-role"] = token_user_role
+            decoded_payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         except Exception:
-            pass
+            decoded_payload = None
+    elif x_admin_key:
+        configured_admin_key = os.getenv("ADMIN_API_KEY", "aetherops-secret-admin-key")
+        # In production, default development admin key is strictly prohibited
+        if ENVIRONMENT == "production" and (not configured_admin_key or configured_admin_key == "aetherops-secret-admin-key"):
+            decoded_payload = None
+        elif secrets.compare_digest(x_admin_key.strip(), configured_admin_key):
+            decoded_payload = {
+                "sub": "admin",
+                "account_id": "act_admin",
+                "tenant_id": "ten_default",
+                "uuid": "usr_00000000000000000000000000",
+                "role": "admin",
+                "roles": ["admin"],
+                "auth_type": "api_key",
+            }
+
+    # Enforce mandatory authentication on all non-public API paths
+    if not is_public and normalized_path.startswith("/api/"):
+        if not decoded_payload:
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={"detail": "Unauthorized: valid authentication token required."},
+            )
+
+    if decoded_payload:
+        token_account_id = decoded_payload.get("account_id")
+        token_tenant_id = decoded_payload.get("tenant_id")
+        token_user_id = decoded_payload.get("uuid")
+        token_user_role = decoded_payload.get("role")
+        token_sub = decoded_payload.get("sub")
+
+        # Validate that caller isn't spoofing another account or tenant
+        req_account_id = request.headers.get("x-account-id")
+        req_tenant_id = request.headers.get("x-tenant-id")
+
+        if req_account_id and token_account_id and req_account_id != token_account_id:
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={"detail": "Tenant isolation violation: Account ID mismatch with authenticated session."},
+            )
+        if req_tenant_id and token_tenant_id and req_tenant_id != token_tenant_id:
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={"detail": "Tenant isolation violation: Tenant ID mismatch with authenticated session."},
+            )
+
+        # Propagate cryptographically verified identity headers downstream
+        if token_account_id:
+            req_headers["x-account-id"] = str(token_account_id)
+        if token_tenant_id:
+            req_headers["x-tenant-id"] = str(token_tenant_id)
+        if token_user_id:
+            req_headers["x-user-id"] = str(token_user_id)
+        if token_user_role:
+            req_headers["x-user-role"] = str(token_user_role)
+        if token_sub:
+            req_headers["x-authenticated-user"] = str(token_sub)
 
     body = None
     if request.method not in ("GET", "HEAD"):
@@ -293,15 +390,18 @@ async def _proxy_to_upstream(
 
         resp_headers = {}
         for k, v in upstream_resp.headers.items():
-            if k.lower() not in EXCLUDE_HEADERS:
+            if k.lower() not in EXCLUDE_HEADERS and k.lower() != "set-cookie":
                 resp_headers[k] = v
 
-        return Response(
+        gateway_resp = Response(
             content=upstream_resp.content,
             status_code=upstream_resp.status_code,
             headers=resp_headers,
             media_type=upstream_resp.headers.get("content-type"),
         )
+        for cookie_str in upstream_resp.headers.get_list("set-cookie"):
+            gateway_resp.raw_headers.append((b"set-cookie", cookie_str.encode("latin-1")))
+        return gateway_resp
     except httpx.ConnectError:
         logger.warning(f"Gateway Upstream Offline: Unable to connect to {url}")
         return JSONResponse(

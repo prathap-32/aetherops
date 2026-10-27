@@ -33,9 +33,21 @@ else
     exit 1
 fi
 
+echo -e "\n${BLUE}Acquiring authentication token via Gateway...${NC}"
+AUTH_RES=$(curl -s -X POST http://127.0.0.1:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}')
+TOKEN=$(echo "$AUTH_RES" | grep -o '"token":"[^"]*"' | head -n 1 | cut -d'"' -f4)
+if [ -z "$TOKEN" ]; then
+  echo -e "${RED}✗ Failed to acquire token from Gateway${NC}"
+  exit 1
+fi
+echo -e "${GREEN}✓ Acquired JWT token from Gateway${NC}"
+
 # Test 3: Save Canvas State to Architecture Studio (Port 8000 -> 8004)
 echo -e "\n${BLUE}Test 3: Save Canvas Topology State via Gateway (Port 8000 -> 8004)${NC}"
 SAVE_RES=$(curl -s -X POST http://127.0.0.1:8000/api/v1/architecture/studio/save \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "project_id": "test-canvas-proj",
@@ -60,7 +72,7 @@ fi
 
 # Test 4: Retrieve Canvas State
 echo -e "\n${BLUE}Test 4: Retrieve Canvas State (Port 8000 -> 8004)${NC}"
-GET_RES=$(curl -s "http://127.0.0.1:8000/api/v1/architecture/studio/state?project_id=test-canvas-proj&environment_id=")
+GET_RES=$(curl -s -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8000/api/v1/architecture/studio/state?project_id=test-canvas-proj&environment_id=")
 echo "Response: $GET_RES"
 if echo "$GET_RES" | grep -q "test-canvas-proj"; then
     echo -e "${GREEN}✓ Canvas topology retrieved successfully!${NC}"
@@ -72,6 +84,7 @@ fi
 # Test 5: Validate Topology Compliance
 echo -e "\n${BLUE}Test 5: Well-Architected Framework Compliance Validation${NC}"
 VAL_RES=$(curl -s -X POST http://127.0.0.1:8000/api/v1/architecture/validate \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "environment_tier": "development",

@@ -326,7 +326,7 @@ async def test_invalid_aws_region_rejected(client, api_key_headers):
 async def test_invalid_env_type_rejected(client, api_key_headers):
     proj = await _create_project(client, api_key_headers, name="BadEnvTypeProj")
     res = await client.post(f"/api/v1/projects/{proj['id']}/environments",
-        json={"name": "Env", "env_type": "testing", "aws_region": "us-east-1"},
+        json={"name": "Env", "env_type": "invalid_env_type", "aws_region": "us-east-1"},
         headers=api_key_headers)
     assert res.status_code == 422
 

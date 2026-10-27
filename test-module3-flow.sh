@@ -13,6 +13,17 @@ echo "════════════════════════�
 GATEWAY_URL="http://127.0.0.1:8000"
 REPO_SERVICE_URL="http://127.0.0.1:8003"
 
+echo "Logging in via Gateway..."
+AUTH_RES=$(curl -s -X POST "$GATEWAY_URL/api/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}')
+TOKEN=$(echo "$AUTH_RES" | grep -o '"token":"[^"]*"' | head -n 1 | cut -d'"' -f4)
+if [ -z "$TOKEN" ]; then
+  echo "Failed to acquire token from Gateway"
+  exit 1
+fi
+echo "✓ Acquired JWT token from Gateway"
+
 echo ""
 echo "Test 1: Module 3 Microservice Health Check (Port 8003)"
 HEALTH=$(curl -s "$REPO_SERVICE_URL/health")
@@ -22,6 +33,7 @@ echo ""
 echo "Test 2: Remote GitHub In-Memory Zero-Clone Readiness Check"
 echo "Target: 'Docker_webApp_analogClock'"
 READINESS=$(curl -s -X POST "$GATEWAY_URL/api/v1/repo/readiness" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"repo_path": "Docker_webApp_analogClock"}')
 echo "$READINESS" | grep -q '"is_analyzable":true'
@@ -31,6 +43,7 @@ echo "  Response: $(echo "$READINESS" | cut -c 1-120)..."
 echo ""
 echo "Test 3: Remote GitHub Universal In-Memory Scan & Key:Value Report"
 SCAN_REPORT=$(curl -s -X POST "$GATEWAY_URL/api/v1/repo/scan-report" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "repo_path": "Docker_webApp_analogClock",
@@ -46,6 +59,7 @@ echo ""
 echo "Test 4: Local Filesystem Deterministic AST Readiness Check"
 echo "Target: '.'"
 LOCAL_READINESS=$(curl -s -X POST "$GATEWAY_URL/api/v1/repo/readiness" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"repo_path": "."}')
 echo "$LOCAL_READINESS" | grep -q '"is_analyzable":true'
@@ -54,6 +68,7 @@ echo "✓ Local workspace scan validated successfully!"
 echo ""
 echo "Test 5: Human-in-the-Loop Spec Acceptance & AWS Right-Sizing (DEV)"
 SIZING_DEV=$(curl -s -X POST "$GATEWAY_URL/api/v1/repo/accept-and-size" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "repo_path": "Docker_webApp_analogClock",
@@ -83,6 +98,7 @@ echo "  Total Estimated Monthly Cost: \$$TOTAL_DEV_USD / month"
 echo ""
 echo "Test 6: Human-in-the-Loop Spec Acceptance & AWS Right-Sizing (PROD)"
 SIZING_PROD=$(curl -s -X POST "$GATEWAY_URL/api/v1/repo/accept-and-size" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "repo_path": "Docker_webApp_analogClock",

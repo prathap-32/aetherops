@@ -19,7 +19,13 @@ import {
 import { projectsApi } from '../../services/api';
 import { AWS_REGIONS_39, TIER_TYPES_LIST } from '../../constants/awsRegions';
 
-export default function EnvironmentsView({ onNavigate }) {
+export default function EnvironmentsView({
+  onNavigate,
+  activeProject,
+  activeEnvironment,
+  onSelectEnvironment,
+  navState,
+}) {
   const [projects, setProjects] = useState([]);
   const [environments, setEnvironments] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState('ALL');
@@ -35,6 +41,19 @@ export default function EnvironmentsView({ onNavigate }) {
   const [envType, setEnvType] = useState('development');
   const [region, setRegion] = useState('us-east-1');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createdSuccessEnv, setCreatedSuccessEnv] = useState(null);
+
+  const targetProjectId = navState?.projectId || activeProject?.id || activeProject?.project_id || null;
+
+  useEffect(() => {
+    if (targetProjectId) {
+      setSelectedProjectId(targetProjectId);
+      setModalProjectId(targetProjectId);
+    }
+    if (navState?.autoOpenModal) {
+      setIsModalOpen(true);
+    }
+  }, [navState, targetProjectId]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -43,8 +62,12 @@ export default function EnvironmentsView({ onNavigate }) {
       const projList = await projectsApi.list();
       setProjects(projList);
 
-      if (projList.length > 0 && !modalProjectId) {
-        setModalProjectId(projList[0].id || projList[0].project_id);
+      const defaultPid = targetProjectId || (projList.length > 0 ? (projList[0].id || projList[0].project_id) : '');
+      if (defaultPid && !modalProjectId) {
+        setModalProjectId(defaultPid);
+      }
+      if (targetProjectId) {
+        setSelectedProjectId(targetProjectId);
       }
 
       // Fetch environments for all projects
@@ -82,7 +105,7 @@ export default function EnvironmentsView({ onNavigate }) {
 
     setIsSubmitting(true);
     try {
-      await projectsApi.createEnvironment(modalProjectId, {
+      const created = await projectsApi.createEnvironment(modalProjectId, {
         name: envName.trim(),
         env_type: envType.toLowerCase(),
         type: envType.toLowerCase(),
@@ -92,6 +115,17 @@ export default function EnvironmentsView({ onNavigate }) {
       setIsModalOpen(false);
       setEnvName('');
       await loadData();
+
+      const projObj = projects.find(p => (p.id || p.project_id) === modalProjectId) || activeProject;
+      const enrichedEnv = {
+        ...created,
+        projectId: modalProjectId,
+        projectName: projObj?.name || 'Project',
+      };
+      if (onSelectEnvironment) {
+        onSelectEnvironment(enrichedEnv);
+      }
+      setCreatedSuccessEnv(enrichedEnv);
     } catch (err) {
       alert(`Failed to create environment: ${err.message}`);
     } finally {
@@ -220,6 +254,48 @@ export default function EnvironmentsView({ onNavigate }) {
           <p className="text-xs text-slate-500 mt-1">N. Virginia (AWS Data Center)</p>
         </div>
       </div>
+
+      {/* New Environment Success Banner */}
+      {createdSuccessEnv && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm">
+              ✓
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-emerald-950">
+                Environment &quot;{createdSuccessEnv.name || createdSuccessEnv.env_name}&quot; Created!
+              </h4>
+              <p className="text-[11px] text-emerald-700">
+                Next Step: Link your GitHub repository and cloud credentials in Source &amp; Cloud Connection.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCreatedSuccessEnv(null)}
+              className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 transition"
+            >
+              Dismiss
+            </button>
+            <button
+              onClick={() => {
+                if (onNavigate) {
+                  onNavigate('source_cloud', '/source-connection', {
+                    projectId: createdSuccessEnv.projectId,
+                    environmentId: createdSuccessEnv.id || createdSuccessEnv.env_id,
+                    environment: createdSuccessEnv,
+                  });
+                }
+              }}
+              className="px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>Proceed to Source &amp; Cloud</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filter / Search Bar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-center gap-4 justify-between">
@@ -357,8 +433,15 @@ export default function EnvironmentsView({ onNavigate }) {
                   <div className="flex items-center gap-2 self-end md:self-auto">
                     {onNavigate && (
                       <button
-                        onClick={() => onNavigate('source_cloud')}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition"
+                        onClick={() => {
+                          if (onSelectEnvironment) onSelectEnvironment(env);
+                          onNavigate('source_cloud', '/source-connection', {
+                            projectId: env.projectId,
+                            environmentId: envId,
+                            environment: env,
+                          });
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition cursor-pointer"
                       >
                         Connect Git & AWS
                         <ChevronRight className="w-3.5 h-3.5" />

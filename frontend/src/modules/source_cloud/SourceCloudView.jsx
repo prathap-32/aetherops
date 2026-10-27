@@ -28,12 +28,20 @@ import {
 import { projectsApi, connectionsApi } from '../../services/api';
 import { AWS_REGIONS_39 } from '../../constants/awsRegions';
 
-export default function SourceCloudView({ onNavigate }) {
+export default function SourceCloudView({
+  onNavigate,
+  activeProject,
+  activeEnvironment,
+  navState,
+}) {
+  const targetProjectId = navState?.projectId || activeProject?.id || activeProject?.project_id || '';
+  const targetEnvId = navState?.environmentId || activeEnvironment?.id || activeEnvironment?.env_id || '';
+
   // Data states
   const [projects, setProjects] = useState([]);
-  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState(targetProjectId);
   const [environments, setEnvironments] = useState([]);
-  const [selectedEnvId, setSelectedEnvId] = useState('');
+  const [selectedEnvId, setSelectedEnvId] = useState(targetEnvId);
 
   // Active connections
   const [gitConnections, setGitConnections] = useState([]);
@@ -111,7 +119,8 @@ export default function SourceCloudView({ onNavigate }) {
       setCloudConnections(cloudList);
 
       if (projList.length > 0) {
-        const firstId = projList[0].id || projList[0].project_id;
+        const matched = targetProjectId && projList.find(p => (p.id || p.project_id) === targetProjectId);
+        const firstId = matched ? (matched.id || matched.project_id) : (projList[0].id || projList[0].project_id);
         setSelectedProjectId(firstId);
       }
     } catch (err) {
@@ -137,8 +146,8 @@ export default function SourceCloudView({ onNavigate }) {
         const envList = await projectsApi.listEnvironments(selectedProjectId);
         setEnvironments(envList);
         if (envList.length > 0) {
-          const firstEnv = envList[0].id || envList[0].env_id;
-          setSelectedEnvId(firstEnv);
+          const matchedEnv = targetEnvId && envList.find(e => (e.id || e.env_id) === targetEnvId);
+          setSelectedEnvId(matchedEnv ? (matchedEnv.id || matchedEnv.env_id) : (envList[0].id || envList[0].env_id));
         } else {
           setSelectedEnvId('');
         }
@@ -147,7 +156,7 @@ export default function SourceCloudView({ onNavigate }) {
       }
     }
     loadEnvs();
-  }, [selectedProjectId]);
+  }, [selectedProjectId, targetEnvId]);
 
   // Reusable repository loader
   const loadUserRepos = async (token) => {
@@ -908,8 +917,17 @@ export default function SourceCloudView({ onNavigate }) {
                     </button>
                     {onNavigate && (
                       <button
-                        onClick={() => onNavigate('repo_analyzer')}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition"
+                        onClick={() => {
+                          onNavigate('repo_analyzer', '/source-analysis', {
+                            projectId: conn.project_id || selectedProjectId,
+                            environmentId: conn.environment_id || selectedEnvId,
+                            repoPath: conn.repo_name || conn.repo_url,
+                            branch: conn.branch || 'main',
+                            activeProject,
+                            activeEnvironment,
+                          });
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition cursor-pointer"
                       >
                         Scan in Analyzer
                         <ChevronRight className="w-3.5 h-3.5" />

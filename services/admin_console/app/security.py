@@ -25,7 +25,11 @@ def _is_test_context() -> bool:
 
 def get_admin_secret_key() -> str:
     """Resolve the admin secret key from env or fallback."""
-    return os.getenv("ADMIN_SECRET_KEY", _DEFAULT_DEV_KEY)
+    key = os.getenv("ADMIN_SECRET_KEY", _DEFAULT_DEV_KEY)
+    env = os.getenv("ENVIRONMENT", os.getenv("AETHER_ENV", "development")).lower()
+    if env == "production" and (not key or key == _DEFAULT_DEV_KEY):
+        raise RuntimeError("FATAL: Default development ADMIN_SECRET_KEY cannot be used in production.")
+    return key
 
 
 async def verify_admin_key(request: Request, api_key: Optional[str] = Depends(api_key_header)):

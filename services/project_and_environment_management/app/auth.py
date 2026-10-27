@@ -18,16 +18,38 @@ from app.security_models import AdminUser, AdminAuditLog
 
 logger = logging.getLogger("project-manager-auth")
 
-JWT_SECRET_KEY       = os.getenv(
-    "JWT_SECRET_KEY",
-    "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master"
-)
+ENVIRONMENT          = os.getenv("AETHER_ENV", os.getenv("ENVIRONMENT", "development")).lower()
+INSECURE_DEV_JWT_SECRETS = {
+    "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master",
+    "secret",
+    "changeme",
+    "admin",
+    "default",
+    "test",
+    "dev",
+}
+
+
+def validate_production_secrets(env: Optional[str] = None, secret: Optional[str] = None) -> None:
+    target_env = (env or os.getenv("AETHER_ENV", os.getenv("ENVIRONMENT", "development"))).lower()
+    target_secret = secret if secret is not None else os.getenv("JWT_SECRET_KEY")
+    if target_env == "production":
+        if not target_secret or target_secret in INSECURE_DEV_JWT_SECRETS:
+            raise RuntimeError("FATAL: JWT_SECRET_KEY must be explicitly configured with a secure non-default secret in production.")
+
+
+raw_jwt_key = os.getenv("JWT_SECRET_KEY")
+validate_production_secrets()
+if ENVIRONMENT == "production":
+    JWT_SECRET_KEY = raw_jwt_key
+else:
+    JWT_SECRET_KEY = raw_jwt_key or "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master"
+
 JWT_ALGORITHM        = "HS256"
 JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "8"))
 SESSION_COOKIE_NAME  = "aether_session"
-ENVIRONMENT          = os.getenv("AETHER_ENV", os.getenv("ENVIRONMENT", "development")).lower()
 MASTER_ADMIN_KEY     = os.getenv("ADMIN_API_KEY", "aetherops-secret-admin-key")
-if ENVIRONMENT == "production" and MASTER_ADMIN_KEY == "aetherops-secret-admin-key":
+if ENVIRONMENT == "production" and (not MASTER_ADMIN_KEY or MASTER_ADMIN_KEY == "aetherops-secret-admin-key"):
     logger.critical("SECURITY ALERT: Insecure default ADMIN_API_KEY in production! Disabling master key fallback.")
     MASTER_ADMIN_KEY = None
 
@@ -150,16 +172,6 @@ def create_access_token(
 def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
     if not token:
         return None
-    # Backward compatibility for mock development tokens
-    if token.startswith("mock_token_"):
-        parts = token.split("_")
-        uname = parts[2] if len(parts) > 2 else "admin"
-        return {
-            "sub": uname,
-            "uuid": "00000000-0000-0000-0000-000000000001" if uname == "admin" else "00000000-0000-0000-0000-000000000002",
-            "role": "ADMIN" if uname == "admin" else "USER",
-            "email": f"{uname}@aetherops.local",
-        }
     try:
         return jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
     except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
@@ -223,6 +235,10 @@ async def init_admin_security():
                 await conn.run_sync(Base.metadata.create_all)
         except Exception as exc:
             logger.warning(f"PG admin security init deferred: {exc}")
+
+    if ENVIRONMENT == "production":
+        logger.info("Production mode: default administrator account seeding is disabled.")
+        return
 
     pwd_hash = hash_password(DEFAULT_ADMIN_PASS)
     import uuid as _uuid

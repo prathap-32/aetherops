@@ -31,17 +31,25 @@ import {
 import { repoAnalyzerApi, projectsApi, connectionsApi } from '../../services/api';
 import { AWS_REGIONS_39 } from '../../constants/awsRegions';
 
-export default function RepoAnalyzerView({ onNavigate }) {
+export default function RepoAnalyzerView({
+  onNavigate,
+  activeProject,
+  activeEnvironment,
+  navState,
+}) {
+  const targetProjectId = navState?.projectId || activeProject?.id || activeProject?.project_id || '';
+  const targetEnvId = navState?.environmentId || activeEnvironment?.id || activeEnvironment?.env_id || '';
+
   // Navigation & Project Context
   const [projects, setProjects] = useState([]);
-  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState(targetProjectId);
   const [environments, setEnvironments] = useState([]);
-  const [selectedEnvId, setSelectedEnvId] = useState('');
+  const [selectedEnvId, setSelectedEnvId] = useState(targetEnvId);
   const [selectedEnvTier, setSelectedEnvTier] = useState('development');
   const [connectedGit, setConnectedGit] = useState(null);
 
   // Form Parameters
-  const [repoPath, setRepoPath] = useState('.');
+  const [repoPath, setRepoPath] = useState(navState?.repoPath || '.');
   const [targetRegion, setTargetRegion] = useState('us-east-1');
   const [trafficScale, setTrafficScale] = useState('MODERATE');
   const [budgetTier, setBudgetTier] = useState('STANDARD');
@@ -80,8 +88,9 @@ export default function RepoAnalyzerView({ onNavigate }) {
         ]);
         setProjects(projList);
         if (projList.length > 0) {
-          const firstProj = projList[0];
-          const pid = firstProj.id || firstProj.project_id;
+          const matched = targetProjectId && projList.find(p => (p.id || p.project_id) === targetProjectId);
+          const activeProjObj = matched || projList[0];
+          const pid = activeProjObj.id || activeProjObj.project_id;
           setSelectedProjectId(pid);
           loadEnvironments(pid, gitList);
         }
@@ -90,17 +99,18 @@ export default function RepoAnalyzerView({ onNavigate }) {
       }
     }
     loadData();
-  }, []);
+  }, [targetProjectId]);
 
   const loadEnvironments = async (projectId, gitList = []) => {
     try {
       const envList = await projectsApi.listEnvironments(projectId);
       setEnvironments(envList);
       if (envList.length > 0) {
-        const firstEnv = envList[0];
-        const eid = firstEnv.id || firstEnv.env_id;
+        const matchedEnv = targetEnvId && envList.find(e => (e.id || e.env_id) === targetEnvId);
+        const activeEnvObj = matchedEnv || envList[0];
+        const eid = activeEnvObj.id || activeEnvObj.env_id;
         setSelectedEnvId(eid);
-        setSelectedEnvTier(firstEnv.type || firstEnv.env_type || 'development');
+        setSelectedEnvTier(activeEnvObj.type || activeEnvObj.env_type || 'development');
 
         // Check if there is an existing git connection for this env
         const matchGit = gitList.find(
@@ -108,10 +118,12 @@ export default function RepoAnalyzerView({ onNavigate }) {
         );
         if (matchGit) {
           setConnectedGit(matchGit);
-          if (matchGit.repo_name) {
-            setRepoPath(matchGit.repo_name);
-          } else if (matchGit.repo_url) {
-            setRepoPath(matchGit.repo_url);
+          if (!navState?.repoPath) {
+            if (matchGit.repo_name) {
+              setRepoPath(matchGit.repo_name);
+            } else if (matchGit.repo_url) {
+              setRepoPath(matchGit.repo_url);
+            }
           }
         }
       }
@@ -231,6 +243,16 @@ export default function RepoAnalyzerView({ onNavigate }) {
       });
 
       setSizingOutput(res);
+      // Cache sizing in localStorage for Cloud Architecture Studio & Designer
+      try {
+        localStorage.setItem('aether_latest_sizing', JSON.stringify(res));
+        const userKey = 'user';
+        const projectKey = selectedProjectId || 'default';
+        localStorage.setItem(`aether_sizing_${userKey}_${projectKey}`, JSON.stringify(res));
+      } catch (e) {
+        console.warn('Could not cache sizing in localStorage', e);
+      }
+
       // Initialize editable fields from sizing response
       setEditedComputeService(res.compute?.service || 'Amazon EC2 (Docker Runtime)');
       setEditedInstanceType(res.compute?.instance_class || (res.compute?.service?.includes('ECS') ? '0.25 vCPU / 0.5 GB' : 't4g.micro'));
@@ -243,8 +265,24 @@ export default function RepoAnalyzerView({ onNavigate }) {
       setWorkflowStep(3);
       setStatusMessage({
         type: 'success',
-        text: `Specification accepted! AWS Infrastructure right-sized for ${selectedEnvTier.toUpperCase()} environment via ${res.ai_provider}.`,
+        text: `Tech stack specification verified! Synthesized AWS recommendations for ${selectedEnvTier.toUpperCase()}. Forwarding to Cloud Architecture Studio...`,
       });
+
+      // Userflow: "after analyse of aws service recommendation want to in cloud architecture studio , after click verify then it shows that"
+      if (onNavigate) {
+        setTimeout(() => {
+          onNavigate('architecture_studio', '/architecture-studio', {
+            sizingOutput: res,
+            selectedProjectId,
+            selectedEnvId,
+            selectedEnvTier,
+            targetRegion,
+            activeProject,
+            activeEnvironment,
+            fromAnalyzer: true,
+          });
+        }, 300);
+      }
     } catch (err) {
       console.error('Sizing error:', err);
       setStatusMessage({
@@ -639,14 +677,14 @@ export default function RepoAnalyzerView({ onNavigate }) {
           <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="text-xs text-slate-500 flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>Verifying and accepting this specification triggers Gemini Cloud Sizing for <strong>{selectedEnvTier.toUpperCase()}</strong>.</span>
+              <span>Verifying tech stack will right-size AWS architecture and open <strong>Cloud Architecture Studio</strong>.</span>
             </div>
 
             <button
               type="button"
               onClick={handleAcceptAndSize}
               disabled={isSizing}
-              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-xs transition disabled:opacity-50 flex items-center justify-center gap-2"
+              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-xs transition disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
             >
               {isSizing ? (
                 <>
@@ -656,7 +694,7 @@ export default function RepoAnalyzerView({ onNavigate }) {
               ) : (
                 <>
                   <Check className="w-4 h-4" />
-                  Verify &amp; Accept Specification ➔
+                  Verify Tech Stack &amp; View in Cloud Architecture Studio ➔
                 </>
               )}
             </button>

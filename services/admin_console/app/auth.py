@@ -28,17 +28,33 @@ from app.security_models import AdminUser, AdminAuditLog
 
 logger = logging.getLogger("aetherops-admin-auth")
 
-# JWT Configuration (64-byte minimum cryptographic key)
-JWT_SECRET_KEY = os.getenv(
-    "JWT_SECRET_KEY",
-    "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master"
-)
+ENVIRONMENT = os.getenv("AETHER_ENV", os.getenv("ENVIRONMENT", "development")).lower()
+INSECURE_DEV_JWT_SECRETS = {
+    "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master",
+    "secret",
+    "changeme",
+    "admin",
+    "default",
+    "test",
+    "dev",
+}
+raw_jwt_key = os.getenv("JWT_SECRET_KEY")
+if ENVIRONMENT == "production":
+    if not raw_jwt_key or raw_jwt_key in INSECURE_DEV_JWT_SECRETS:
+        raise RuntimeError("FATAL: JWT_SECRET_KEY must be explicitly configured with a secure non-default secret in production.")
+    JWT_SECRET_KEY = raw_jwt_key
+else:
+    JWT_SECRET_KEY = raw_jwt_key or "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master"
+
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "8"))
 SESSION_COOKIE_NAME = "aether_session"
 
 # Master API Key (for backward compatibility & CI/CD)
 MASTER_ADMIN_KEY = os.getenv("ADMIN_API_KEY", "aetherops-secret-admin-key")
+if ENVIRONMENT == "production" and (not MASTER_ADMIN_KEY or MASTER_ADMIN_KEY == "aetherops-secret-admin-key"):
+    logger.critical("SECURITY ALERT: Insecure default ADMIN_API_KEY in production! Disabling master key fallback.")
+    MASTER_ADMIN_KEY = None
 
 # Default Super Admin Seed Credentials
 DEFAULT_ADMIN_USER = os.getenv("ADMIN_DEFAULT_USER", "admin")

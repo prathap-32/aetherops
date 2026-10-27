@@ -28,6 +28,8 @@ export default function ProjectsView({
   showToast,
   onSwitchView,
   onNavigate,
+  activeProject,
+  onSelectProject,
 }) {
   const [internalModalOpen, setInternalModalOpen] = useState(false);
   const isCreateModalOpen = propIsCreateModalOpen !== undefined ? propIsCreateModalOpen : internalModalOpen;
@@ -78,7 +80,7 @@ export default function ProjectsView({
     setCreateError('');
 
     try {
-      await projectsApi.create({
+      const created = await projectsApi.create({
         name: newName.trim(),
         project_type: newType,
         description: newDesc.trim() || null,
@@ -88,8 +90,20 @@ export default function ProjectsView({
       setNewDesc('');
       setNewType('web_application');
       onCloseCreateModal();
-      if (showToast) showToast(`Project "${newName.trim()}" created successfully!`);
+      if (showToast) showToast(`Project "${newName.trim()}" created successfully! Opening environment setup...`);
       await fetchProjects();
+
+      // Ensure active project is selected and navigate to Environment Creation step
+      if (onSelectProject) {
+        onSelectProject(created);
+      }
+      if (handleNavigate) {
+        handleNavigate('environments', '/environments', {
+          projectId: created.id || created.project_id,
+          project: created,
+          autoOpenModal: true,
+        });
+      }
     } catch (err) {
       setCreateError(err.message || 'Failed to create project');
     } finally {
@@ -346,7 +360,18 @@ export default function ProjectsView({
                 key={project.id}
                 className="bg-white border border-slate-200/90 hover:border-blue-300 rounded-2xl p-5 shadow-xs hover:shadow-md transition flex flex-col justify-between group space-y-4"
               >
-                <div className="space-y-3">
+                <div
+                  className="space-y-3 cursor-pointer"
+                  onClick={() => {
+                    if (onSelectProject) onSelectProject(project);
+                    if (handleNavigate) {
+                      handleNavigate('environments', '/environments', {
+                        projectId: project.id,
+                        project: project,
+                      });
+                    }
+                  }}
+                >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#1e40af] flex items-center justify-center font-bold text-sm shrink-0">
@@ -381,9 +406,17 @@ export default function ProjectsView({
 
                   <div className="flex items-center gap-1.5">
                     <button
-                      onClick={() => handleNavigate && handleNavigate('source_cloud')}
-                      className="p-1 text-slate-400 hover:text-blue-600 rounded transition"
-                      title="Inspect Source & Cloud"
+                      onClick={() => {
+                        if (onSelectProject) onSelectProject(project);
+                        if (handleNavigate) {
+                          handleNavigate('environments', '/environments', {
+                            projectId: project.id,
+                            project: project,
+                          });
+                        }
+                      }}
+                      className="p-1 text-slate-400 hover:text-blue-600 rounded transition cursor-pointer"
+                      title="Manage Environments"
                     >
                       <ArrowRight className="w-4 h-4" />
                     </button>
@@ -416,7 +449,19 @@ export default function ProjectsView({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filtered.map((project) => (
-                  <tr key={project.id} className="hover:bg-slate-50/50 transition">
+                  <tr
+                    key={project.id}
+                    onClick={() => {
+                      if (onSelectProject) onSelectProject(project);
+                      if (handleNavigate) {
+                        handleNavigate('environments', '/environments', {
+                          projectId: project.id,
+                          project: project,
+                        });
+                      }
+                    }}
+                    className="hover:bg-slate-50/70 transition cursor-pointer"
+                  >
                     <td className="px-5 py-3.5">
                       <div className="font-semibold text-slate-900">{project.name}</div>
                       <div className="text-[10px] font-mono text-slate-400">owner: {project.owner}</div>

@@ -24,7 +24,7 @@ from app.schemas import (
     CloudConnectionCreate, CloudConnectionUpdate, CloudConnectionOut, CloudConnectionListOut,
     UnifiedFinalizeRequest, UnifiedFinalizeOut,
 )
-from app.auth import get_current_admin, login_admin, SESSION_COOKIE_NAME, create_access_token
+from app.auth import get_current_admin, login_admin, SESSION_COOKIE_NAME, create_access_token, MASTER_ADMIN_KEY
 from app.cache import cache_manager
 from app.aws_service import validate_aws_connection, mask_access_key
 from app.github_service import (
@@ -51,7 +51,7 @@ async def list_available_projects(request: Request, admin: Dict[str, Any] = Depe
         async with httpx.AsyncClient(timeout=3.0) as client:
             res = await client.get(
                 f"{MODULE1_BASE_URL}/api/v1/projects",
-                headers={"X-Admin-Key": "aetherops-secret-admin-key"}
+                headers={"X-Admin-Key": MASTER_ADMIN_KEY}
             )
             if res.status_code == 200:
                 return res.json()
@@ -67,7 +67,7 @@ async def list_project_environments(project_id: str, request: Request, admin: Di
         async with httpx.AsyncClient(timeout=3.0) as client:
             res = await client.get(
                 f"{MODULE1_BASE_URL}/api/v1/projects/{project_id}/environments",
-                headers={"X-Admin-Key": "aetherops-secret-admin-key"}
+                headers={"X-Admin-Key": MASTER_ADMIN_KEY}
             )
             if res.status_code == 200:
                 return res.json()
@@ -84,7 +84,7 @@ async def create_bridge_project(payload: Dict[str, Any], request: Request, admin
             res = await client.post(
                 f"{MODULE1_BASE_URL}/api/v1/projects",
                 json=payload,
-                headers={"X-Admin-Key": "aetherops-secret-admin-key", "Content-Type": "application/json"}
+                headers={"X-Admin-Key": MASTER_ADMIN_KEY, "Content-Type": "application/json"}
             )
             return JSONResponse(status_code=res.status_code, content=res.json())
     except Exception as exc:
@@ -100,7 +100,7 @@ async def create_bridge_environment(project_id: str, payload: Dict[str, Any], re
             res = await client.post(
                 f"{MODULE1_BASE_URL}/api/v1/projects/{project_id}/environments",
                 json=payload,
-                headers={"X-Admin-Key": "aetherops-secret-admin-key", "Content-Type": "application/json"}
+                headers={"X-Admin-Key": MASTER_ADMIN_KEY, "Content-Type": "application/json"}
             )
             return JSONResponse(status_code=res.status_code, content=res.json())
     except Exception as exc:
@@ -1353,7 +1353,7 @@ async def _notify_module1_status(environment_id: str, project_id: str, new_statu
         async with httpx.AsyncClient(timeout=3.0) as client:
             await client.patch(url,
                                json={"status": new_status},
-                               headers={"X-Admin-Key": "aetherops-secret-admin-key"})
+                               headers={"X-Admin-Key": MASTER_ADMIN_KEY})
         logger.info(f"Module 1 notified: env '{environment_id}' → {new_status}")
     except Exception as exc:
         logger.warning(f"Module 1 status callback failed (non-critical): {exc}")
