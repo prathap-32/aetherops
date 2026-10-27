@@ -11,12 +11,14 @@ from sqlalchemy import text
 
 from migrations.runner import ensure_migration_table, get_applied_versions, record_migration, remove_migration
 import migrations.versions.v20261012_01_user_uuid_and_tenants as m_01
+import migrations.versions.v20261027_02_crypto_envelope as m_02
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("aether-migrations")
 
 MIGRATIONS = [
     m_01,
+    m_02,
 ]
 
 

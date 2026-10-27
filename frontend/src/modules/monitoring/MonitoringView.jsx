@@ -1,20 +1,22 @@
 // frontend/src/modules/monitoring/MonitoringView.jsx
 import React from 'react';
-import { Activity, DollarSign, Cpu, HardDrive, Radio, CheckCircle2 } from 'lucide-react';
+import { DollarSign, Cpu, Radio } from 'lucide-react';
 
 export default function MonitoringView() {
   return (
     <div className="space-y-6">
-      <div className="pb-4 border-b border-slate-200">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            Module 7
-          </span>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Observability & FinOps Optimizer</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Infrastructure Monitoring &amp; Observability</h1>
+            <span className="px-2.5 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              CloudWatch Telemetry Active
+            </span>
+          </div>
+          <p className="text-sm text-slate-500 mt-1">
+            CloudWatch metric aggregations, cluster utilization, and AWS resource health metrics.
+          </p>
         </div>
-        <p className="text-sm text-slate-500 mt-1">
-          CloudWatch metric aggregations, cluster utilization, and AWS cost allocation per service.
-        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

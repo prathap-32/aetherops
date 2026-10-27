@@ -512,7 +512,12 @@ class GeminiSizer:
                 traffic_scale=traffic_scale,
                 ha_level=ha_level,
             )
-            fallback_res["ai_provider"] = f"deterministic_rules_engine (Fallback: {str(exc)[:60]})"
+            fallback_res["ai_provider"] = "deterministic_rules_engine"
+            fallback_res["diagnostics"] = {
+                "engine": "deterministic_rules_engine",
+                "fallback_engaged": True,
+                "diagnostic_detail": str(exc)[:200],
+            }
             future.set_result(fallback_res)
             _AI_SIZING_CACHE[cache_key] = fallback_res
             return fallback_res
@@ -572,7 +577,7 @@ class GeminiSizer:
             "generationConfig": {
                 "response_mime_type": "application/json",
                 "temperature": 0.2,
-                "max_output_tokens": 2048,
+                "max_output_tokens": 4096,
             },
         }
 

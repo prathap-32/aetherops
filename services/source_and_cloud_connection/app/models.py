@@ -26,6 +26,9 @@ class GitConnection(Base):
     branch          = Column(String(200), nullable=False, default="main")
     pat_label       = Column(String(100), nullable=True)                   # e.g. "my-github-pat" — no token stored
     pat_token_hash  = Column(String(255), nullable=True)                   # bcrypt hash for validation only
+    encrypted_pat   = Column(Text,        nullable=True)                   # AES-256-GCM encrypted PAT
+    pat_nonce       = Column(String(64),  nullable=True)                   # Base64 96-bit nonce
+    pat_tag         = Column(String(64),  nullable=True)                   # Base64 128-bit GCM tag
 
     auth_type       = Column(String(30),  nullable=True, default="PAT")    # OAUTH | PAT | MANUAL
     github_user     = Column(String(100), nullable=True)                   # GitHub username if connected via OAuth/PAT
@@ -102,7 +105,11 @@ class CloudConnection(Base):
     # Access Keys mode (masked for display)
     access_key_masked  = Column(String(30),  nullable=True)                  # e.g. "AKIA••••••••1234"
     access_key_id      = Column(String(128), nullable=True)                  # stored for deployment runner
-    secret_key_hash    = Column(String(255), nullable=True)
+    secret_key_hash    = Column(String(255), nullable=True)                  # legacy verification hash
+    encrypted_secret   = Column(Text,        nullable=True)                  # AES-256-GCM encrypted secret key
+    encryption_nonce   = Column(String(64),  nullable=True)                  # Base64 96-bit nonce
+    encryption_tag     = Column(String(64),  nullable=True)                  # Base64 128-bit GCM auth tag
+    encryption_key_id  = Column(String(64),  nullable=True)                  # Key provider ID (e.g. root-v1)
 
     # IAM Role ARN mode
     role_arn           = Column(String(300), nullable=True)                  # arn:aws:iam::123456789012:role/...

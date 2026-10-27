@@ -27,6 +27,7 @@ import {
   Plus
 } from 'lucide-react';
 import { architectureStudioApi } from '../../services/api';
+import { formatAiProvider } from '../../utils/formatters';
 
 export default function ArchitectureView({ onNavigate, activeProject, activeEnvironment, navState, user }) {
   // Sizing Context from Module 3 or scoped localStorage
@@ -352,12 +353,6 @@ resource "aws_instance" "compute" {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-              Module 4
-            </span>
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-              PORT 8004
-            </span>
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Cloud Architecture Studio</h1>
           </div>
           <p className="text-sm text-slate-500 mt-1">
@@ -378,11 +373,11 @@ resource "aws_instance" "compute" {
             {onNavigate && (
               <button
                 onClick={handleOpenInDesigner}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 border border-amber-600 rounded-lg transition shadow-xs cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-xs cursor-pointer"
                 title="Create and edit this diagram in Architecture Designer"
               >
                 <Network className="w-4 h-4 text-white" />
-                <span>Create Diagram in Architecture Designer ➔</span>
+                <span>Open in Architecture Designer</span>
               </button>
             )}
 
@@ -397,9 +392,9 @@ resource "aws_instance" "compute" {
             {onNavigate && (
               <button
                 onClick={() => onNavigate('iac', '/terraform')}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition"
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-xs transition cursor-pointer"
               >
-                Generate IaC (Module 5)
+                <span>Generate IaC</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             )}
@@ -410,23 +405,23 @@ resource "aws_instance" "compute" {
       {/* When no sizing has been generated yet for this project/user */}
       {!activeSizing ? (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-10 text-center max-w-2xl mx-auto space-y-5">
-          <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200 shadow-xs">
+          <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto border border-blue-200 shadow-xs">
             <Palette className="w-8 h-8" />
           </div>
           <div>
             <h2 className="text-lg font-bold text-slate-900">No Architecture Synthesized Yet</h2>
             <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
-              Connect your repository and run Universal Codebase Analyzer (Module 3) to right-size and synthesize an AWS production topology, or build a custom diagram on the interactive canvas.
+              Connect your repository and run the Source Code Analyzer to right-size and synthesize an AWS production topology, or build a custom diagram on the interactive canvas.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             {onNavigate && (
               <button
                 onClick={() => onNavigate('repo_analyzer', '/source-analysis')}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
               >
-                <Sparkles className="w-4 h-4 text-amber-200" />
-                <span>Analyze Codebase (Module 3)</span>
+                <Sparkles className="w-4 h-4 text-blue-200" />
+                <span>Analyze Codebase</span>
               </button>
             )}
             {onNavigate && (
@@ -459,7 +454,7 @@ resource "aws_instance" "compute" {
                   Region: {region}
                 </span>
                 <span className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 font-semibold text-[11px] border border-blue-200">
-                  {activeSizing?.ai_provider || 'Gemini 2.5 Flash'}
+                  {formatAiProvider(activeSizing?.ai_provider)}
                 </span>
               </div>
             </div>
@@ -594,7 +589,7 @@ resource "aws_instance" "compute" {
                 {isValidating ? (
                   <>
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    Validating on Port 8004...
+                    Validating Architecture...
                   </>
                 ) : (
                   <>

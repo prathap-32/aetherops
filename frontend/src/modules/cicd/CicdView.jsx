@@ -1,6 +1,6 @@
 // frontend/src/modules/cicd/CicdView.jsx
 import React, { useState } from 'react';
-import { GitFork, CheckCircle2, Copy, FileCode, Play, ArrowRight, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Copy, FileCode, ArrowRight } from 'lucide-react';
 
 export default function CicdView({ onNavigate }) {
   const [copied, setCopied] = useState(false);
@@ -39,16 +39,15 @@ jobs:
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
           <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-              MODULE // CI/CD GITOPS
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">CI/CD GitOps Pipeline</h1>
+            <span className="px-2.5 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+              GitHub Actions
             </span>
-            <span className="text-xs text-slate-400 font-mono">Module 6: CI/CD Pipeline Synthesizer (Port 8006)</span>
           </div>
-          <h1 className="text-xl font-bold text-slate-900 mt-1">CI/CD GitOps Integration</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-sm text-slate-500 mt-1">
             Automated pipeline generation for GitHub Actions, GitLab CI, and AWS CodePipeline.
           </p>
         </div>
@@ -56,7 +55,7 @@ jobs:
         <div className="flex items-center gap-2">
           <button
             onClick={() => onNavigate('monitoring', '/monitoring')}
-            className="px-3.5 py-2 rounded-xl bg-[#1e40af] hover:bg-blue-700 text-white text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
           >
             <span>Observability</span>
             <ArrowRight className="w-3.5 h-3.5" />

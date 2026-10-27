@@ -40,11 +40,11 @@ export default function AdminConsoleView() {
           sqlite: { connected: true, status: 'SYNCED' },
         })),
         adminApi.getModules().catch((e) => [
-          { code: 'module1', name: 'Project & Environment Management', port: 8009, status: 'ONLINE' },
-          { code: 'module2', name: 'Source & Cloud Connection', port: 8010, status: 'ONLINE' },
-          { code: 'module3', name: 'Requirement Analysis & Sizing', port: 8001, status: 'ONLINE' },
-          { code: 'module4', name: 'Architecture Generator', port: 8002, status: 'ONLINE' },
-          { code: 'admin', name: 'Admin Console & Unified Catalog', port: 8000, status: 'ONLINE' },
+          { code: 'projects', name: 'Project & Environment Management', port: 8001, status: 'ONLINE', description: 'Multi-tenant workspace isolation and environment fleets' },
+          { code: 'source', name: 'Source & Cloud Connection', port: 8002, status: 'ONLINE', description: 'GitHub OAuth/PAT and AWS IAM credential validation' },
+          { code: 'repo', name: 'Source Code Analyzer', port: 8003, status: 'ONLINE', description: 'Codebase AST analysis and AWS architecture right-sizing' },
+          { code: 'architecture', name: 'Cloud Architecture Studio', port: 8004, status: 'ONLINE', description: 'Visual topology synthesis and Well-Architected validation' },
+          { code: 'gateway', name: 'API Gateway & Orchestrator', port: 8000, status: 'ONLINE', description: 'Central reverse proxy and secure API routing' },
         ]),
         adminApi.getAuditLogs().catch((e) => ({
           audit_logs: [
@@ -113,7 +113,7 @@ export default function AdminConsoleView() {
             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
               Privileged Console
             </span>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Admin & Platform Cockpit</h1>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Administration Console</h1>
           </div>
           <p className="text-sm text-slate-500 mt-1">
             Global service fleet health, cache invalidation, database probe, and security audit ledger.

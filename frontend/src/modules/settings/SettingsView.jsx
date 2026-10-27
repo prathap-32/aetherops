@@ -1,6 +1,6 @@
 // frontend/src/modules/settings/SettingsView.jsx
 import React, { useState } from 'react';
-import { Settings, Shield, Key, Bell, Save, CheckCircle2 } from 'lucide-react';
+import { Save, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export default function SettingsView() {
@@ -8,25 +8,27 @@ export default function SettingsView() {
   const [username, setUsername] = useState(user?.username || '');
   const [email] = useState(user?.email || '');
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const handleSave = async (e) => {
     e.preventDefault();
     if (!username.trim()) return;
+    setSaveError('');
     try {
       await updateProfile(username.trim());
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
-      alert(`Save failed: ${err.message}`);
+      setSaveError(err.message || 'Failed to update account profile');
     }
   };
 
   return (
     <div className="space-y-6 max-w-2xl">
       <div className="pb-4 border-b border-slate-200">
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Account & Workspace Settings</h1>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Account &amp; Workspace Settings</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Manage your account profile, role preferences, and API keys.
+          Manage your account profile, role preferences, and API configuration.
         </p>
       </div>
 
@@ -35,6 +37,13 @@ export default function SettingsView() {
           <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-lg flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             Profile changes saved successfully.
+          </div>
+        )}
+
+        {saveError && (
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold rounded-lg flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600" />
+            {saveError}
           </div>
         )}
 
@@ -78,7 +87,7 @@ export default function SettingsView() {
         <div className="pt-3 border-t border-slate-100 flex justify-end">
           <button
             type="submit"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition cursor-pointer"
           >
             <Save className="w-3.5 h-3.5" />
             Save Profile

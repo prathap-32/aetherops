@@ -50,11 +50,11 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject }) {
     }
     loadStats();
 
-    // Probe essential microservices
+    // Probe essential platform services
     const services = [
-      { id: 'admin', name: 'Gateway (8000)', url: '/health' },
-      { id: 'auth', name: 'Auth Authority (7999)', url: '/api/v1/auth/health' },
-      { id: 'pm', name: 'Project Manager (8001)', url: '/api/v1/projects' },
+      { id: 'admin', name: 'API Gateway', url: '/health' },
+      { id: 'auth', name: 'Authentication Authority', url: '/api/v1/auth/health' },
+      { id: 'pm', name: 'Project Management Service', url: '/api/v1/projects' },
     ];
 
     services.forEach(async (s) => {
@@ -84,7 +84,7 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject }) {
             <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-mono border border-amber-400/30 font-bold">
               AWS ACCOUNT: {formatAccountId(user?.account_id || '109283746519')}
             </span>
-            <span className="text-xs text-slate-300 font-mono">Microservices Fleet Orchestrator</span>
+            <span className="text-xs text-slate-300 font-medium">Autonomous Cloud Platform</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
             Autonomous Cloud Infrastructure Operations

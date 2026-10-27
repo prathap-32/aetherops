@@ -1713,13 +1713,16 @@ resource "aws_security_group_rule" "rule_${idx + 1}" {
             <span className="hidden sm:inline">Export HCL</span>
           </button>
 
-          {/* Proceed to IaC Module 5 */}
+          {/* Mandatory Architecture Review Gate Before Terraform */}
           {onNavigate && (
             <button
-              onClick={() => onNavigate('iac', '/terraform')}
+              onClick={async () => {
+                await handleSaveToBackend();
+                onNavigate('architecture_validation', '/architecture/validation');
+              }}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
             >
-              <span>Deploy IaC</span>
+              <span>Review &amp; Approve</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}
@@ -2574,7 +2577,7 @@ resource "aws_security_group_rule" "rule_${idx + 1}" {
                 No Cloud Arch Studio Output Available
               </h3>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                You haven't run Universal Codebase Analyzer (Module 3) for project{' '}
+                You haven't run the Source Code Analyzer for project{' '}
                 <strong className="text-slate-800">{activeProject?.name || 'current'}</strong> yet.
                 Analyzing your repository code will automatically right-size and synthesize an AWS cloud topology.
               </p>
@@ -2592,9 +2595,9 @@ resource "aws_security_group_rule" "rule_${idx + 1}" {
                     setNoStudioOutputModalOpen(false);
                     onNavigate('repo_analyzer', '/source-analysis');
                   }}
-                  className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
                 >
-                  Analyze Codebase (Module 3)
+                  Analyze Codebase
                 </button>
               )}
             </div>

@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { repoAnalyzerApi, projectsApi, connectionsApi } from '../../services/api';
 import { AWS_REGIONS_39 } from '../../constants/awsRegions';
+import { formatAiProvider } from '../../utils/formatters';
 
 export default function RepoAnalyzerView({
   onNavigate,
@@ -357,15 +358,12 @@ export default function RepoAnalyzerView({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-violet-50 text-violet-700 border border-violet-200">
-              Module 3
-            </span>
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-              Universal Codebase Analyzer &amp; AI Cloud Sizing
+              Source Code Analyzer &amp; Architecture Sizing
             </h1>
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            Deterministic AST scan across any language or framework, paired with environment-driven AWS right-sizing.
+            Deterministic AST analysis across languages and frameworks, paired with environment-driven AWS right-sizing.
           </p>
         </div>
 
@@ -729,7 +727,7 @@ export default function RepoAnalyzerView({
                 </span>
               </div>
               <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
-                {sizingOutput.ai_provider}
+                {formatAiProvider(sizingOutput.ai_provider)}
               </span>
             </div>
           </div>

@@ -370,13 +370,10 @@ export default function SourceCloudView({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-              Module 2
-            </span>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Source & Cloud Connection</h1>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Source &amp; Cloud Connection</h1>
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            Securely link Git repositories and AWS cloud environments without recursive iframe nesting.
+            Securely link Git repositories, verify IAM credentials, and configure target AWS cloud deployment providers.
           </p>
         </div>
         <div className="flex items-center gap-3">

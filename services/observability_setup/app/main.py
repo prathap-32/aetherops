@@ -37,6 +37,8 @@ async def root():
     }
 
 @app.get("/health", status_code=status.HTTP_200_OK)
+@app.get("/api/v1/monitoring/health", status_code=status.HTTP_200_OK)
+@app.get("/api/v1/observability/health", status_code=status.HTTP_200_OK)
 async def health_check():
     return {
         "status": "healthy",
@@ -46,6 +48,8 @@ async def health_check():
     }
 
 @app.post("/api/v1/generate-observability", response_model=ObservabilitySetupResponse, status_code=status.HTTP_200_OK)
+@app.post("/api/v1/monitoring/generate-observability", response_model=ObservabilitySetupResponse, status_code=status.HTTP_200_OK)
+@app.post("/api/v1/observability/generate-observability", response_model=ObservabilitySetupResponse, status_code=status.HTTP_200_OK)
 async def generate_telemetry_stack(request: ObservabilitySetupRequest):
     logger.info(f"Synthesizing observability stack for project='{request.project_name}'")
     try:

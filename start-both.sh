@@ -53,9 +53,17 @@ cd "$SCRIPT_DIR"
 
 sleep 1
 
-echo "Starting Cloud Architecture Studio on port 8004..."
+echo "Starting Requirement Analysis on port 8004..."
+cd "$SCRIPT_DIR/services/requirement_analysis"
+nohup setsid $PYTHON -m uvicorn app.main:app --host "$HOST" --port 8004 </dev/null > /tmp/aether-requirements.log 2>&1 &
+REQ_PID=$!
+cd "$SCRIPT_DIR"
+
+sleep 1
+
+echo "Starting Cloud Architecture Studio on port 8005..."
 cd "$SCRIPT_DIR/services/architecture_generator"
-nohup setsid $PYTHON -m uvicorn app.main:app --host "$HOST" --port 8004 </dev/null > /tmp/aether-architecture.log 2>&1 &
+nohup setsid $PYTHON -m uvicorn app.main:app --host "$HOST" --port 8005 </dev/null > /tmp/aether-architecture.log 2>&1 &
 ARCH_PID=$!
 cd "$SCRIPT_DIR"
 
@@ -70,7 +78,8 @@ echo "  Dashboard Gateway:  http://localhost:8000 (PID: $DASH_PID)"
 echo "  Project Manager:    http://localhost:8001 (PID: $PM_PID)"
 echo "  Source Connection:  http://localhost:8002 (PID: $SC_PID)"
 echo "  Repo Analyzer (M3): http://localhost:8003 (PID: $REPO_PID)"
-echo "  Architecture Studio: http://localhost:8004 (PID: $ARCH_PID)"
+echo "  Requirement Engine: http://localhost:8004 (PID: $REQ_PID)"
+echo "  Architecture Studio: http://localhost:8005 (PID: $ARCH_PID)"
 echo ""
 echo "  Default Login: admin / admin123"
 echo ""

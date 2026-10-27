@@ -262,17 +262,51 @@ export default function DashboardPage() {
           />
         );
       case 'risk_analysis':
-        return <RiskEngineView onNavigate={handleNavigate} />;
+        return (
+          <RiskEngineView
+            onNavigate={handleNavigate}
+            activeProject={activeProject}
+            activeEnvironment={activeEnvironment}
+            user={user}
+          />
+        );
       case 'architecture_validation':
-        return <ArchitectureValidationView onNavigate={handleNavigate} />;
       case 'security':
-        return <ArchitectureValidationView onNavigate={handleNavigate} />;
+        return (
+          <ArchitectureValidationView
+            onNavigate={handleNavigate}
+            activeProject={activeProject}
+            activeEnvironment={activeEnvironment}
+            user={user}
+          />
+        );
       case 'iac':
-        return <IacView onNavigate={handleNavigate} />;
+        return (
+          <IacView
+            onNavigate={handleNavigate}
+            activeProject={activeProject}
+            activeEnvironment={activeEnvironment}
+            user={user}
+          />
+        );
       case 'execution':
-        return <ApprovalExecutionView onNavigate={handleNavigate} />;
+        return (
+          <ApprovalExecutionView
+            onNavigate={handleNavigate}
+            activeProject={activeProject}
+            activeEnvironment={activeEnvironment}
+            user={user}
+          />
+        );
       case 'deployments':
-        return <DeploymentsView onNavigate={handleNavigate} />;
+        return (
+          <DeploymentsView
+            onNavigate={handleNavigate}
+            activeProject={activeProject}
+            activeEnvironment={activeEnvironment}
+            user={user}
+          />
+        );
       case 'cicd':
         return <CicdView onNavigate={handleNavigate} />;
       case 'monitoring':

@@ -185,9 +185,6 @@ export default function Sidebar({
                     <FileCode2 className={iconClass('repo_analyzer')} />
                     <span>Source Code Analyzer</span>
                   </div>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-800 border border-violet-200">
-                    M3
-                  </span>
                 </button>
                 <button
                   onClick={() => navItemClick('architecture_studio', '/architecture-studio')}
@@ -197,9 +194,6 @@ export default function Sidebar({
                     <Palette className={iconClass('architecture_studio')} />
                     <span>Cloud Architecture Studio</span>
                   </div>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 border border-sky-200">
-                    M4
-                  </span>
                 </button>
                 <button
                   onClick={() => navItemClick('architecture_designer', '/architecture-designer')}
@@ -209,9 +203,6 @@ export default function Sidebar({
                     <Network className={iconClass('architecture_designer')} />
                     <span>Architecture Designer</span>
                   </div>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
-                    Canvas
-                  </span>
                 </button>
                 <button
                   onClick={() => navItemClick('risk_analysis', '/risk-analysis')}

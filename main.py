@@ -70,6 +70,15 @@ class ServiceSpec:
 
 FLEET_SPECS: List[ServiceSpec] = [
     ServiceSpec(
+        id="auth_service",
+        code="AUTH",
+        name="Authentication Service",
+        port=7999,
+        dir="services/auth_service",
+        health_path="/health",
+        ui_url="http://localhost:7999/health"
+    ),
+    ServiceSpec(
         id="gateway",
         code="GW",
         name="Unified Dashboard & Gateway",

@@ -37,6 +37,7 @@ async def root():
     }
 
 @app.get("/health", status_code=status.HTTP_200_OK)
+@app.get("/api/v1/finops/health", status_code=status.HTTP_200_OK)
 async def health_check():
     return {
         "status": "healthy",
@@ -46,6 +47,7 @@ async def health_check():
     }
 
 @app.post("/api/v1/optimize", response_model=FinOpsOptimizationResponse, status_code=status.HTTP_200_OK)
+@app.post("/api/v1/finops/optimize", response_model=FinOpsOptimizationResponse, status_code=status.HTTP_200_OK)
 async def optimize_workload_costs(request: FinOpsOptimizationRequest):
     logger.info(f"Computing FinOps model for project='{request.project_name}'")
     try:

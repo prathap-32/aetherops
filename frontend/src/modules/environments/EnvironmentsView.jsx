@@ -176,10 +176,10 @@ export default function EnvironmentsView({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-              Module 1.2
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Target Environments Fleet</h1>
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+              {environments.length} {environments.length === 1 ? 'environment' : 'environments'}
             </span>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Fleet Environments</h1>
           </div>
           <p className="text-sm text-slate-500 mt-1">
             Manage deployment targets, cloud landing zones, and VPC environments across AWS regions.

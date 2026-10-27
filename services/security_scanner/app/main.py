@@ -37,6 +37,7 @@ async def root():
     }
 
 @app.get("/health", status_code=status.HTTP_200_OK)
+@app.get("/api/v1/security/health", status_code=status.HTTP_200_OK)
 async def health_check():
     return {
         "status": "healthy",
@@ -46,6 +47,7 @@ async def health_check():
     }
 
 @app.post("/api/v1/scan", response_model=SecurityScanResponse, status_code=status.HTTP_200_OK)
+@app.post("/api/v1/security/scan", response_model=SecurityScanResponse, status_code=status.HTTP_200_OK)
 async def scan_infrastructure_security(request: SecurityScanRequest):
     logger.info(f"Scanning security posture for project='{request.project_name}'")
     try:

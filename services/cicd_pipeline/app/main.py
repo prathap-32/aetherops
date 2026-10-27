@@ -37,6 +37,7 @@ async def root():
     }
 
 @app.get("/health", status_code=status.HTTP_200_OK)
+@app.get("/api/v1/cicd/health", status_code=status.HTTP_200_OK)
 async def health_check():
     return {
         "status": "healthy",
@@ -46,6 +47,7 @@ async def health_check():
     }
 
 @app.post("/api/v1/generate-pipeline", response_model=PipelineGenerationResponse, status_code=status.HTTP_200_OK)
+@app.post("/api/v1/cicd/generate-pipeline", response_model=PipelineGenerationResponse, status_code=status.HTTP_200_OK)
 async def generate_pipeline(request: PipelineGenerationRequest):
     logger.info(f"Synthesizing CI/CD pipeline for project='{request.project_name}', platform='{request.platform}'")
     try:

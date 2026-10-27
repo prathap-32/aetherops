@@ -246,6 +246,97 @@ export const architectureStudioApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  getReview: (payload) =>
+    apiRequest('/api/v1/architecture/review', {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+    }),
+  approve: (payload) =>
+    apiRequest('/api/v1/architecture/approve', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  reject: (payload) =>
+    apiRequest('/api/v1/architecture/reject', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getStatus: (versionId) =>
+    apiRequest(`/api/v1/architecture/versions/${versionId}/status`),
+  listVersions: (projectId, envId) =>
+    apiRequest(`/api/v1/architecture/versions?project_id=${projectId || ''}&environment_id=${envId || ''}`),
+};
+
+export const iacApi = {
+  generate: (payload) =>
+    apiRequest('/api/v1/iac/generate', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getHealth: () =>
+    apiRequest('/api/v1/iac/health'),
+};
+
+export const deploymentsApi = {
+  plan: (payload) =>
+    apiRequest('/api/v1/deployments/plan', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getPlan: (planId) =>
+    apiRequest(`/api/v1/deployments/plan/${planId}`),
+  approve: (payload) =>
+    apiRequest('/api/v1/deployments/approve', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  execute: (payload) =>
+    apiRequest('/api/v1/deployments/execute', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getLogs: (deploymentId) =>
+    apiRequest(`/api/v1/deployments/${deploymentId}/logs`),
+  getResources: (deploymentId) =>
+    apiRequest(`/api/v1/deployments/${deploymentId}/resources`),
+  cancel: (deploymentId) =>
+    apiRequest(`/api/v1/deployments/${deploymentId}/cancel`, {
+      method: 'POST',
+    }),
+  list: (projectId) =>
+    apiRequest(`/api/v1/deployments${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''}`),
+};
+
+export const finopsApi = {
+  optimize: (payload) =>
+    apiRequest('/api/v1/finops/optimize', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+};
+
+export const cicdApi = {
+  generate: (payload) =>
+    apiRequest('/api/v1/cicd/generate-pipeline', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+};
+
+export const monitoringApi = {
+  generate: (payload) =>
+    apiRequest('/api/v1/monitoring/generate-observability', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+};
+
+export const securityApi = {
+  scan: (payload) =>
+    apiRequest('/api/v1/security/scan', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 };
 
 export const adminApi = {

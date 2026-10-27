@@ -529,14 +529,27 @@ async def create_cloud_connection(
         await db.delete(existing)
         await db.flush()
 
-    # Hash secret key if provided
+    conn_id = str(uuid.uuid4())
     secret_hash = None
+    enc_secret = None
+    enc_nonce = None
+    enc_tag = None
+    enc_key_id = None
     if payload.secret_access_key:
         import bcrypt as _bc
+        from app.crypto_envelope import encrypt_credential
         secret_hash = _bc.hashpw(payload.secret_access_key.encode(), _bc.gensalt(rounds=10)).decode()
+        try:
+            enc = encrypt_credential(payload.secret_access_key, tenant_id, conn_id, "aws_secret")
+            enc_secret = enc["ciphertext"]
+            enc_nonce = enc["nonce"]
+            enc_tag = enc["tag"]
+            enc_key_id = enc["key_id"]
+        except Exception as ee:
+            logger.warning(f"Envelope encryption deferred: {ee}")
 
     conn = CloudConnection(
-        id=str(uuid.uuid4()),
+        id=conn_id,
         project_id=payload.project_id,
         environment_id=payload.environment_id,
         tenant_id=tenant_id,
@@ -548,6 +561,10 @@ async def create_cloud_connection(
         access_key_masked=mask_access_key(payload.access_key_id) if payload.access_key_id else None,
         access_key_id=payload.access_key_id,
         secret_key_hash=secret_hash,
+        encrypted_secret=enc_secret,
+        encryption_nonce=enc_nonce,
+        encryption_tag=enc_tag,
+        encryption_key_id=enc_key_id,
         role_arn=payload.role_arn,
         external_id=payload.external_id,
         account_id=val.get("account_id"),
@@ -679,7 +696,16 @@ async def update_cloud_connection(
         conn.access_key_masked = mask_access_key(payload.access_key_id)
     if payload.secret_access_key is not None:
         import bcrypt as _bc
+        from app.crypto_envelope import encrypt_credential
         conn.secret_key_hash = _bc.hashpw(payload.secret_access_key.encode(), _bc.gensalt(rounds=10)).decode()
+        try:
+            enc = encrypt_credential(payload.secret_access_key, tenant_id, conn.id, "aws_secret")
+            conn.encrypted_secret = enc["ciphertext"]
+            conn.encryption_nonce = enc["nonce"]
+            conn.encryption_tag = enc["tag"]
+            conn.encryption_key_id = enc["key_id"]
+        except Exception as ee:
+            logger.warning(f"Envelope encryption deferred on update: {ee}")
     if payload.status is not None:
         conn.status = payload.status
 
@@ -731,11 +757,33 @@ async def revalidate_cloud_connection(
     )
 
     try:
+        secret_key = None
+        if conn.auth_type == "ACCESS_KEYS":
+            if conn.encrypted_secret and conn.encryption_nonce and conn.encryption_tag:
+                from app.crypto_envelope import decrypt_credential
+                try:
+                    secret_key = decrypt_credential(
+                        conn.encrypted_secret,
+                        conn.encryption_nonce,
+                        conn.encryption_tag,
+                        conn.tenant_id,
+                        conn.id,
+                        "aws_secret",
+                    )
+                except Exception as e:
+                    logger.warning(f"Envelope decryption failed: {e}")
+            if not secret_key:
+                conn.status = "NEEDS_REAUTHENTICATION"
+                conn.updated_at = datetime.datetime.utcnow()
+                await db.commit()
+                await db.refresh(conn)
+                return CloudConnectionOut(**conn.to_dict())
+
         val = await validate_aws_connection(
             auth_type=conn.auth_type,
             region=conn.aws_region,
-            access_key_id=conn.access_key_id or "AKIA_TEST_KEY_SAMPLE",
-            secret_access_key="dummy_test_secret_for_reval",
+            access_key_id=conn.access_key_id or "",
+            secret_access_key=secret_key or "",
             role_arn=conn.role_arn,
             external_id=conn.external_id,
         )
@@ -801,13 +849,25 @@ async def finalize_connection(
         await db.flush()
 
     repo_name = _extract_repo_name(payload.repo_url)
+    git_conn_id = str(uuid.uuid4())
     pat_hash = None
+    enc_pat = None
+    pat_nonce = None
+    pat_tag = None
     if payload.pat_token:
         import bcrypt as _bc
+        from app.crypto_envelope import encrypt_credential
         pat_hash = _bc.hashpw(payload.pat_token.encode(), _bc.gensalt(rounds=10)).decode()
+        try:
+            enc_p = encrypt_credential(payload.pat_token, tenant_id, git_conn_id, "github_pat")
+            enc_pat = enc_p["ciphertext"]
+            pat_nonce = enc_p["nonce"]
+            pat_tag = enc_p["tag"]
+        except Exception as ee:
+            logger.warning(f"PAT encryption deferred: {ee}")
 
     git_conn = GitConnection(
-        id=str(uuid.uuid4()),
+        id=git_conn_id,
         project_id=payload.project_id,
         environment_id=payload.environment_id,
         tenant_id=tenant_id,
@@ -820,6 +880,9 @@ async def finalize_connection(
         github_user=payload.github_user,
         pat_label=payload.pat_label,
         pat_token_hash=pat_hash,
+        encrypted_pat=enc_pat,
+        pat_nonce=pat_nonce,
+        pat_tag=pat_tag,
         status="CONNECTED",
         last_commit_sha="a4f89d31b2c5e6f7a8b9c0d1e2f3a4b5c6d7e8f9",
         last_commit_msg="feat: production infrastructure baseline initialization",
@@ -845,13 +908,27 @@ async def finalize_connection(
         await db.delete(existing_cloud)
         await db.flush()
 
+    cloud_conn_id = str(uuid.uuid4())
     secret_hash = None
+    enc_secret = None
+    enc_nonce = None
+    enc_tag = None
+    enc_key_id = None
     if payload.secret_access_key:
         import bcrypt as _bc
+        from app.crypto_envelope import encrypt_credential
         secret_hash = _bc.hashpw(payload.secret_access_key.encode(), _bc.gensalt(rounds=10)).decode()
+        try:
+            enc_c = encrypt_credential(payload.secret_access_key, tenant_id, cloud_conn_id, "aws_secret")
+            enc_secret = enc_c["ciphertext"]
+            enc_nonce = enc_c["nonce"]
+            enc_tag = enc_c["tag"]
+            enc_key_id = enc_c["key_id"]
+        except Exception as ee:
+            logger.warning(f"Cloud secret encryption deferred: {ee}")
 
     cloud_conn = CloudConnection(
-        id=str(uuid.uuid4()),
+        id=cloud_conn_id,
         project_id=payload.project_id,
         environment_id=payload.environment_id,
         tenant_id=tenant_id,
@@ -863,6 +940,10 @@ async def finalize_connection(
         access_key_masked=mask_access_key(payload.access_key_id) if payload.access_key_id else None,
         access_key_id=payload.access_key_id,
         secret_key_hash=secret_hash,
+        encrypted_secret=enc_secret,
+        encryption_nonce=enc_nonce,
+        encryption_tag=enc_tag,
+        encryption_key_id=enc_key_id,
         role_arn=payload.role_arn,
         external_id=payload.external_id,
         account_id=aws_val.get("account_id"),

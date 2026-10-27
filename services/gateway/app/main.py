@@ -136,10 +136,14 @@ UPSTREAM_MAP = {
 
     # Port 8003: Source Code Analyzer
     "analyzer": os.getenv("REPO_ANALYZER_SERVICE_URL", "http://127.0.0.1:8003"),
+    "repo": os.getenv("REPO_ANALYZER_SERVICE_URL", "http://127.0.0.1:8003"),
 
-    # Port 8004: Cloud Architecture Studio (Module 4)
-    "architecture": os.getenv("ARCH_SERVICE_URL", "http://127.0.0.1:8004"),
-    "studio": os.getenv("ARCH_SERVICE_URL", "http://127.0.0.1:8004"),
+    # Port 8004: Requirement Analysis Engine
+    "requirements": os.getenv("REQUIREMENTS_SERVICE_URL", "http://127.0.0.1:8004"),
+
+    # Port 8005: Cloud Architecture Studio (Module 4)
+    "architecture": os.getenv("ARCH_SERVICE_URL", "http://127.0.0.1:8005"),
+    "studio": os.getenv("ARCH_SERVICE_URL", "http://127.0.0.1:8005"),
 
     # Port 8006: IaC / Terraform Generator
     "iac": os.getenv("IAC_SERVICE_URL", "http://127.0.0.1:8006"),
@@ -519,12 +523,12 @@ async def proxy_microservice_api(module: str, request: Request, subpath: str = "
         upstream = UPSTREAM_MAP["analyzer"]
 
     elif module in ("requirements", "analyze", "catalog", "recommendation"):
-        upstream = UPSTREAM_MAP["repo"]
+        upstream = UPSTREAM_MAP["requirements"]
 
     elif module in ("architecture", "generate-graph", "studio", "cloud-architecture-studio"):
         upstream = UPSTREAM_MAP["architecture"]
 
-    elif module in ("iac", "terraform"):
+    elif module in ("iac", "terraform", "generate-iac"):
         upstream = UPSTREAM_MAP["iac"]
 
     elif module == "finops":
@@ -539,7 +543,7 @@ async def proxy_microservice_api(module: str, request: Request, subpath: str = "
     elif module in ("monitoring", "observability"):
         upstream = UPSTREAM_MAP["monitoring"]
 
-    elif module in ("deployments", "cloud-deployer"):
+    elif module in ("deployments", "cloud-deployer", "deploy", "drift-detection"):
         upstream = UPSTREAM_MAP["deployments"]
 
     elif module == "admin":

@@ -1,14 +1,14 @@
 // frontend/src/modules/docs/DocsView.jsx
 import React from 'react';
-import { BookOpen, ExternalLink, ShieldCheck, Terminal, Layers } from 'lucide-react';
+import { ShieldCheck, Layers } from 'lucide-react';
 
 export default function DocsView() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div className="pb-4 border-b border-slate-200">
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Platform Documentation & Architecture</h1>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Platform Documentation &amp; Architecture</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Reference guide for Aether Cloud multi-tenant DevOps orchestrator and API contracts.
+          Reference guide for AetherOps multi-tenant cloud orchestration platform and API contracts.
         </p>
       </div>
 
@@ -19,7 +19,7 @@ export default function DocsView() {
             Decoupled Microservice Topology
           </div>
           <p className="text-sm text-slate-600 leading-relaxed">
-            Aether Cloud decomposes DevOps automation into independent, headless microservices communicating via standard REST APIs and Redis pub/sub. The frontend React application acts as a single-page orchestrator, avoiding iframe recursion and preserving browser history.
+            AetherOps decomposes DevOps automation into independent, high-performance microservices communicating via standard REST APIs and Redis pub/sub. The frontend console acts as a unified single-page application orchestrating cloud infrastructure workflows and preserving browser navigation history.
           </p>
         </div>
 

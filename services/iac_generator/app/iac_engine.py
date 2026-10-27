@@ -1,6 +1,100 @@
-# services/iac_generator/app/iac_engine.py
-from typing import List, Dict, Any
+import hashlib
+import logging
+import os
+import shutil
+import subprocess
+import tempfile
+import uuid
+from typing import List, Dict, Any, Tuple
 from app.schemas import IaCGenerationRequest, GeneratedFile, IaCGenerationResponse
+
+logger = logging.getLogger("iac-engine")
+
+PROVIDER_PLUGIN_DIRS = [
+    "/home/prathap32/.terraform.d/plugins",
+    "/tmp/tf_test/.terraform/providers",
+]
+
+def validate_and_format_terraform(files: List[GeneratedFile]) -> Tuple[List[GeneratedFile], Dict[str, Any]]:
+    """
+    Executes terraform fmt and terraform validate in an isolated temporary directory.
+    Returns formatted files and validation report.
+    """
+    validation_report = {
+        "fmt": "NOT_RUN",
+        "validate": "NOT_RUN",
+        "details": "",
+        "terraform_version": "unknown"
+    }
+
+    tf_binary = shutil.which("terraform") or "/usr/bin/terraform"
+    if not os.path.exists(tf_binary) and not shutil.which("terraform"):
+        validation_report["details"] = "Terraform binary not found on system PATH."
+        return files, validation_report
+
+    try:
+        ver_res = subprocess.run([tf_binary, "version"], capture_output=True, text=True, timeout=5)
+        if ver_res.returncode == 0:
+            first_line = ver_res.stdout.splitlines()[0] if ver_res.stdout else ""
+            validation_report["terraform_version"] = first_line.replace("Terraform v", "").strip()
+    except Exception as e:
+        logger.warning(f"Could not retrieve terraform version: {e}")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Write files
+        file_map = {}
+        for f in files:
+            fp = os.path.join(tmpdir, f.filename)
+            with open(fp, "w", encoding="utf-8") as out:
+                out.write(f.content)
+            file_map[f.filename] = fp
+
+        # 1. Run terraform fmt
+        try:
+            fmt_res = subprocess.run([tf_binary, "fmt", tmpdir], capture_output=True, text=True, timeout=10)
+            if fmt_res.returncode == 0:
+                validation_report["fmt"] = "PASS"
+                # Read back formatted content
+                formatted_files = []
+                for f in files:
+                    fp = file_map[f.filename]
+                    if os.path.exists(fp):
+                        with open(fp, "r", encoding="utf-8") as r:
+                            formatted_files.append(GeneratedFile(filename=f.filename, content=r.read(), language=f.language))
+                    else:
+                        formatted_files.append(f)
+                files = formatted_files
+            else:
+                validation_report["fmt"] = "WARNING"
+                validation_report["details"] += f"fmt error: {fmt_res.stderr}; "
+        except Exception as e:
+            validation_report["fmt"] = "ERROR"
+            validation_report["details"] += f"fmt exception: {e}; "
+
+        # 2. Run terraform init & validate
+        plugin_dir = next((d for d in PROVIDER_PLUGIN_DIRS if os.path.exists(d)), None)
+        init_args = [tf_binary, "init"]
+        if plugin_dir:
+            init_args.append(f"-plugin-dir={plugin_dir}")
+
+        try:
+            init_res = subprocess.run(init_args, cwd=tmpdir, capture_output=True, text=True, timeout=15)
+            if init_res.returncode == 0:
+                val_res = subprocess.run([tf_binary, "validate"], cwd=tmpdir, capture_output=True, text=True, timeout=10)
+                if val_res.returncode == 0:
+                    validation_report["validate"] = "PASS"
+                    validation_report["details"] = "Terraform configuration is syntactically valid and passed hashicorp/aws provider schema validation."
+                else:
+                    validation_report["validate"] = "FAILED"
+                    validation_report["details"] += f"validate error: {val_res.stderr or val_res.stdout}"
+            else:
+                validation_report["validate"] = "SKIPPED"
+                validation_report["details"] += f"init notice: {init_res.stderr or init_res.stdout}"
+        except Exception as e:
+            validation_report["validate"] = "ERROR"
+            validation_report["details"] += f"validate exception: {e}"
+
+    return files, validation_report
 
 def generate_terraform_hcl(req: IaCGenerationRequest) -> IaCGenerationResponse:
     """
@@ -207,21 +301,37 @@ output "rds_endpoint" {{
 """
     if req.enable_alb:
         outputs_content += """
-output "alb_dns_name" {{
+output "alb_dns_name" {
   description = "Public Load Balancer FQDN"
   value       = aws_lb.app.dns_name
-}}
+}
 """
     files.append(GeneratedFile(filename="outputs.tf", content=outputs_content, language="hcl"))
+
+    # Format and validate synthesized Terraform files in isolated temp workspace
+    formatted_files, validation_report = validate_and_format_terraform(files)
+
+    # Compute SHA256 checksum over all files
+    content_stream = "".join(f"{f.filename}:{f.content}\n" for f in formatted_files).encode("utf-8")
+    checksum = hashlib.sha256(content_stream).hexdigest()
+    tf_version_id = f"tf-{uuid.uuid4().hex[:12]}"
+    arch_link = f"/api/v1/architecture/review/{req.architecture_version_id}" if req.architecture_version_id else ""
 
     return IaCGenerationResponse(
         status="SUCCESS",
         iac_tool=req.iac_tool,
         project_name=req.project_name,
-        files=files,
+        architecture_version_id=req.architecture_version_id,
+        terraform_version_id=tf_version_id,
+        checksum=checksum,
+        approved_architecture_link=arch_link,
+        validation=validation_report,
+        files=formatted_files,
         summary={
-            "total_files": len(files),
+            "total_files": len(formatted_files),
             "resources_defined": ["aws_vpc", "aws_subnets", "aws_db_instance", "aws_security_group"] + (["aws_lb"] if req.enable_alb else []) + (["aws_kms_key"] if req.enable_kms else []),
-            "target_region": req.aws_region
+            "target_region": req.aws_region,
+            "terraform_version_id": tf_version_id,
+            "validation_status": validation_report.get("validate", "UNKNOWN")
         }
     )

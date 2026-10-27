@@ -98,6 +98,9 @@ async def init_source_db():
             ("github_user", "VARCHAR(100)"),
             ("tenant_id", "VARCHAR(36)"),
             ("created_by_user_id", "VARCHAR(36)"),
+            ("encrypted_pat", "TEXT"),
+            ("pat_nonce", "VARCHAR(64)"),
+            ("pat_tag", "VARCHAR(64)"),
         ]:
             try:
                 await conn.execute(text(f"ALTER TABLE sc_git_connections ADD COLUMN {col_name} {col_def}"))
@@ -107,6 +110,10 @@ async def init_source_db():
         for col_name, col_def in [
             ("tenant_id", "VARCHAR(36)"),
             ("created_by_user_id", "VARCHAR(36)"),
+            ("encrypted_secret", "TEXT"),
+            ("encryption_nonce", "VARCHAR(64)"),
+            ("encryption_tag", "VARCHAR(64)"),
+            ("encryption_key_id", "VARCHAR(64)"),
         ]:
             try:
                 await conn.execute(text(f"ALTER TABLE sc_cloud_connections ADD COLUMN {col_name} {col_def}"))
