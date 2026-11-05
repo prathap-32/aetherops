@@ -506,11 +506,11 @@ def run_deployment_execution(
         is_real_aws = bool(
             aws_key 
             and not aws_key.startswith("test") 
-            and not "EXAMPLE" in aws_key 
             and requested_mode == "REAL"
         )
         mode = "REAL_AWS" if is_real_aws else "TEST_SANDBOX"
         notice = None if is_real_aws else "Executed in local isolated test sandbox runner (supply real AWS access keys in Settings to deploy to live AWS)."
+
 
         now = time.time()
         logs: List[str] = []
