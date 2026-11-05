@@ -122,11 +122,21 @@ export default function Sidebar({
                 if (setMobileOpen) setMobileOpen(true);
                 else navItemClick('dashboard', '/');
               }}
-              className="w-9 h-9 rounded-xl bg-[#1e40af] text-white flex items-center justify-center font-bold text-xs shadow-xs hover:bg-blue-800 transition cursor-pointer group"
+              className="w-9 h-9 rounded-xl bg-[#1e40af] text-white flex items-center justify-center font-bold text-xs shadow-xs hover:bg-blue-800 transition cursor-pointer group select-none"
               title="Click to expand sidebar and show text"
               aria-label="Expand sidebar"
+              onContextMenu={(e) => e.preventDefault()}
             >
-              AO
+              <img
+                src="/static/logo/logo.png"
+                alt="AetherOps"
+                className="w-6 h-6 object-contain select-none pointer-events-none drop-shadow-xs"
+                draggable={false}
+                onContextMenu={(e) => e.preventDefault()}
+                style={{ WebkitUserDrag: 'none', userSelect: 'none' }}
+                width="24"
+                height="24"
+              />
             </button>
           </div>
 
