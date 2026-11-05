@@ -23,7 +23,7 @@ if [ ! -d ".venv" ]; then
     echo -e "${YELLOW}Creating virtual environment...${NC}"
     python3 -m venv .venv
     .venv/bin/pip install -q --upgrade pip
-    .venv/bin/pip install -q fastapi uvicorn httpx pydantic rich pyjwt bcrypt
+    .venv/bin/pip install -q -r requirements.txt || uv pip install --python .venv/bin/python -r requirements.txt
 fi
 
 PYTHON="$SCRIPT_DIR/.venv/bin/python"

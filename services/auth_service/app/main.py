@@ -28,7 +28,9 @@ from pydantic import BaseModel
 import jwt
 import bcrypt
 import httpx
-
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 logger = logging.getLogger("auth-service")
 logging.basicConfig(level=logging.INFO)
 
@@ -107,8 +109,11 @@ app.add_middleware(
 
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode = WAL;")
+    conn.execute("PRAGMA synchronous = NORMAL;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     return conn
 
 
@@ -138,9 +143,36 @@ def init_db():
         account_id TEXT UNIQUE NOT NULL,
         tenant_id TEXT NOT NULL,
         created_at TEXT NOT NULL,
-        last_login_at TEXT
+        last_login_at TEXT,
+        email_verified INTEGER DEFAULT 0
     )
     """)
+
+    # Ensure email_verified column exists if table already existed
+    c.execute("PRAGMA table_info(users)")
+    existing_cols = [row[1] for row in c.fetchall()]
+    if "email_verified" not in existing_cols:
+        try:
+            c.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
+    # Create email_verifications table
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS email_verifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL,
+        user_uuid TEXT NOT NULL,
+        token TEXT UNIQUE NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        verified_at TEXT
+    )
+    """)
+
+    # Indexes for fast letter-by-letter lookup and token validation
+    c.execute("CREATE INDEX IF NOT EXISTS idx_users_lower_email ON users(lower(email))")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_verifications_token ON email_verifications(token)")
 
     # Check for admin user
     c.execute("SELECT id FROM users WHERE username = 'admin'")
@@ -199,6 +231,7 @@ def init_db():
                 user_tenant_id,
                 now
             ))
+    c.execute("UPDATE users SET email_verified = 1 WHERE username IN ('admin', 'user') OR email_verified IS NULL")
 
     conn.commit()
     conn.close()
@@ -315,6 +348,14 @@ class VerifyTenantRequest(BaseModel):
     tenant_id: str
 
 
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+class ResendVerificationRequest(BaseModel):
+    email: str
+
+
 @app.get("/health")
 async def health():
     return {"status": "healthy", "service": "auth", "port": 7999, "timestamp": time.time()}
@@ -328,115 +369,298 @@ async def login(req: LoginRequest):
     Returns JWT with account_id and tenant_id, plus showcases account_id.
     """
     conn = get_db_connection()
-    c = conn.cursor()
-    user = find_user_by_login_id(c, req.username)
+    try:
+        c = conn.cursor()
+        user = find_user_by_login_id(c, req.username)
 
-    if not user or not _verify_password(req.password, user["password_hash"]):
-        conn.close()
-        return JSONResponse(
-            status_code=401,
-            content={"detail": "Invalid Login ID or password. Enter Username, Email, or 12-digit Account ID."}
+        if not user or not _verify_password(req.password, user["password_hash"]):
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Invalid Login ID or password. Enter Username, Email, or 12-digit Account ID."}
+            )
+
+        if "email_verified" in user.keys() and user["email_verified"] == 0:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "detail": "Email address not confirmed. Please check your inbox or request a new verification link.",
+                    "email_unverified": True,
+                    "email": user["email"]
+                }
+            )
+
+        # Update last login
+        now_iso = datetime.datetime.utcnow().isoformat()
+        c.execute("UPDATE users SET last_login_at = ? WHERE id = ?", (now_iso, user["id"]))
+        conn.commit()
+
+        hours = 168 if req.remember_me else JWT_EXPIRATION_HOURS
+        token = _create_jwt_token(
+            username=user["username"],
+            role=user["role"],
+            email=user["email"],
+            user_uuid=user["uuid"],
+            account_id=user["account_id"],
+            tenant_id=user["tenant_id"],
+            hours=hours,
         )
 
-    # Update last login
-    now_iso = datetime.datetime.utcnow().isoformat()
-    c.execute("UPDATE users SET last_login_at = ? WHERE id = ?", (now_iso, user["id"]))
-    conn.commit()
+        resp_user = {
+            "username": user["username"],
+            "email": user["email"],
+            "role": user["role"],
+            "uuid": user["uuid"],
+            "account_id": user["account_id"],
+            "account_id_formatted": format_account_id(user["account_id"]),
+        }
+        return {
+            "token": token,
+            "user": resp_user,
+            "redirect_url": "http://localhost:8000"
+        }
+    finally:
+        conn.close()
 
-    hours = 168 if req.remember_me else JWT_EXPIRATION_HOURS
-    token = _create_jwt_token(
-        username=user["username"],
-        role=user["role"],
-        email=user["email"],
-        user_uuid=user["uuid"],
-        account_id=user["account_id"],
-        tenant_id=user["tenant_id"],
-        hours=hours,
-    )
 
-    resp_user = {
-        "username": user["username"],
-        "email": user["email"],
-        "role": user["role"],
-        "uuid": user["uuid"],
-        "account_id": user["account_id"],
-        "account_id_formatted": format_account_id(user["account_id"]),
-    }
-    conn.close()
+def _send_verification_email(recipient_email: str, username: str, token: str) -> str:
+    verification_url = f"http://localhost:8000/?verify_token={token}"
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASSWORD")
+    smtp_from = os.getenv("SMTP_FROM", "no-reply@aetherops.cloud")
 
-    return {
-        "token": token,
-        "user": resp_user,
-        "redirect_url": "http://localhost:8000"
-    }
+    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #0f172a; }}
+    .card {{ max-width: 520px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 36px 32px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }}
+    .logo-bar {{ text-align: center; margin-bottom: 24px; }}
+    .badge {{ display: inline-block; padding: 4px 12px; font-size: 11px; font-weight: 700; color: #0284c7; background: #e0f2fe; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.05em; }}
+    h1 {{ font-size: 20px; font-weight: 800; color: #0f172a; margin-top: 16px; margin-bottom: 12px; }}
+    p {{ font-size: 14px; line-height: 1.6; color: #475569; margin: 8px 0; }}
+    .btn-wrap {{ text-align: center; margin: 28px 0; }}
+    .btn {{ display: inline-block; padding: 12px 32px; background: linear-gradient(135deg, #2563eb, #06b6d4); color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 700; border-radius: 10px; box-shadow: 0 4px 12px rgba(37,99,235,0.25); }}
+    .url-box {{ background: #f1f5f9; padding: 12px; border-radius: 8px; word-break: break-all; font-family: monospace; font-size: 12px; color: #334155; margin-top: 20px; }}
+    .footer {{ font-size: 11px; color: #94a3b8; text-align: center; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo-bar">
+      <span class="badge">AetherOps Cloud</span>
+      <h1>Confirm Your Email Address</h1>
+    </div>
+    <p>Hello <strong>{username}</strong>,</p>
+    <p>Thank you for registering with AetherOps. Please verify your email address to activate your account and access your cloud workspace.</p>
+    <div class="btn-wrap">
+      <a href="{verification_url}" class="btn" target="_blank">Verify Email &amp; Launch Console</a>
+    </div>
+    <p>Or paste this link into your browser:</p>
+    <div class="url-box">{verification_url}</div>
+    <p style="font-size: 12px; color: #64748b; margin-top: 20px;">This link will expire in 24 hours.</p>
+    <div class="footer">&copy; AetherOps Autonomous Cloud Engineering. All rights reserved.</div>
+  </div>
+</body>
+</html>"""
+
+    if smtp_host:
+        try:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = "Verify your email - AetherOps Cloud"
+            msg["From"] = smtp_from
+            msg["To"] = recipient_email
+            msg.attach(MIMEText(f"Verify your email: {verification_url}", "plain"))
+            msg.attach(MIMEText(html_content, "html"))
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+                if smtp_port in (587, 25):
+                    server.starttls()
+                if smtp_user and smtp_pass:
+                    server.login(smtp_user, smtp_pass)
+                server.sendmail(smtp_from, [recipient_email], msg.as_string())
+            logger.info(f"Verification email dispatched to {recipient_email} via SMTP")
+        except Exception as e:
+            logger.warning(f"SMTP dispatch to {recipient_email} failed: {e}")
+
+    try:
+        with open("/tmp/aether-email-confirmations.log", "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.datetime.utcnow().isoformat()}] TO: {recipient_email} | USER: {username} | LINK: {verification_url}\n")
+    except Exception:
+        pass
+
+    return verification_url
+
+
+@app.get("/api/v1/auth/check-email")
+async def check_email(email: str = ""):
+    """Live letter-by-letter check using indexed SQLite lookup."""
+    clean = email.strip().lower()
+    conn = get_db_connection()
+    try:
+        c = conn.cursor()
+        c.execute("SELECT 1 FROM users WHERE lower(email) = lower(?) LIMIT 1", (clean,))
+        exists = bool(c.fetchone())
+        return {"exists": exists, "valid": True, "email": clean}
+    finally:
+        conn.close()
 
 
 @app.post("/api/v1/auth/register")
 async def register(req: RegisterRequest):
     """
     Registration endpoint:
-    Creates a new user and automatically allocates an AWS-like 12-digit Account ID
-    and a hidden internal Tenant ID.
+    Creates a new user with unverified email, generates secure confirmation token,
+    and dispatches confirmation email.
     """
     clean_username = req.username.strip().replace(" ", "_")
-    clean_email = req.email.strip().lower()
+    conn = get_db_connection()
+    try:
+        c = conn.cursor()
+
+        c.execute("SELECT id FROM users WHERE lower(username) = lower(?)", (clean_username,))
+        if c.fetchone():
+            return JSONResponse(status_code=400, content={"detail": "Username already exists."})
+
+        c.execute("SELECT id FROM users WHERE lower(email) = lower(?)", (clean_email,))
+        if c.fetchone():
+            return JSONResponse(status_code=400, content={"detail": "Email already registered."})
+
+        user_uuid = str(uuid.uuid4())
+        account_id = generate_unique_account_id(c)
+        tenant_id = generate_unique_tenant_id()
+        pw_hash = bcrypt.hashpw(req.password.encode(), bcrypt.gensalt(rounds=10)).decode()
+        now_iso = datetime.datetime.utcnow().isoformat()
+
+        # Create personal tenant
+        c.execute("""
+        INSERT INTO tenants (id, name, account_id, tenant_type, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        """, (tenant_id, f"{clean_username}'s Workspace", account_id, "PERSONAL", now_iso))
+
+        # Create user record with email_verified = 0
+        c.execute("""
+        INSERT INTO users (uuid, username, email, password_hash, role, account_id, tenant_id, created_at, last_login_at, email_verified)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+        """, (user_uuid, clean_username, clean_email, pw_hash, req.role, account_id, tenant_id, now_iso, now_iso))
+
+        # Create verification token valid for 24h
+        verif_token = secrets.token_urlsafe(32)
+        expires_at = (datetime.datetime.utcnow() + datetime.timedelta(hours=24)).isoformat()
+        c.execute("""
+        INSERT INTO email_verifications (email, user_uuid, token, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?)
+        """, (clean_email, user_uuid, verif_token, now_iso, expires_at))
+
+        conn.commit()
+
+        verification_url = _send_verification_email(clean_email, clean_username, verif_token)
+
+        return {
+            "status": "VERIFICATION_SENT",
+            "requires_verification": True,
+            "message": f"Verification email sent to {clean_email}. Please confirm your email to activate your account.",
+            "email": clean_email,
+            "username": clean_username,
+            "verification_url": verification_url,
+        }
+    finally:
+        conn.close()
+
+
+@app.post("/api/v1/auth/verify-email")
+async def verify_email(req: VerifyEmailRequest):
+    """Validates confirmation token, marks user email verified, and issues active session."""
+    token = req.token.strip()
+    if not token:
+        return JSONResponse(status_code=400, content={"detail": "Verification token is required."})
 
     conn = get_db_connection()
-    c = conn.cursor()
+    try:
+        c = conn.cursor()
 
-    c.execute("SELECT id FROM users WHERE lower(username) = lower(?)", (clean_username,))
-    if c.fetchone():
+        c.execute("SELECT * FROM email_verifications WHERE token = ?", (token,))
+        verif = c.fetchone()
+        if not verif:
+            return JSONResponse(status_code=400, content={"detail": "Invalid or expired confirmation link."})
+
+        now_iso = datetime.datetime.utcnow().isoformat()
+        if verif["expires_at"] < now_iso:
+            return JSONResponse(status_code=400, content={"detail": "Confirmation link has expired. Please request a new one."})
+
+        c.execute("SELECT * FROM users WHERE uuid = ?", (verif["user_uuid"],))
+        user = c.fetchone()
+        if not user:
+            return JSONResponse(status_code=400, content={"detail": "Associated user account was not found."})
+
+        c.execute("UPDATE email_verifications SET verified_at = ? WHERE id = ?", (now_iso, verif["id"]))
+        c.execute("UPDATE users SET email_verified = 1 WHERE id = ?", (user["id"],))
+        conn.commit()
+
+        jwt_token = _create_jwt_token(
+            username=user["username"],
+            role=user["role"],
+            email=user["email"],
+            user_uuid=user["uuid"],
+            account_id=user["account_id"],
+            tenant_id=user["tenant_id"],
+        )
+
+        resp_user = {
+            "username": user["username"],
+            "email": user["email"],
+            "role": user["role"],
+            "uuid": user["uuid"],
+            "account_id": user["account_id"],
+            "account_id_formatted": format_account_id(user["account_id"]),
+        }
+        return {
+            "status": "VERIFIED",
+            "message": "Email confirmed successfully! Welcome to AetherOps.",
+            "token": jwt_token,
+            "user": resp_user,
+            "redirect_url": "http://localhost:8000"
+        }
+    finally:
         conn.close()
-        return JSONResponse(status_code=400, content={"detail": "Username already exists."})
 
-    c.execute("SELECT id FROM users WHERE lower(email) = lower(?)", (clean_email,))
-    if c.fetchone():
+
+@app.post("/api/v1/auth/resend-verification")
+async def resend_verification(req: ResendVerificationRequest):
+    """Resends activation email for unverified account."""
+    clean_email = req.email.strip().lower()
+    if not clean_email:
+        return JSONResponse(status_code=400, content={"detail": "Email address is required."})
+
+    conn = get_db_connection()
+    try:
+        c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE lower(email) = lower(?)", (clean_email,))
+        user = c.fetchone()
+        if not user:
+            return JSONResponse(status_code=404, content={"detail": "No registered account found with that email."})
+
+        if user["email_verified"] == 1:
+            return {"status": "ALREADY_VERIFIED", "message": "Email is already confirmed. You can sign in immediately."}
+
+        now_iso = datetime.datetime.utcnow().isoformat()
+        verif_token = secrets.token_urlsafe(32)
+        expires_at = (datetime.datetime.utcnow() + datetime.timedelta(hours=24)).isoformat()
+        c.execute("""
+        INSERT INTO email_verifications (email, user_uuid, token, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?)
+        """, (clean_email, user["uuid"], verif_token, now_iso, expires_at))
+        conn.commit()
+
+        verification_url = _send_verification_email(clean_email, user["username"], verif_token)
+        return {
+            "status": "SENT",
+            "message": f"Verification email sent to {clean_email}.",
+            "verification_url": verification_url,
+        }
+    finally:
         conn.close()
-        return JSONResponse(status_code=400, content={"detail": "Email already registered."})
-
-    user_uuid = str(uuid.uuid4())
-    account_id = generate_unique_account_id(c)
-    tenant_id = generate_unique_tenant_id()
-    pw_hash = bcrypt.hashpw(req.password.encode(), bcrypt.gensalt(rounds=10)).decode()
-    now_iso = datetime.datetime.utcnow().isoformat()
-
-    # Create personal tenant
-    c.execute("""
-    INSERT INTO tenants (id, name, account_id, tenant_type, created_at)
-    VALUES (?, ?, ?, ?, ?)
-    """, (tenant_id, f"{clean_username}'s Workspace", account_id, "PERSONAL", now_iso))
-
-    # Create user record
-    c.execute("""
-    INSERT INTO users (uuid, username, email, password_hash, role, account_id, tenant_id, created_at, last_login_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (user_uuid, clean_username, clean_email, pw_hash, req.role, account_id, tenant_id, now_iso, now_iso))
-
-    conn.commit()
-    conn.close()
-
-    token = _create_jwt_token(
-        username=clean_username,
-        role=req.role,
-        email=clean_email,
-        user_uuid=user_uuid,
-        account_id=account_id,
-        tenant_id=tenant_id,
-    )
-
-    return {
-        "token": token,
-        "user": {
-            "username": clean_username,
-            "email": clean_email,
-            "role": req.role,
-            "uuid": user_uuid,
-            "account_id": account_id,
-            "account_id_formatted": format_account_id(account_id),
-        },
-        "redirect_url": "http://localhost:8000"
-    }
-
 
 def _get_request_auth_payload(request: Request) -> Optional[Dict[str, Any]]:
     auth_header = request.headers.get("Authorization", "")
@@ -890,8 +1114,8 @@ async def google_callback(
         """, (tenant_id, f"{username}'s Workspace", account_id, "PERSONAL", now_iso))
 
         c.execute("""
-        INSERT INTO users (uuid, username, email, password_hash, role, account_id, tenant_id, created_at, last_login_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (uuid, username, email, password_hash, role, account_id, tenant_id, created_at, last_login_at, email_verified)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         """, (user_uuid, username, email, "", "USER", account_id, tenant_id, now_iso, now_iso))
         conn.commit()
 
@@ -1041,8 +1265,8 @@ async def github_callback(
         """, (tenant_id, f"{username}'s Workspace", account_id, "PERSONAL", now_iso))
 
         c.execute("""
-        INSERT INTO users (uuid, username, email, password_hash, role, account_id, tenant_id, created_at, last_login_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (uuid, username, email, password_hash, role, account_id, tenant_id, created_at, last_login_at, email_verified)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         """, (user_uuid, username, email, "", "USER", account_id, tenant_id, now_iso, now_iso))
         conn.commit()
 

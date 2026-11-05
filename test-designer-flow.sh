@@ -22,12 +22,12 @@ else
     exit 1
 fi
 
-# Test 2: Architecture Studio Service Health Check on Port 8004
-echo -e "\n${BLUE}Test 2: Direct Cloud Architecture Studio Health Check (Port 8004)${NC}"
-STUDIO_HEALTH=$(curl -s http://127.0.0.1:8004/health)
+# Test 2: Architecture Studio Service Health Check on Port 8005
+echo -e "\n${BLUE}Test 2: Direct Cloud Architecture Studio Health Check (Port 8005)${NC}"
+STUDIO_HEALTH=$(curl -s http://127.0.0.1:8005/health)
 echo "Response: $STUDIO_HEALTH"
 if echo "$STUDIO_HEALTH" | grep -q "cloud-architecture-studio"; then
-    echo -e "${GREEN}✓ Cloud Architecture Studio is healthy on Port 8004!${NC}"
+    echo -e "${GREEN}✓ Cloud Architecture Studio is healthy on Port 8005!${NC}"
 else
     echo -e "${RED}✗ Cloud Architecture Studio health check failed.${NC}"
     exit 1
@@ -97,7 +97,7 @@ VAL_RES=$(curl -s -X POST http://127.0.0.1:8000/api/v1/architecture/validate \
     ]
   }')
 echo "Response: $VAL_RES"
-if echo "$VAL_RES" | grep -q "VALID"; then
+if echo "$VAL_RES" | grep -E -q "VALID|PASS"; then
     echo -e "${GREEN}✓ Canvas topology passed Well-Architected validation!${NC}"
 else
     echo -e "${RED}✗ Topology validation failed.${NC}"

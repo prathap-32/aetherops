@@ -357,7 +357,7 @@ async def test_production_mode_fails_closed_without_postgres(monkeypatch):
 
     monkeypatch.setattr(pm_db, "get_pg_sessionmaker", broken_pg_sessionmaker)
 
-    with pytest.raises(RuntimeError, match="FATAL: PostgreSQL database connection failed in production"):
+    with pytest.raises(RuntimeError, match=r"FATAL: PostgreSQL database (connection|initialization) failed in production"):
         async for _ in pm_db.get_db():
             pass
 

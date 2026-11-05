@@ -61,8 +61,9 @@ export default function Navbar({
       <div className="flex items-center gap-3 min-w-0">
         <button
           onClick={onOpenMobileSidebar}
-          className="lg:hidden p-1.5 -ml-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-          aria-label="Toggle menu"
+          className="p-1.5 -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+          aria-label="Toggle sidebar menu"
+          title="Toggle sidebar menu (Expand text / Show icons only)"
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -87,35 +88,11 @@ export default function Navbar({
             </div>
           )}
 
-          {/* Default Region Badge */}
-          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-mono border border-slate-200/80">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>us-east-1 (N. Virginia)</span>
-          </div>
         </div>
       </div>
 
       {/* Center / Right: AWS Account ID Showcase, Search & Actions */}
       <div className="flex items-center gap-2 sm:gap-3">
-        {/* Prominent AWS Account ID Showcase */}
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50/90 text-amber-900 text-xs font-mono border border-amber-200/90 shadow-xs">
-          <Key className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-          <span className="font-semibold text-amber-950 hidden xs:inline">Account:</span>
-          <span className="font-bold text-amber-900">
-            {formatAccountId(user?.account_id || '109283746519')}
-          </span>
-          <button
-            onClick={copyAccountId}
-            title={copiedAccount ? 'Copied Account ID!' : 'Copy AWS Account ID'}
-            className="p-1 hover:bg-amber-100 rounded text-amber-700 transition cursor-pointer"
-          >
-            {copiedAccount ? (
-              <Check className="w-3.5 h-3.5 text-emerald-600" />
-            ) : (
-              <Copy className="w-3.5 h-3.5 text-amber-700 hover:text-amber-900" />
-            )}
-          </button>
-        </div>
 
         {/* Search */}
         <div className="relative w-32 sm:w-48 lg:w-56">
@@ -154,17 +131,14 @@ export default function Navbar({
             <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
               <span>{user?.username || 'User'}</span>
               <span
-                className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold uppercase border ${
+                className={`px-1.5 py-0.5 rounded text-[11px] font-semibold uppercase border ${
                   isAdmin
-                    ? 'bg-amber-100 text-amber-900 border-amber-300'
-                    : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                    ? 'bg-blue-100 text-blue-900 border-blue-300'
+                    : 'bg-slate-100 text-slate-700 border-slate-200'
                 }`}
               >
                 {user?.role || 'USER'}
               </span>
-            </div>
-            <div className="text-[10px] font-mono text-slate-500">
-              Account
             </div>
           </div>
           <User className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 sm:hidden" />

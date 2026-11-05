@@ -170,30 +170,30 @@ export default function IacView({ onNavigate, activeProject, activeEnvironment }
       {iacData && (
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
           <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
-            <div className="text-slate-400 font-medium text-[11px]">Architecture Bound</div>
+            <div className="text-slate-500 font-medium text-xs">Architecture Version</div>
             <div className="text-slate-900 font-bold font-mono mt-1 truncate">
               {iacData.architecture_version_id}
             </div>
           </div>
           <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
-            <div className="text-slate-400 font-medium text-[11px]">Terraform Version ID</div>
+            <div className="text-slate-500 font-medium text-xs">Terraform Version</div>
             <div className="text-slate-900 font-bold font-mono mt-1 truncate">
               {iacData.terraform_version_id}
             </div>
           </div>
           <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
-            <div className="text-slate-400 font-medium text-[11px]">Cryptographic SHA256</div>
+            <div className="text-slate-500 font-medium text-xs">HCL Checksum</div>
             <div className="text-slate-900 font-bold font-mono mt-1 truncate" title={iacData.checksum}>
               {iacData.checksum?.substring(0, 16)}...
             </div>
           </div>
           <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
-            <div className="text-slate-400 font-medium text-[11px]">Terraform Validation</div>
+            <div className="text-slate-500 font-medium text-xs">Terraform Validation</div>
             <div className="flex items-center gap-2 mt-1">
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="px-2 py-0.5 rounded text-xs font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 FMT: {iacData.validation?.fmt || 'PASS'}
               </span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="px-2 py-0.5 rounded text-xs font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 VALIDATE: {iacData.validation?.validate || 'PASS'}
               </span>
             </div>

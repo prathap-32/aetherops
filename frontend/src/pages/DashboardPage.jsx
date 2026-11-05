@@ -352,7 +352,7 @@ export default function DashboardPage() {
           activeView={activeView}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
-          onOpenMobileSidebar={() => setMobileSidebarOpen(true)}
+          onOpenMobileSidebar={() => setMobileSidebarOpen((prev) => !prev)}
           onOpenCreateProject={() => {
             handleNavigate('projects', '/projects');
             setIsCreateProjectModalOpen(true);

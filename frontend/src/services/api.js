@@ -101,6 +101,20 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ username, email, password, role }),
     }),
+  checkEmail: (email) =>
+    apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/check-email?email=${encodeURIComponent(email)}`),
+
+  verifyEmail: (token) =>
+    apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/verify-email`, {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+
+  resendVerification: (email) =>
+    apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/resend-verification`, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
 
   oauthCallback: (provider, username, email) =>
     apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/oauth-callback`, {
@@ -110,9 +124,10 @@ export const authApi = {
 
   getMe: () => apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/me`),
 
-  updateProfile: (username, email) =>
+  updateProfile: (username, email, customToken = null) =>
     apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/profile`, {
       method: 'PUT',
+      headers: customToken ? { Authorization: `Bearer ${customToken}` } : {},
       body: JSON.stringify({ username, email }),
     }),
 

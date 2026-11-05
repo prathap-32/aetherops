@@ -305,6 +305,7 @@ async def get_current_admin(request: Request) -> Dict[str, Any]:
                 "uuid":      payload.get("uuid"),
                 "role":      payload.get("role"),
                 "email":     payload.get("email"),
+                "tenant_id": payload.get("tenant_id"),
                 "auth_type": "bearer",
             }
 
@@ -318,6 +319,7 @@ async def get_current_admin(request: Request) -> Dict[str, Any]:
                 "uuid":      payload.get("uuid"),
                 "role":      payload.get("role"),
                 "email":     payload.get("email"),
+                "tenant_id": payload.get("tenant_id"),
                 "auth_type": "cookie",
             }
 

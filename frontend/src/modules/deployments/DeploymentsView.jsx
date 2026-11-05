@@ -74,7 +74,7 @@ export default function DeploymentsView({ onNavigate, activeProject, activeEnvir
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Cloud Deployments &amp; State Inventory</h1>
             <span className="px-2.5 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-              Module 8 &amp; 9: Live Operations
+              Deployment Engine Active
             </span>
           </div>
           <p className="text-sm text-slate-500 mt-1">
@@ -113,7 +113,7 @@ export default function DeploymentsView({ onNavigate, activeProject, activeEnvir
         <div className="p-5 border-b border-slate-100 flex items-center justify-between">
           <div>
             <h3 className="text-sm font-bold text-slate-900">Recorded Deployment Runs</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Retrieved from AetherOps Cloud Deployer Engine (Port 8011)</p>
+            <p className="text-xs text-slate-500 mt-0.5">Infrastructure provisioning history and state</p>
           </div>
           <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
             {deployments.length} Runs Recorded
@@ -151,7 +151,7 @@ export default function DeploymentsView({ onNavigate, activeProject, activeEnvir
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-slate-900 font-mono">{d.deployment_id}</span>
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
                         d.status === 'SUCCESS'
                           ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
                           : d.status === 'CANCELLED'
@@ -160,8 +160,8 @@ export default function DeploymentsView({ onNavigate, activeProject, activeEnvir
                       }`}>
                         {d.status}
                       </span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                        {d.mode || 'TEST_SANDBOX'}
+                      <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                        {d.mode || 'STANDARD'}
                       </span>
                     </div>
                     <p className="text-slate-500 mt-0.5">
@@ -216,19 +216,19 @@ export default function DeploymentsView({ onNavigate, activeProject, activeEnvir
                   {/* Metadata */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                      <div className="text-slate-400 text-[10px] font-semibold">PLAN ID</div>
+                      <div className="text-slate-400 text-xs font-semibold">PLAN ID</div>
                       <div className="font-mono text-slate-800 mt-0.5 truncate">{selectedDep.plan_id || 'N/A'}</div>
                     </div>
                     <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                      <div className="text-slate-400 text-[10px] font-semibold">REGION</div>
+                      <div className="text-slate-400 text-xs font-semibold">REGION</div>
                       <div className="font-mono text-slate-800 mt-0.5">{selectedDep.target_region}</div>
                     </div>
                     <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                      <div className="text-slate-400 text-[10px] font-semibold">MODE</div>
-                      <div className="font-mono text-slate-800 mt-0.5">{selectedDep.mode || 'TEST_SANDBOX'}</div>
+                      <div className="text-slate-400 text-xs font-semibold">MODE</div>
+                      <div className="font-mono text-slate-800 mt-0.5">{selectedDep.mode || 'STANDARD'}</div>
                     </div>
                     <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                      <div className="text-slate-400 text-[10px] font-semibold">DURATION</div>
+                      <div className="text-slate-400 text-xs font-semibold">DURATION</div>
                       <div className="font-mono text-slate-800 mt-0.5">{selectedDep.execution_time_seconds || '0.4'}s</div>
                     </div>
                   </div>

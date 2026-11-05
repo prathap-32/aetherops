@@ -78,34 +78,32 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject }) {
   return (
     <div className="space-y-8">
       {/* Platform Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#0f172a] via-[#1e293b] to-[#1e3a8a] text-white p-6 sm:p-8 shadow-xl border border-slate-700">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#0a1128] via-[#1e293b] to-[#1e40af] text-white p-6 sm:p-8 shadow-xl border border-slate-700/80">
         <div className="relative z-10 max-w-3xl space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-mono border border-amber-400/30 font-bold">
-              AWS ACCOUNT: {formatAccountId(user?.account_id || '109283746519')}
-            </span>
-            <span className="text-xs text-slate-300 font-medium">Autonomous Cloud Platform</span>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-400/30 text-cyan-300 text-xs font-semibold">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+            Autonomous Cloud Operations MVP
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Autonomous Cloud Infrastructure Operations
+            AWS Cloud Infrastructure &amp; Deployment Platform
           </h1>
-          <p className="text-sm text-slate-300 leading-relaxed">
-            Deterministic code analysis, verified catalog pricing, multi-region architecture generation, and production Terraform synthesis.
+          <p className="text-sm text-slate-300 leading-relaxed max-w-2xl">
+            Connect your real AWS account, design your cloud architecture, generate production-ready Terraform code, and deploy and monitor your infrastructure.
           </p>
           <div className="pt-2 flex flex-wrap gap-3">
             <button
-              onClick={() => onNavigate('projects', '/projects')}
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-xs transition flex items-center gap-2 shadow-lg shadow-blue-600/30 cursor-pointer"
+              onClick={() => onNavigate('source_cloud', '/source-connection')}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 font-semibold text-xs transition flex items-center gap-2 shadow-lg shadow-blue-600/30 cursor-pointer"
             >
-              <span>Explore Projects</span>
+              <span>1. Connect AWS Account</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
             <button
-              onClick={() => onNavigate('source_cloud', '/source-connection')}
+              onClick={() => onNavigate('architecture_designer', '/architecture-designer')}
               className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 font-semibold text-xs transition flex items-center gap-2 cursor-pointer"
             >
-              <GitBranch className="w-3.5 h-3.5" />
-              <span>Connect GitHub</span>
+              <Network className="w-3.5 h-3.5 text-cyan-400" />
+              <span>2. Cloud Architecture</span>
             </button>
           </div>
         </div>
@@ -119,115 +117,154 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject }) {
           className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Active Projects</span>
+            <span className="text-xs font-medium text-slate-500">Workspaces</span>
             <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center group-hover:scale-105 transition">
               <FolderKanban className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-3">
-            <div className="text-2xl font-black text-slate-900 font-mono">
+            <div className="text-2xl font-bold text-slate-900 font-mono">
               {loading ? '...' : projects.length}
             </div>
-            <div className="text-[11px] text-emerald-600 font-medium flex items-center gap-1 mt-1">
-              <span>● Live PostgreSQL storage</span>
-            </div>
+            <div className="text-xs text-slate-500 mt-1">Configured applications</div>
           </div>
         </div>
 
-        {/* Target Environments */}
-        <div
-          onClick={() => onNavigate('environments', '/environments')}
-          className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Target Environments</span>
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center group-hover:scale-105 transition">
-              <Boxes className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-black text-slate-900 font-mono">
-              {loading ? '...' : projects.reduce((acc, p) => acc + (p.environment_count || 0), 0)}
-            </div>
-            <div className="text-[11px] text-slate-500 mt-1">Isolated VPC environments</div>
-          </div>
-        </div>
-
-        {/* Source Connections */}
+        {/* Cloud Connections */}
         <div
           onClick={() => onNavigate('source_cloud', '/source-connection')}
           className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Connected Repos</span>
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition">
+            <span className="text-xs font-medium text-slate-500">Cloud &amp; Repos</span>
+            <div className="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-700 flex items-center justify-center group-hover:scale-105 transition">
               <GitBranch className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-3">
-            <div className="text-2xl font-black text-slate-900 font-mono">
+            <div className="text-2xl font-bold text-slate-900 font-mono">
               {loading ? '...' : connections.length}
             </div>
-            <div className="text-[11px] text-emerald-600 mt-1">GitHub OAuth &amp; PAT active</div>
+            <div className="text-xs text-slate-500 mt-1">AWS &amp; Git Connections</div>
           </div>
         </div>
 
-        {/* Fleet Microservices */}
+        {/* Terraform / IaC */}
         <div
-          onClick={() => onNavigate('admin', '/admin')}
+          onClick={() => onNavigate('iac', '/terraform')}
           className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Fleet Supervisor</span>
-            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center group-hover:scale-105 transition">
-              <Server className="w-4 h-4" />
+            <span className="text-xs font-medium text-slate-500">Terraform IaC</span>
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center group-hover:scale-105 transition">
+              <Code2 className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-3">
-            <div className="text-2xl font-black text-slate-900 font-mono">11 / 11</div>
-            <div className="text-[11px] text-emerald-600 font-medium flex items-center gap-1 mt-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>All microservices online</span>
+            <div className="text-2xl font-bold text-slate-900 font-mono">Ready</div>
+            <div className="text-xs text-slate-500 mt-1">Validated HCL stacks</div>
+          </div>
+        </div>
+
+        {/* Microservices Health */}
+        <div
+          onClick={() => onNavigate('monitoring', '/monitoring')}
+          className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500">System Status</span>
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition">
+              <Activity className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-bold text-emerald-600 font-mono">14 / 14</div>
+            <div className="text-xs text-emerald-600 font-medium flex items-center gap-1 mt-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>All Services Healthy</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Recommended Workflow Pipeline */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-4">
+      {/* Clean 4-Step MVP Guided Workflow */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-5">
         <div>
-          <h2 className="text-base font-bold text-slate-900">End-to-End Delivery Pipeline</h2>
-          <p className="text-xs text-slate-500">Follow the standard engineering workflow from source repo to monitored production</p>
+          <h2 className="text-base font-bold text-slate-900">End-to-End Cloud Workflow</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Follow these core steps to provision and monitor infrastructure on your AWS account.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-2.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { step: '1', title: 'Projects', desc: 'Create workspace', view: 'projects', path: '/projects', icon: FolderKanban },
-            { step: '2', title: 'Environments', desc: 'Configure fleets', view: 'environments', path: '/environments', icon: Layers },
-            { step: '3', title: 'Connect Repo', desc: 'Link GitHub & AWS', view: 'source_cloud', path: '/source-connection', icon: GitBranch },
-            { step: '4', title: 'Analyze Code', desc: 'Tech stack scan', view: 'repo_analyzer', path: '/source-analysis', icon: FileCode2 },
-            { step: '5', title: 'Cloud Studio', desc: 'AWS Sizing & Designer', view: 'architecture_studio', path: '/architecture-studio', icon: Network },
-            { step: '6', title: 'Terraform IaC', desc: 'Synthesize HCL', view: 'iac', path: '/terraform', icon: Code2 },
-            { step: '7', title: 'Deploy & APM', desc: 'Operate in cloud', view: 'monitoring', path: '/monitoring', icon: Rocket },
+            {
+              step: '1',
+              title: 'Connect AWS & Git',
+              desc: 'Enter AWS Access Key, Secret, and region to authorize infrastructure creation.',
+              view: 'source_cloud',
+              path: '/source-connection',
+              icon: GitBranch,
+              color: 'text-blue-600',
+              badge: 'Authentication',
+            },
+            {
+              step: '2',
+              title: 'Cloud Architecture',
+              desc: 'Design and review your multi-tier VPC, compute, container, and database topology.',
+              view: 'architecture_designer',
+              path: '/architecture-designer',
+              icon: Network,
+              color: 'text-cyan-600',
+              badge: 'Architecture',
+            },
+            {
+              step: '3',
+              title: 'Generate Terraform',
+              desc: 'Synthesize clean, validated HashiCorp HCL Terraform configuration files.',
+              view: 'iac',
+              path: '/terraform',
+              icon: Code2,
+              color: 'text-indigo-600',
+              badge: 'IaC Synthesis',
+            },
+            {
+              step: '4',
+              title: 'Deploy & Monitor',
+              desc: 'Execute deployment to AWS and view live resource metrics, CPU, and alarms.',
+              view: 'deployments',
+              path: '/deployment',
+              icon: Rocket,
+              color: 'text-emerald-600',
+              badge: 'Operation',
+            },
           ].map((item) => {
             const Icon = item.icon;
             return (
               <div
                 key={item.step}
                 onClick={() => onNavigate(item.view, item.path)}
-                className="p-3.5 rounded-xl border border-slate-200/80 hover:border-blue-400 hover:bg-blue-50/40 transition cursor-pointer group flex flex-col justify-between"
+                className="p-5 rounded-xl border border-slate-200/80 hover:border-blue-500 hover:shadow-md transition cursor-pointer group flex flex-col justify-between space-y-4 bg-slate-50/40 hover:bg-white"
               >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
-                      STEP {item.step}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="w-7 h-7 rounded-lg bg-blue-100 text-blue-800 font-bold font-mono text-xs flex items-center justify-center">
+                      {item.step}
                     </span>
-                    <Icon className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition" />
+                    <Icon className={`w-5 h-5 ${item.color}`} />
                   </div>
-                  <div className="text-xs font-bold text-slate-900 group-hover:text-blue-700 transition">
-                    {item.title}
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition">
+                      {item.title}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      {item.desc}
+                    </p>
                   </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">{item.desc}</div>
+                </div>
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-blue-600 group-hover:text-blue-700">
+                  <span>Launch Step {item.step}</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition" />
                 </div>
               </div>
             );
@@ -240,7 +277,7 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject }) {
         <div className="p-5 border-b border-slate-100 flex items-center justify-between">
           <div>
             <h3 className="text-sm font-bold text-slate-900">Recent Projects</h3>
-            <p className="text-[11px] text-slate-500">Live projects stored in AetherOps PostgreSQL vault</p>
+            <p className="text-xs text-slate-500">Active application workspaces</p>
           </div>
           <button
             onClick={() => onNavigate('projects', '/projects')}
@@ -271,16 +308,14 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject }) {
                   </div>
                   <div>
                     <div className="text-xs font-bold text-slate-900">{p.name}</div>
-                    <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5">
-                      <span className="font-mono">{p.project_type}</span>
-                      <span>•</span>
-                      <span>Owner: {p.owner}</span>
+                    <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                      <span className="font-mono text-slate-600">{p.project_type}</span>
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    {p.status}
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    {p.status || 'Active'}
                   </span>
                   <ArrowRight className="w-4 h-4 text-slate-400" />
                 </div>

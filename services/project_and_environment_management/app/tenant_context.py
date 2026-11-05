@@ -94,13 +94,35 @@ async def create_personal_workspace_for_user(
     user_identifier = user_uuid or clean_name
     deterministic_slug = f"personal-{slugify(clean_name)}-{user_identifier[:8].lower()}"
 
-    # 1. Check if user already has an active personal workspace
+    # 1. If tenant_id_override is provided, check if that exact tenant already exists
+    if tenant_id_override:
+        res = await db.execute(select(Tenant).where(Tenant.id == tenant_id_override))
+        existing_override = res.scalar_one_or_none()
+        if existing_override:
+            # Ensure membership exists for this user
+            mem_res = await db.execute(
+                select(TenantMembership).where(
+                    TenantMembership.tenant_id == existing_override.id,
+                    (TenantMembership.user_id == user_identifier) | (TenantMembership.user_id == clean_name),
+                )
+            )
+            if not mem_res.scalars().first():
+                db.add(TenantMembership(
+                    id=str(uuid.uuid4()),
+                    tenant_id=existing_override.id,
+                    user_id=user_identifier,
+                    role="OWNER",
+                    status="ACTIVE",
+                ))
+                await db.commit()
+            return existing_override
+
+    # 2. Check if user already has an active personal workspace for this user identifier
     existing_query = (
         select(Tenant)
         .join(TenantMembership, Tenant.id == TenantMembership.tenant_id)
         .where(
-            (TenantMembership.user_id == clean_name)
-            | (Tenant.slug.like(f"personal-{slugify(clean_name)}%")),
+            (TenantMembership.user_id == user_identifier) | (TenantMembership.user_id == clean_name),
             Tenant.tenant_type == "PERSONAL",
             TenantMembership.role == "OWNER",
         )
@@ -110,7 +132,7 @@ async def create_personal_workspace_for_user(
     if existing_tenant:
         return existing_tenant
 
-    # 2. Concurrency-safe creation using deterministic slug
+    # 3. Concurrency-safe creation using deterministic slug
     try:
         tenant_id = tenant_id_override or str(uuid.uuid4())
         tenant = Tenant(
@@ -137,10 +159,28 @@ async def create_personal_workspace_for_user(
         return tenant
     except Exception:
         await db.rollback()
-        # In case of concurrency race, retrieve winning tenant with this slug
-        res = await db.execute(select(Tenant).where(Tenant.slug == deterministic_slug))
+        # In case of concurrency race, retrieve winning tenant with this slug or id
+        res = await db.execute(select(Tenant).where((Tenant.id == tenant_id_override) | (Tenant.slug == deterministic_slug)))
         winning = res.scalar_one_or_none()
         if winning:
+            mem_res = await db.execute(
+                select(TenantMembership).where(
+                    TenantMembership.tenant_id == winning.id,
+                    (TenantMembership.user_id == user_identifier) | (TenantMembership.user_id == clean_name),
+                )
+            )
+            if not mem_res.scalars().first():
+                try:
+                    db.add(TenantMembership(
+                        id=str(uuid.uuid4()),
+                        tenant_id=winning.id,
+                        user_id=user_identifier,
+                        role="OWNER",
+                        status="ACTIVE",
+                    ))
+                    await db.commit()
+                except Exception:
+                    await db.rollback()
             return winning
         raise
 
@@ -211,6 +251,26 @@ async def get_tenant_context(
             )
         )
         membership = mem_res.scalars().first()
+        if not membership:
+            # Auto-enroll personal workspace owner if this is user's token tenant or matches user handle
+            token_tenant = admin.get("tenant_id") or request.headers.get("X-Tenant-ID")
+            if (
+                tenant.tenant_type == "PERSONAL"
+                and (tenant.id == token_tenant or tenant.slug.startswith(f"personal-{slugify(user_name)}"))
+            ):
+                try:
+                    auto_mem = TenantMembership(
+                        id=str(uuid.uuid4()),
+                        tenant_id=tenant.id,
+                        user_id=user_uuid,
+                        role="OWNER",
+                        status="ACTIVE",
+                    )
+                    db.add(auto_mem)
+                    await db.commit()
+                    membership = auto_mem
+                except Exception:
+                    await db.rollback()
 
         if not membership:
             if is_platform_super_admin:

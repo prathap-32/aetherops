@@ -160,24 +160,24 @@ export default function ProjectsView({
   const getStatusBadge = (status) => {
     if (status === 'ACTIVE') {
       return (
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-          ACTIVE
+          Active
         </span>
       );
     }
     if (status === 'ARCHIVED') {
       return (
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-1">
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-          ARCHIVED
+          Archived
         </span>
       );
     }
     return (
-      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-50 text-[#1e40af] border border-blue-200 flex items-center gap-1">
+      <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-blue-50 text-[#1e40af] border border-blue-200 flex items-center gap-1.5">
         <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-        CREATED
+        Ready
       </span>
     );
   };
@@ -220,7 +220,7 @@ export default function ProjectsView({
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white border border-slate-200/90 rounded-2xl p-5 space-y-2 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Workspaces</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Workspaces</span>
             <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#1e40af] flex items-center justify-center">
               <FolderKanban className="w-4 h-4" />
             </div>
@@ -229,7 +229,7 @@ export default function ProjectsView({
             <span className="text-3xl font-bold font-mono text-slate-900">{totalProjects}</span>
             <span className="text-xs text-slate-500 font-medium">projects</span>
           </div>
-          <p className="text-[11px] text-slate-500">Applications configured in your tenant</p>
+          <p className="text-xs text-slate-500">Applications configured in your tenant</p>
         </div>
 
         <div
@@ -237,7 +237,7 @@ export default function ProjectsView({
           className="bg-white border border-slate-200/90 hover:border-blue-300 rounded-2xl p-5 space-y-2 shadow-xs cursor-pointer transition"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Target Environments</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Target Environments</span>
             <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
               <Boxes className="w-4 h-4" />
             </div>
@@ -246,12 +246,12 @@ export default function ProjectsView({
             <span className="text-3xl font-bold font-mono text-slate-900">{totalEnvs}</span>
             <span className="text-xs text-slate-500 font-medium">deployed fleets</span>
           </div>
-          <p className="text-[11px] text-slate-500">Dev, Staging &amp; Production clusters</p>
+          <p className="text-xs text-slate-500">Dev, Staging &amp; Production clusters</p>
         </div>
 
         <div className="bg-white border border-slate-200/90 rounded-2xl p-5 space-y-2 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">AWS Regions</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">AWS Regions</span>
             <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#1e40af] flex items-center justify-center">
               <Globe className="w-4 h-4" />
             </div>
@@ -262,11 +262,11 @@ export default function ProjectsView({
           </div>
           <div className="flex flex-wrap gap-1">
             {Array.from(regionsSet).slice(0, 3).map((r) => (
-              <span key={r} className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-slate-100 text-slate-700 border border-slate-200">
+              <span key={r} className="px-2 py-0.5 rounded text-xs font-mono bg-slate-100 text-slate-700 border border-slate-200">
                 {r}
               </span>
             ))}
-            {regionsSet.size === 0 && <span className="text-[11px] text-slate-400 italic">No regions bound</span>}
+            {regionsSet.size === 0 && <span className="text-xs text-slate-400 italic">No regions bound</span>}
           </div>
         </div>
       </section>

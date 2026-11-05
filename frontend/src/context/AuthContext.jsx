@@ -73,6 +73,9 @@ export function AuthProvider({ children }) {
 
   const register = async (username, email, password, role = 'USER') => {
     const data = await authApi.register(username, email, password, role);
+    if (data.requires_verification || data.status === 'VERIFICATION_SENT') {
+      return data;
+    }
     const u = data.user || data;
     const authUser = {
       username: u.username,
@@ -82,9 +85,11 @@ export function AuthProvider({ children }) {
       account_id: u.account_id,
       account_id_formatted: u.account_id_formatted,
     };
-    setStoredSession(data.token, authUser);
-    setUser(authUser);
-    setToken(data.token);
+    if (data.token) {
+      setStoredSession(data.token, authUser);
+      setUser(authUser);
+      setToken(data.token);
+    }
     return authUser;
   };
 
@@ -105,11 +110,12 @@ export function AuthProvider({ children }) {
     return authUser;
   };
 
-  const updateProfile = async (newUsername) => {
-    const data = await authApi.updateProfile(newUsername, user?.email);
+  const updateProfile = async (newUsername, customToken = null) => {
+    const activeTok = customToken || token;
+    const data = await authApi.updateProfile(newUsername, user?.email, activeTok);
     const u = data.user || data;
     const updated = {
-      ...user,
+      ...(user || {}),
       username: u.username || newUsername,
       email: u.email || user?.email,
       role: u.role || user?.role || 'USER',
@@ -117,9 +123,12 @@ export function AuthProvider({ children }) {
       account_id: u.account_id || user?.account_id,
       account_id_formatted: u.account_id_formatted || user?.account_id_formatted,
     };
-    setStoredSession(data.token || token, updated);
-    setUser(updated);
-    if (data.token) setToken(data.token);
+    const finalToken = data.token || activeTok;
+    if (finalToken) {
+      setStoredSession(finalToken, updated);
+      setUser(updated);
+      setToken(finalToken);
+    }
     return updated;
   };
 

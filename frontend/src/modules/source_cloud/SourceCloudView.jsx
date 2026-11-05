@@ -429,10 +429,10 @@ export default function SourceCloudView({
           {/* Step 1: Environment Destination */}
           <div>
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700 mb-3">
-              <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px]">
+              <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs">
                 1
               </span>
-              Target Project & Environment
+              Target Project &amp; Environment
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -483,7 +483,7 @@ export default function SourceCloudView({
             {/* Step 2: Git Source Connection */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
-                <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px]">
+                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs">
                   2
                 </span>
                 <GitBranch className="w-4 h-4 text-slate-500" />
@@ -640,7 +640,7 @@ export default function SourceCloudView({
             {/* Step 3: AWS Cloud Connection */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
-                <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px]">
+                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs">
                   3
                 </span>
                 <Cloud className="w-4 h-4 text-slate-500" />
@@ -811,11 +811,11 @@ export default function SourceCloudView({
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                         <span>AWS STS Validated · Account ID: <strong className="font-mono">{awsValidationResult.account_id}</strong></span>
                       </div>
-                      <div className="pl-6 text-[11px] text-emerald-700 font-mono break-all">
+                      <div className="pl-6 text-xs text-emerald-700 font-mono break-all">
                         Caller ARN: {awsValidationResult.arn || 'arn:aws:iam::' + awsValidationResult.account_id + ':root'}
                       </div>
-                      <div className="pl-6 text-[10px] text-emerald-600">
-                        Region: <span className="font-mono font-semibold">{awsValidationResult.region || awsRegion}</span> · Auth: {awsValidationResult.auth_type || 'ACCESS_KEYS'}
+                      <div className="pl-6 text-xs text-emerald-600">
+                        Region: <span className="font-mono font-semibold">{awsValidationResult.region || awsRegion}</span>
                       </div>
                     </div>
                   ) : (
@@ -823,7 +823,7 @@ export default function SourceCloudView({
                       <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                       <div>
                         <div className="font-semibold text-rose-800">AWS Validation Failed</div>
-                        <div className="text-[11px] text-rose-700 mt-0.5">{awsValidationResult.error || 'Authentication error'}</div>
+                        <div className="text-xs text-rose-700 mt-0.5">{awsValidationResult.error || 'Authentication error'}</div>
                       </div>
                     </div>
                   )}
