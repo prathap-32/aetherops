@@ -1,6 +1,6 @@
 // frontend/src/modules/settings/SettingsView.jsx
 import React, { useState, useEffect } from 'react';
-import { Save, CheckCircle2, AlertCircle, Shield, Key, GitBranch, Eye, EyeOff, RefreshCw, Lock, Check } from 'lucide-react';
+import { Save, CheckCircle2, AlertCircle, Shield, Key, GitBranch, Eye, EyeOff, RefreshCw, Lock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { connectionsApi, formatAccountId } from '../../services/api';
 import { AWS_REGIONS_39 } from '../../constants/awsRegions';
@@ -31,6 +31,17 @@ export default function SettingsView() {
   const [patToken, setPatToken] = useState('');
   const [ghStatusMsg, setGhStatusMsg] = useState(null);
 
+  // Fetch existing Git connections on mount to synchronize connection status
+  useEffect(() => {
+    connectionsApi.listGit().then((conns) => {
+      if (Array.isArray(conns) && conns.length > 0) {
+        const c = conns[0];
+        const repoName = c.repo_full_name || c.repository || c.owner || 'Linked Repository';
+        setGithubStatus(`Connected to repo: ${repoName}`);
+      }
+    }).catch(() => {});
+  }, []);
+
   // Listen for OAuth postMessage updates from popup window
   useEffect(() => {
     const handleMessage = (event) => {
@@ -41,6 +52,14 @@ export default function SettingsView() {
           type: 'success',
           text: `Successfully authenticated & linked GitHub account @${ghUser}!`
         });
+        // Refresh git connections list
+        connectionsApi.listGit().then((conns) => {
+          if (Array.isArray(conns) && conns.length > 0) {
+            const c = conns[0];
+            const repoName = c.repo_full_name || c.repository || c.owner || 'Linked Repository';
+            setGithubStatus(`Connected to repo: ${repoName}`);
+          }
+        }).catch(() => {});
       } else if (event.data && event.data.type === 'GITHUB_OAUTH_ERROR') {
         setGhStatusMsg({
           type: 'error',
