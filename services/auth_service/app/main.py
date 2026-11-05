@@ -30,8 +30,15 @@ import bcrypt
 import httpx
 import smtplib
 from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-logger = logging.getLogger("auth-service")
+def get_dynamic_callback_uri(request: Request, default_path: str = "/api/v1/auth/github/callback") -> str:
+    forwarded_host = request.headers.get("x-forwarded-host")
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+    host = forwarded_host or request.headers.get("host")
+    proto = forwarded_proto or ("https" if request.url.scheme == "https" or (host and ("ts.net" in host or "443" in str(request.url.port))) else "http")
+    if host:
+        return f"{proto}://{host}{default_path}"
+    return f"{str(request.base_url).rstrip('/')}{default_path}"
+
 logging.basicConfig(level=logging.INFO)
 
 # Load root .env if not loaded
@@ -1145,7 +1152,7 @@ async def google_callback(
 @app.api_route("/auth/github/login", methods=["GET", "HEAD"])
 async def github_login(request: Request, redirect_uri: Optional[str] = None):
     """Initiates GitHub OAuth flow."""
-    cb = redirect_uri or GITHUB_OAUTH_REDIRECT_URI
+    cb = redirect_uri or get_dynamic_callback_uri(request, "/api/v1/auth/github/callback")
     state = generate_oauth_state("login")
     scope = "user:email read:user"
     github_url = (
@@ -1183,7 +1190,7 @@ async def github_callback(
         logger.warning(f"GitHub OAuth state validation failed. state={state}, cookies={list(request.cookies.keys())}")
         return HTMLResponse(_oauth_error_html("OAuth Security Error", "Invalid or missing OAuth state parameter. Potential CSRF attack prevented."), status_code=400)
 
-    cb = GITHUB_OAUTH_REDIRECT_URI
+    cb = get_dynamic_callback_uri(request, "/api/v1/auth/github/callback")
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             token_res = await client.post(

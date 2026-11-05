@@ -22,6 +22,7 @@ import {
   FileText,
   ShieldCheck,
   LogOut,
+  Settings,
   ChevronDown,
   ChevronRight,
   X,
@@ -171,7 +172,7 @@ export default function Sidebar({
           </div>
         </div>
 
-        {/* Bottom User Avatar Icon */}
+        {/* Bottom User Avatar Icon & Settings (No Sign Out) */}
         <div className="p-2 border-t border-slate-100 bg-slate-50/70 flex flex-col items-center gap-2">
           <button
             onClick={handleOpenAccount}
@@ -182,12 +183,14 @@ export default function Sidebar({
             {initials}
           </button>
           <button
-            onClick={logout}
-            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition shrink-0 cursor-pointer"
-            title="Sign Out"
-            aria-label="Sign Out"
+            onClick={() => navItemClick('settings', '/settings')}
+            className={`p-1.5 rounded-lg transition shrink-0 cursor-pointer ${
+              currentView === 'settings' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/60'
+            }`}
+            title="User & Credential Settings (AWS & GitHub)"
+            aria-label="User & Credential Settings"
           >
-            <LogOut className="w-3.5 h-3.5" />
+            <Settings className="w-4 h-4" />
           </button>
         </div>
       </aside>
@@ -317,6 +320,7 @@ export default function Sidebar({
           </div>
 
           {/* Expanded Bottom User Account Footer */}
+          {/* Expanded Bottom User Account Footer with Settings Anchor */}
           <div className="p-3 border-t border-slate-100 bg-slate-50/70 flex items-center justify-between gap-2">
             <div
               onClick={handleOpenAccount}
@@ -337,11 +341,16 @@ export default function Sidebar({
             </div>
 
             <button
-              onClick={logout}
-              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition shrink-0 cursor-pointer"
-              title="Sign Out"
+              onClick={() => navItemClick('settings', '/settings')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition shrink-0 cursor-pointer flex items-center gap-1.5 shadow-xs ${
+                currentView === 'settings'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+              }`}
+              title="Visit User Settings & Credential Manager"
             >
-              <LogOut className="w-4 h-4" />
+              <Settings className="w-3.5 h-3.5" />
+              <span>Settings</span>
             </button>
           </div>
         </aside>

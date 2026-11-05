@@ -37,8 +37,16 @@ from app.github_service import (
 logger = logging.getLogger("source-connection-router")
 router = APIRouter()
 
-MODULE1_BASE_URL = os.getenv("PM_SERVICE_URL", "http://localhost:8001")
+def get_dynamic_callback_uri(request: Request, default_path: str = "/api/v1/auth/github/callback") -> str:
+    forwarded_host = request.headers.get("x-forwarded-host")
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+    host = forwarded_host or request.headers.get("host")
+    proto = forwarded_proto or ("https" if request.url.scheme == "https" or (host and ("ts.net" in host or "443" in str(request.url.port))) else "http")
+    if host:
+        return f"{proto}://{host}{default_path}"
+    return f"{str(request.base_url).rstrip('/')}{default_path}"
 
+MODULE1_BASE_URL = os.getenv("PM_SERVICE_URL", "http://localhost:8001")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # MODULE 1 BRIDGE ENDPOINTS (PROJECTS & ENVIRONMENTS)
@@ -174,9 +182,7 @@ async def github_oauth_login(
     If OAuth App is configured, redirects to real GitHub authorization URL.
     If not configured, provides clear configuration guidance or switches to PAT / demo.
     """
-    cb = redirect_uri or github_config.get_redirect_uri(
-        fallback=f"{str(request.base_url).rstrip('/')}/api/v1/auth/github/callback"
-    )
+    cb = redirect_uri or get_dynamic_callback_uri(request, "/api/v1/auth/github/callback")
     state = str(uuid.uuid4())
     configured = is_oauth_configured()
     accept = request.headers.get("Accept", "")
@@ -280,7 +286,7 @@ async def github_oauth_callback(
     Handles GitHub OAuth redirect callback.
     Exchanges code for access token and seamlessly communicates with parent window or redirects.
     """
-    cb = github_config.get_redirect_uri(fallback=f"{str(request.base_url).rstrip('/')}/api/v1/auth/github/callback")
+    cb = get_dynamic_callback_uri(request, "/api/v1/auth/github/callback")
 
     if error:
         err_msg = error_description or error or "GitHub authorization was cancelled or failed."

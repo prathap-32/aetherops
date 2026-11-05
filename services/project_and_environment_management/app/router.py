@@ -136,7 +136,7 @@ async def google_oauth_login(request: Request, redirect_uri: Optional[str] = Non
     if not google_cid:
         raise HTTPException(status_code=400, detail="Google OAuth Client ID is not configured in .env.")
 
-    cb = redirect_uri or os.getenv("GOOGLE_REDIRECT_URI", f"{str(request.base_url).rstrip('/')}/api/v1/auth/google/callback")
+    cb = redirect_uri or (lambda req: (lambda h=req.headers.get("x-forwarded-host") or req.headers.get("host"), p=req.headers.get("x-forwarded-proto") or ("https" if req.url.scheme=="https" or (h and "ts.net" in h) else "http"): f"{p}://{h}/api/v1/auth/google/callback" if h else f"{str(req.base_url).rstrip('/')}/api/v1/auth/google/callback"))(request)
     state = str(uuid.uuid4())
     scope = "openid email profile"
     
