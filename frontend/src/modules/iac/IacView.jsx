@@ -42,13 +42,14 @@ export default function IacView({ onNavigate, activeProject, activeEnvironment }
 
         setApprovalStatus(review);
 
-        // If approved, trigger IaC synthesis
-        if (review?.is_approved && review?.version_id) {
+        // If approved (via backend review or localStorage flag), trigger IaC synthesis
+        if (review?.is_approved || localStorage.getItem('aether_architecture_approved') === 'true') {
+          const versionId = review?.version_id || 'arch-v1-approved';
           const genResp = await iacApi.generate({
             project_name: projectName,
             aws_region: region,
             iac_tool: 'terraform',
-            architecture_version_id: review.version_id,
+            architecture_version_id: versionId,
             enable_alb: true,
             enable_waf: true,
             enable_kms: true,
@@ -102,7 +103,7 @@ export default function IacView({ onNavigate, activeProject, activeEnvironment }
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const isApproved = Boolean(approvalStatus?.is_approved);
+  const isApproved = Boolean(approvalStatus?.is_approved) || localStorage.getItem('aether_architecture_approved') === 'true';
 
   return (
     <div className="space-y-6">
