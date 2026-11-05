@@ -83,112 +83,52 @@ export default function ArchitectureView({ onNavigate, activeProject, activeEnvi
   const hasCache = cacheCost > 0 || (cacheService && !cacheService.toLowerCase().includes('none'));
   const hasCdn = Boolean(activeSizing?.frontend_hosting || (activeSizing?.monthly_cost_estimate_usd?.frontend || 0) > 0);
 
-  const nodes = activeSizing ? [
-    {
-      id: 'ingress',
-      name: 'Client / Internet Ingress',
-      tier: 'Edge Layer',
-      type: 'Networking',
-      cidr: '0.0.0.0/0',
-      status: 'Active',
-      cost: '$0.00/mo',
-      serviceType: 'internet',
-      description: 'Public HTTPS traffic entering AWS Region via Route 53 DNS edge.',
-      sg: 'sg-public-ingress',
-      port: '443 / 80',
-    },
-    hasAlb
-      ? {
-          id: 'alb',
-          name: 'Application Load Balancer (ALB)',
-          tier: 'Public Subnet (Dual-AZ)',
-          type: 'Load Balancer',
-          cidr: '10.0.1.0/24, 10.0.2.0/24',
-          status: 'Managed',
-          cost: '$16.50/mo',
-          serviceType: 'alb',
-          description: 'Dual-AZ Application Load Balancer with SSL termination and target group routing.',
-          sg: 'sg-alb-public',
-          port: '80 -> 8080 Target Group',
-        }
-      : {
-          id: 'eip',
-          name: 'Direct Elastic IP (No ALB)',
-          tier: 'Public Subnet (10.0.1.0/24)',
-          type: 'Elastic IP',
-          cidr: '10.0.1.0/24',
-          status: 'Cost Shield',
-          cost: '$0.00/mo (Free Tier)',
-          serviceType: 'elastic_ip',
-          description: 'Direct Elastic IP attached to compute instance. Eliminates load balancer overhead for dev workloads.',
-          sg: 'sg-ec2-direct',
-          port: 'Inbound 80/443',
-        },
-    {
-      id: 'compute',
-      name: computeService,
-      tier: hasAlb ? 'Private Subnet' : 'Public Subnet (AZ-a)',
-      type: 'Compute Fleet',
-      cidr: hasAlb ? '10.0.10.0/24' : '10.0.1.0/24',
-      status: 'Sized',
-      cost: `$${computeCost.toFixed(2)}/mo`,
-      serviceType: computeService.toLowerCase().includes('ec2') ? 'ec2' : 'ecs',
-      description: `${computeService} sized at ${computeTier}. Runs application container with automated process recovery.`,
-      sg: 'sg-app-compute',
-      port: 'Container Port 80/8080',
-      specs: `${activeSizing?.compute?.task_cpu || '2 vCPU'} / ${activeSizing?.compute?.task_memory || '1 GB RAM'}`,
-    },
-  ] : [];
+  const [nodes, setNodes] = useState([]);
+  const [addModuleModalOpen, setAddModuleModalOpen] = useState(false);
+  const [newModuleName, setNewModuleName] = useState('');
+  const [newModuleTier, setNewModuleTier] = useState('Public Subnet');
+  const [newModuleType, setNewModuleType] = useState('Compute');
+  const [newModuleCidr, setNewModuleCidr] = useState('10.0.2.0/24');
+  const [newModulePort, setNewModulePort] = useState('80');
+  const [newModuleCost, setNewModuleCost] = useState('$5.00/mo');
+  const [newModuleDesc, setNewModuleDesc] = useState('');
 
-  if (activeSizing && hasDb) {
-    nodes.push({
-      id: 'database',
-      name: dbService,
-      tier: 'Isolated Database Subnet (10.0.50.0/24)',
-      type: 'Database Layer',
-      cidr: '10.0.50.0/24, 10.0.60.0/24',
-      status: 'Encrypted',
-      cost: `$${dbCost.toFixed(2)}/mo`,
-      serviceType: 'rds',
-      description: `Managed ${dbService} with automated snapshot backups and KMS encryption at rest.`,
-      sg: 'sg-rds-postgres',
-      port: 'PostgreSQL:5432',
-    });
-  }
+  const handleAddModule = (e) => {
+    e.preventDefault();
+    if (!newModuleName.trim()) return;
+    const newId = `mod-${Date.now()}`;
+    const stype = newModuleType.toLowerCase().includes('database') ? 'rds' : newModuleType.toLowerCase().includes('load') ? 'alb' : newModuleType.toLowerCase().includes('cache') ? 'elasticache' : 'ec2';
+    const n = {
+      id: newId,
+      name: newModuleName.trim(),
+      tier: newModuleTier,
+      type: newModuleType,
+      cidr: newModuleCidr,
+      status: 'Manual',
+      cost: newModuleCost,
+      serviceType: stype,
+      description: newModuleDesc || 'Manually created architecture module.',
+      sg: `sg-${newId}`,
+      port: newModulePort,
+    };
+    setNodes([...nodes, n]);
+    setSelectedNodeId(newId);
+    setNewModuleName('');
+    setNewModuleDesc('');
+    setAddModuleModalOpen(false);
+  };
 
-  if (activeSizing && hasCache) {
-    nodes.push({
-      id: 'cache',
-      name: cacheService,
-      tier: 'Private Cache Subnet (10.0.70.0/24)',
-      type: 'In-Memory Cache',
-      cidr: '10.0.70.0/24',
-      status: 'Active',
-      cost: `$${cacheCost.toFixed(2)}/mo`,
-      serviceType: 'elasticache',
-      description: `${cacheService} session store and low-latency cache cluster.`,
-      sg: 'sg-redis-cache',
-      port: 'Redis:6379',
-    });
-  }
-
-  if (activeSizing && hasCdn) {
-    nodes.push({
-      id: 'cdn',
-      name: 'Amazon CloudFront + S3',
-      tier: 'Edge Distribution',
-      type: 'CDN Storage',
-      cidr: 'Edge Global',
-      status: 'Active',
-      cost: '$1.80/mo',
-      serviceType: 'cloudfront',
-      description: 'Global CloudFront CDN edge points caching static HTML/CSS/JS assets from Amazon S3 origin bucket.',
-      sg: 'AWS Managed ACM',
-      port: 'HTTPS:443 Edge',
-    });
-  }
+  const handleDeleteNode = (id) => {
+    const updated = nodes.filter(n => n.id !== id);
+    setNodes(updated);
+    if (selectedNodeId === id && updated.length > 0) {
+      setSelectedNodeId(updated[0].id);
+    }
+  };
 
   const currentNode = nodes.find((n) => n.id === selectedNodeId) || nodes[0];
+
+
 
   // Transfer output to Architecture Designer Canvas
   const handleOpenInDesigner = () => {
@@ -483,91 +423,133 @@ resource "aws_instance" "compute" {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Visual Architecture Canvas (Left 2 cols) */}
           <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-xs p-6 space-y-6">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Globe className="w-4 h-4 text-blue-600" />
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  AWS VPC Topology (10.0.0.0/16 — {region})
-                </span>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-blue-600" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    AWS VPC Topology ({nodes.length} Modules)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAddModuleModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold rounded-lg transition shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Add AWS Module Manually</span>
+                </button>
               </div>
 
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                   Tier: {envTier}
                 </span>
-                <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                  {hasAlb ? 'Multi-AZ ALB' : 'Direct Elastic IP ($0/mo)'}
-                </span>
               </div>
             </div>
 
             {/* Interactive Topology Node Cards */}
             <div className="space-y-3.5">
-              {nodes.map((node, index) => {
-                const isSelected = selectedNodeId === node.id;
-                return (
-                  <div key={node.id} className="relative">
-                    {/* Visual Connection Connector */}
-                    {index > 0 && (
-                      <div className="w-0.5 h-3.5 bg-blue-300 mx-auto my-0.5 relative">
-                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500 absolute -bottom-1 left-1/2 -translate-x-1/2" />
-                      </div>
-                    )}
+              {nodes.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-300 rounded-xl space-y-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+                    <Palette className="w-5 h-5" />
+                  </div>
+                  <div className="text-xs font-bold text-slate-800">No architecture modules added yet</div>
+                  <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                    Cloud Architecture Studio is completely clean. Click <strong>"+ Add AWS Module Manually"</strong> above to build your custom VPC topology module by module.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setAddModuleModalOpen(true)}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add First Module</span>
+                  </button>
+                </div>
+              ) : (
+                nodes.map((node, index) => {
+                  const isSelected = selectedNodeId === node.id;
+                  return (
+                    <div key={node.id} className="relative">
+                      {/* Visual Connection Connector */}
+                      {index > 0 && (
+                        <div className="w-0.5 h-3.5 bg-blue-300 mx-auto my-0.5 relative">
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500 absolute -bottom-1 left-1/2 -translate-x-1/2" />
+                        </div>
+                      )}
 
-                    <div
-                      onClick={() => setSelectedNodeId(node.id)}
-                      className={`p-4 rounded-xl border transition cursor-pointer flex items-center justify-between ${
-                        isSelected
-                          ? 'border-amber-500 bg-amber-50/30 ring-2 ring-amber-400/20 shadow-xs'
-                          : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/60'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3.5">
-                        <div
-                          className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                            isSelected
-                              ? 'bg-amber-600 text-white'
-                              : 'bg-slate-100 border border-slate-200 text-slate-600'
-                          }`}
-                        >
-                          {node.serviceType === 'internet' && <Globe className="w-5 h-5" />}
-                          {node.serviceType === 'alb' && <Layers className="w-5 h-5" />}
-                          {node.serviceType === 'elastic_ip' && <Zap className="w-5 h-5" />}
-                          {node.serviceType === 'ec2' && <Server className="w-5 h-5" />}
-                          {node.serviceType === 'ecs' && <Server className="w-5 h-5" />}
-                          {node.serviceType === 'rds' && <Database className="w-5 h-5" />}
-                          {node.serviceType === 'elasticache' && <Cpu className="w-5 h-5" />}
-                          {node.serviceType === 'cloudfront' && <Layers className="w-5 h-5" />}
+                      <div
+                        onClick={() => setSelectedNodeId(node.id)}
+                        className={`p-4 rounded-xl border transition cursor-pointer flex items-center justify-between ${
+                          isSelected
+                            ? 'border-amber-500 bg-amber-50/30 ring-2 ring-amber-400/20 shadow-xs'
+                            : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/60'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3.5">
+                          <div
+                            className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                              isSelected
+                                ? 'bg-amber-600 text-white'
+                                : 'bg-slate-100 border border-slate-200 text-slate-600'
+                            }`}
+                          >
+                            {node.serviceType === 'internet' && <Globe className="w-5 h-5" />}
+                            {node.serviceType === 'alb' && <Layers className="w-5 h-5" />}
+                            {node.serviceType === 'elastic_ip' && <Zap className="w-5 h-5" />}
+                            {node.serviceType === 'ec2' && <Server className="w-5 h-5" />}
+                            {node.serviceType === 'ecs' && <Server className="w-5 h-5" />}
+                            {node.serviceType === 'rds' && <Database className="w-5 h-5" />}
+                            {node.serviceType === 'elasticache' && <Cpu className="w-5 h-5" />}
+                            {node.serviceType === 'cloudfront' && <Layers className="w-5 h-5" />}
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-semibold text-slate-900">{node.name}</h4>
+                              <span className="text-[10px] font-mono text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                                {node.port}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5">{node.tier}</p>
+                          </div>
                         </div>
 
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h4 className="text-sm font-semibold text-slate-900">{node.name}</h4>
-                            <span className="text-[10px] font-mono text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
-                              {node.port}
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <span className="text-xs font-bold text-slate-900 block font-mono">{node.cost}</span>
+                            <span
+                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block mt-0.5 ${
+                                isSelected
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              {node.status}
                             </span>
                           </div>
-                          <p className="text-xs text-slate-500 mt-0.5">{node.tier}</p>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteNode(node.id);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                            title="Delete module"
+                          >
+                            ✕
+                          </button>
                         </div>
                       </div>
-
-                      <div className="text-right">
-                        <span className="text-xs font-bold text-slate-900 block font-mono">{node.cost}</span>
-                        <span
-                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block mt-0.5 ${
-                            isSelected
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-slate-100 text-slate-600'
-                          }`}
-                        >
-                          {node.status}
-                        </span>
-                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
+
+
 
             {/* Two-Way Decision Flow Control Panel (Topology OK -> Approval Gate & AI HCL Synthesis | Needs Changes -> Architecture Designer) */}
             <div className="p-5 bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-2xl shadow-md space-y-4">
@@ -920,6 +902,130 @@ resource "aws_instance" "compute" {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Add AWS Module Manually Modal */}
+      {addModuleModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in select-none">
+          <form onSubmit={handleAddModule} className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden space-y-4 p-6">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                  <Plus className="w-4 h-4 text-blue-600" />
+                </div>
+                <h3 className="text-base font-bold text-slate-900">Add AWS Module Manually</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAddModuleModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 text-xs font-semibold cursor-pointer p-1.5 rounded-lg hover:bg-slate-100"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Module Name <span className="text-rose-600">*</span></label>
+                <input
+                  type="text"
+                  placeholder="e.g. App-EC2-Worker, RDS-Postgres, Redis-Cache"
+                  value={newModuleName}
+                  onChange={(e) => setNewModuleName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Subnet / Tier</label>
+                  <select
+                    value={newModuleTier}
+                    onChange={(e) => setNewModuleTier(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
+                  >
+                    <option value="Public Subnet">Public Subnet (10.0.1.0/24)</option>
+                    <option value="Private Subnet">Private Subnet (10.0.10.0/24)</option>
+                    <option value="Isolated Database Subnet">Isolated Database Subnet (10.0.50.0/24)</option>
+                    <option value="Edge Layer">Edge Layer (0.0.0.0/0)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Component Type</label>
+                  <select
+                    value={newModuleType}
+                    onChange={(e) => setNewModuleType(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
+                  >
+                    <option value="Compute Fleet">Compute Fleet (EC2/ECS)</option>
+                    <option value="Database Layer">Database (RDS/Aurora)</option>
+                    <option value="Load Balancer">Load Balancer (ALB)</option>
+                    <option value="In-Memory Cache">Cache (ElastiCache)</option>
+                    <option value="Networking">Networking (VPC/IGW)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">CIDR Block</label>
+                  <input
+                    type="text"
+                    value={newModuleCidr}
+                    onChange={(e) => setNewModuleCidr(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-mono text-[11px]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Port / Ingress</label>
+                  <input
+                    type="text"
+                    value={newModulePort}
+                    onChange={(e) => setNewModulePort(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-mono text-[11px]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Monthly Cost</label>
+                  <input
+                    type="text"
+                    value={newModuleCost}
+                    onChange={(e) => setNewModuleCost(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-mono text-[11px]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Description &amp; Purpose</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Runs primary microservice worker with automated recovery."
+                  value={newModuleDesc}
+                  onChange={(e) => setNewModuleDesc(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setAddModuleModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition cursor-pointer shadow-xs"
+              >
+                + Add Module to Topology
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>
