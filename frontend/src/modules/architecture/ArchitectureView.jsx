@@ -68,7 +68,7 @@ export default function ArchitectureView({ onNavigate, activeProject, activeEnvi
   const [isValidating, setIsValidating] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
   const [hclModalOpen, setHclModalOpen] = useState(false);
-
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   // Derive dynamic visual nodes from activeSizing
   const computeService = activeSizing?.compute?.service || 'Amazon EC2';
   const computeTier = activeSizing?.compute?.instance_class || activeSizing?.compute?.task_cpu || 't4g.micro';
@@ -370,13 +370,20 @@ resource "aws_instance" "compute" {
             )}
 
             <button
+              onClick={() => setApprovalModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-xs cursor-pointer animate-pulse"
+            >
+              <ShieldCheck className="w-4 h-4 text-white" />
+              <span>Review &amp; Approve Architecture</span>
+            </button>
+
+            <button
               onClick={() => setHclModalOpen(true)}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition shadow-xs cursor-pointer"
             >
               <Download className="w-4 h-4 text-slate-500" />
               Export HCL
             </button>
-
             {onNavigate && (
               <button
                 onClick={() => onNavigate('iac', '/terraform')}
@@ -768,6 +775,94 @@ resource "aws_instance" "compute" {
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg"
               >
                 Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Architecture Review & Approval Modal */}
+      {approvalModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in select-none">
+          <div className="bg-white rounded-2xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden space-y-6 p-6">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                  <ShieldCheck className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Architecture Review &amp; Approval Gate</h3>
+                  <p className="text-xs text-slate-500">Evaluate synthesized VPC topology and dynamic sizing for deployment.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setApprovalModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 text-xs font-semibold cursor-pointer p-1.5 rounded-lg hover:bg-slate-100"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            {/* Dynamic Module Values Card */}
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3 font-mono text-xs">
+              <div className="flex justify-between items-center pb-2 border-b border-slate-200/70">
+                <span className="text-slate-500">Target Project:</span>
+                <span className="font-bold text-slate-900">{activeProject?.name || activeProject?.id || 'aether-workload'}</span>
+              </div>
+              <div className="flex justify-between items-center pb-2 border-b border-slate-200/70">
+                <span className="text-slate-500">Environment Tier:</span>
+                <span className="font-bold text-blue-700 uppercase">{envTier}</span>
+              </div>
+              <div className="flex justify-between items-center pb-2 border-b border-slate-200/70">
+                <span className="text-slate-500">Target AWS Region:</span>
+                <span className="font-bold text-slate-900">{region}</span>
+              </div>
+              <div className="flex justify-between items-center pb-2 border-b border-slate-200/70">
+                <span className="text-slate-500">Compute Runtime:</span>
+                <span className="font-bold text-slate-900">{computeService} ({computeTier})</span>
+              </div>
+              <div className="flex justify-between items-center pb-2 border-b border-slate-200/70">
+                <span className="text-slate-500">Database Engine:</span>
+                <span className="font-bold text-slate-900">{dbService}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Estimated Monthly Cost:</span>
+                <span className="font-bold text-emerald-600">${totalCost.toFixed(2)}/mo</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                Is the synthesized architecture topology approved?
+              </label>
+              <p className="text-[11px] text-slate-500">
+                Select <strong>Architecture Is OK</strong> to unlock Terraform HCL code synthesis, or <strong>Architecture Needs Changes</strong> to edit the layout in the Designer.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setApprovalModalOpen(false);
+                  if (onNavigate) onNavigate('iac', '/terraform', { sizingOutput: activeSizing });
+                }}
+                className="p-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Architecture Is OK ➔</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setApprovalModalOpen(false);
+                  if (onNavigate) onNavigate('architecture_designer', '/architecture-designer', { sizingOutput: activeSizing });
+                }}
+                className="p-3.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+              >
+                <Network className="w-4 h-4 text-amber-400" />
+                <span>Architecture Needs Changes</span>
               </button>
             </div>
           </div>
