@@ -159,7 +159,10 @@ async def execute_deployment(req: DeploymentExecuteRequest, request: Request):
         execution_record = run_deployment_execution(
             plan_id=req.plan_id,
             user_identity=user_identity,
-            requested_mode=req.execution_mode
+            requested_mode=req.execution_mode,
+            aws_access_key_id=req.aws_access_key_id,
+            aws_secret_access_key=req.aws_secret_access_key,
+            aws_region=req.aws_region
         )
         return execution_record
     except ValueError as ve:

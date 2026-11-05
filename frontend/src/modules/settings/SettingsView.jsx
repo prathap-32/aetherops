@@ -103,6 +103,10 @@ export default function SettingsView() {
 
       const res = await connectionsApi.validateAws(payload);
       if (res && (res.status === 'success' || res.account_id)) {
+        localStorage.setItem('aether_aws_creds', JSON.stringify({
+          accessKeyId: accessKeyId.trim(),
+          secretAccessKey: secretAccessKey.trim()
+        }));
         setAwsStatus({
           type: 'success',
           text: `AWS STS GetCallerIdentity verified successfully! Account ID: ${res.account_id}`,

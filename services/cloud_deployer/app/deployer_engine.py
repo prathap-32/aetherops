@@ -455,7 +455,10 @@ def approve_deployment_plan(
 def run_deployment_execution(
     plan_id: str,
     user_identity: Optional[Dict[str, Any]] = None,
-    requested_mode: Optional[str] = None
+    requested_mode: Optional[str] = None,
+    aws_access_key_id: Optional[str] = None,
+    aws_secret_access_key: Optional[str] = None,
+    aws_region: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Executes state-locked deployment.
@@ -491,11 +494,23 @@ def run_deployment_execution(
     _ACTIVE_LOCKS[proj] = deployment_id
 
     try:
+        if aws_access_key_id:
+            os.environ["AWS_ACCESS_KEY_ID"] = aws_access_key_id.strip()
+        if aws_secret_access_key:
+            os.environ["AWS_SECRET_ACCESS_KEY"] = aws_secret_access_key.strip()
+        if aws_region:
+            os.environ["AWS_DEFAULT_REGION"] = aws_region.strip()
+
         # Check if real AWS credentials exist
-        aws_key = os.getenv("AWS_ACCESS_KEY_ID")
-        is_real_aws = bool(aws_key and not aws_key.startswith("test") and requested_mode == "REAL")
+        aws_key = (aws_access_key_id and aws_access_key_id.strip()) or os.getenv("AWS_ACCESS_KEY_ID")
+        is_real_aws = bool(
+            aws_key 
+            and not aws_key.startswith("test") 
+            and not "EXAMPLE" in aws_key 
+            and requested_mode == "REAL"
+        )
         mode = "REAL_AWS" if is_real_aws else "TEST_SANDBOX"
-        notice = None if is_real_aws else "Executed in local isolated test sandbox runner."
+        notice = None if is_real_aws else "Executed in local isolated test sandbox runner (supply real AWS access keys in Settings to deploy to live AWS)."
 
         now = time.time()
         logs: List[str] = []

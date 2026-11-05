@@ -91,9 +91,18 @@ export default function ApprovalExecutionView({ onNavigate, activeProject, activ
     setError(null);
     setLogs(['[00:00:00] Initializing state-locked deployment execution runner...']);
     try {
+      let awsCreds = {};
+      try {
+        const saved = localStorage.getItem('aether_aws_creds');
+        if (saved) awsCreds = JSON.parse(saved);
+      } catch (e) {}
+
       const res = await deploymentsApi.execute({
         plan_id: plan.plan_id,
         execution_mode: executionMode,
+        aws_access_key_id: awsCreds.accessKeyId || '',
+        aws_secret_access_key: awsCreds.secretAccessKey || '',
+        aws_region: plan.target_region || 'us-east-1',
       });
       setExecutionResult(res);
 

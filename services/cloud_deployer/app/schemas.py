@@ -114,6 +114,9 @@ class DeploymentExecuteRequest(BaseModel):
     plan_id: str
     execution_mode: Optional[str] = None  # REAL or TEST_SANDBOX
     dry_run: bool = False
+    aws_access_key_id: Optional[str] = None
+    aws_secret_access_key: Optional[str] = None
+    aws_region: Optional[str] = None
 
 class DeployedResource(BaseModel):
     resource_id: str
