@@ -176,18 +176,28 @@ async def github_oauth_login(
     request: Request,
     redirect_uri: Optional[str] = None,
     popup: Optional[bool] = False,
+    access_level: Optional[str] = "rw",
+    repo_scope: Optional[str] = "all",
+    visibility: Optional[str] = "all",
 ):
     """
-    Initiates GitHub OAuth flow.
-    If OAuth App is configured, redirects to real GitHub authorization URL.
-    If not configured, provides clear configuration guidance or switches to PAT / demo.
+    Initiates GitHub OAuth flow with granular access level (Read/RW) and scope (All/Selected/Public).
     """
     cb = redirect_uri or get_dynamic_callback_uri(request, "/api/v1/auth/github/callback")
     state = str(uuid.uuid4())
+
+    if access_level == "read" and visibility == "public":
+        scope = "public_repo,read:user,user:email"
+    elif access_level == "read":
+        scope = "repo:status,read:user,user:email"
+    elif visibility == "public":
+        scope = "public_repo,read:user,user:email"
+    else:
+        scope = "repo,read:user,user:email"
+
     configured = is_oauth_configured()
     accept = request.headers.get("Accept", "")
-    url = get_oauth_authorize_url(state=state, redirect_uri=cb)
-
+    url = get_oauth_authorize_url(state=state, redirect_uri=cb, scope=scope)
     if not configured:
         if "text/html" in accept:
             # Render a helpful in-browser setup page

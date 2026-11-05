@@ -151,15 +151,14 @@ def is_oauth_configured() -> bool:
     return github_config.is_configured()
 
 
-def get_oauth_authorize_url(state: str, redirect_uri: Optional[str] = None) -> str:
+def get_oauth_authorize_url(state: str, redirect_uri: Optional[str] = None, scope: str = "repo,read:user,user:email") -> str:
     """
-    Build the GitHub OAuth authorize redirect URL.
-    Returns URL using real client_id if configured, or fallback mock client ID if not configured.
+    Build the GitHub OAuth authorize redirect URL with granular scope permissions.
     """
     cid = github_config.get_client_id() or "mock-github-client-id"
     r_uri = redirect_uri or github_config.get_redirect_uri()
-    scope = "repo,read:user,user:email"
     return f"https://github.com/login/oauth/authorize?client_id={cid}&redirect_uri={r_uri}&scope={scope}&state={state}"
+
 
 
 async def exchange_oauth_code(code: str, redirect_uri: Optional[str] = None) -> Dict[str, Any]:
