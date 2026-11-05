@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Layers,
   Shield,
+  ShieldCheck,
   Server,
   Database,
   Globe,
