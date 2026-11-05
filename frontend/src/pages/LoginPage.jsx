@@ -444,16 +444,22 @@ export default function LoginPage({ onLoginSuccess }) {
           onContextMenu={(e) => e.preventDefault()}
         >
           <div className="absolute -inset-4 bg-gradient-to-r from-blue-600/15 via-cyan-400/20 to-indigo-600/15 rounded-3xl blur-xl" />
-          <img
-            src="/static/logo/aetherops_transparent.png"
-            alt=""
-            aria-hidden="true"
-            role="presentation"
-            draggable={false}
-            onContextMenu={(e) => e.preventDefault()}
-            className="relative h-12 sm:h-14 w-auto max-w-[280px] object-contain select-none pointer-events-none drop-shadow-sm"
-            style={{ WebkitUserDrag: 'none', userSelect: 'none' }}
-          />
+          <picture className="relative inline-flex items-center justify-center select-none pointer-events-none">
+            <source srcSet="/static/logo/aetherops_transparent.webp" type="image/webp" />
+            <img
+              src="/static/logo/aetherops_transparent.png"
+              alt=""
+              aria-hidden="true"
+              role="presentation"
+              draggable={false}
+              onContextMenu={(e) => e.preventDefault()}
+              className="relative h-12 sm:h-14 w-auto max-w-[280px] object-contain select-none pointer-events-none drop-shadow-sm"
+              style={{ WebkitUserDrag: 'none', userSelect: 'none' }}
+              width="280"
+              height="71"
+              loading="eager"
+            />
+          </picture>
         </div>
       </div>
 

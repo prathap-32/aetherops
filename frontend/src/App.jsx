@@ -1,9 +1,10 @@
 // frontend/src/App.jsx
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense, lazy } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
 import { Shield, RefreshCw } from 'lucide-react';
+
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -38,10 +39,25 @@ function AppContent() {
     return <LoginPage />;
   }
 
-  // Authenticated: Render unified dashboard
-  return <DashboardPage />;
+  // Authenticated: Render unified dashboard with lazy code splitting
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-800">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 flex items-center justify-center shadow-lg shadow-blue-500/25 mb-4 animate-pulse">
+            <Shield className="w-6 h-6 text-white" />
+          </div>
+          <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
+            <RefreshCw className="w-4 h-4 animate-spin text-cyan-600" />
+            <span>Loading workspace dashboard...</span>
+          </div>
+        </div>
+      }
+    >
+      <DashboardPage />
+    </Suspense>
+  );
 }
-
 export default function App() {
   return (
     <AuthProvider>
