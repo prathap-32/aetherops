@@ -226,12 +226,15 @@ export default function Sidebar({
                 onClick={() => navItemClick('dashboard', '/')}
                 className="cursor-pointer group flex items-center gap-2"
               >
-                <picture>
+                <picture className="select-none pointer-events-none" onContextMenu={(e) => e.preventDefault()}>
                   <source srcSet="/static/logo/aetherops_transparent.webp" type="image/webp" />
                   <img
                     src="/static/logo/aetherops_transparent.png"
                     alt="AetherOps"
-                    className="h-8 max-w-[170px] object-contain object-left transition-opacity group-hover:opacity-90"
+                    className="h-8 max-w-[170px] object-contain object-left transition-opacity group-hover:opacity-90 select-none pointer-events-none"
+                    draggable={false}
+                    onContextMenu={(e) => e.preventDefault()}
+                    style={{ WebkitUserDrag: 'none', userSelect: 'none' }}
                     width="170"
                     height="43"
                   />
