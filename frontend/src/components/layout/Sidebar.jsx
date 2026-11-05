@@ -31,28 +31,15 @@ import {
 
 const NAV_GROUPS = [
   {
-    name: 'CORE WORKFLOW',
+    name: 'CORE DEVOPS PIPELINE',
     items: [
-      { id: 'dashboard', path: '/', label: 'Overview', icon: LayoutDashboard },
+      { id: 'dashboard', path: '/', label: 'Overview Dashboard', icon: LayoutDashboard },
       { id: 'source_cloud', path: '/source-connection', label: '1. Connect AWS & Git', icon: GitBranch },
-      { id: 'architecture_designer', path: '/architecture-designer', label: '2. Cloud Architecture', icon: Network },
-      { id: 'iac', path: '/terraform', label: '3. Terraform Code', icon: Code2 },
-      { id: 'execution', path: '/execution', label: '4. Plan & Approval', icon: CheckSquare },
-      { id: 'deployments', path: '/deployment', label: '5. Deploy Infrastructure', icon: Rocket },
-      { id: 'cicd', path: '/cicd', label: '6. CI/CD Pipelines', icon: GitFork },
-      { id: 'monitoring', path: '/monitoring', label: '7. Live Monitoring', icon: Activity },
-      { id: 'optimization', path: '/optimization', label: '8. FinOps Optimizer', icon: DollarSign },
-    ],
-  },
-  {
-    name: 'MANAGEMENT & WORKSPACES',
-    items: [
-      { id: 'projects', path: '/projects', label: 'Projects & Workspaces', icon: FolderKanban },
-      { id: 'environments', path: '/environments', label: 'Environments', icon: Boxes },
-      { id: 'security', path: '/security', label: 'Security & Compliance', icon: ShieldCheck },
-      { id: 'audit', path: '/audit', label: 'Audit Log', icon: History },
-      { id: 'docs', path: '/documentation', label: 'Documentation', icon: FileText },
-      { id: 'settings', path: '/settings', label: 'Account Settings', icon: Settings },
+      { id: 'repo_analyzer', path: '/source-analysis', label: '2. Analyze Repo & Tech Stack', icon: FileCode2 },
+      { id: 'architecture_studio', path: '/architecture-studio', label: '3. AI AWS Architecture', icon: Network },
+      { id: 'iac', path: '/terraform', label: '4. Terraform HCL Synthesis', icon: Code2 },
+      { id: 'deployments', path: '/deployment', label: '5. AI Dry-Run & Approval Gate', icon: Rocket },
+      { id: 'settings', path: '/settings', label: '6. User & Credential Settings', icon: Settings },
     ],
   },
 ];
