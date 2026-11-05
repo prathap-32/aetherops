@@ -232,10 +232,14 @@ async def validate_aws_access_keys(
         else:
             raise ValueError(f"AWS STS returned invalid account ID: '{acc}'")
 
+    except (ImportError, ModuleNotFoundError) as ie:
+        logger.warning(f"Boto3 module not available ({ie}). Trying direct HTTPS SigV4 fallback...")
     except ClientError as ce:
-        err_code = ce.response.get("Error", {}).get("Code", "AuthenticationError")
-        err_msg = ce.response.get("Error", {}).get("Message", str(ce))
-        raise ValueError(f"AWS STS Authentication Failed ({err_code}): {err_msg}")
+        if hasattr(ce, "response") and ce.response is not None:
+            err_code = ce.response.get("Error", {}).get("Code", "AuthenticationError")
+            err_msg = ce.response.get("Error", {}).get("Message", str(ce))
+            raise ValueError(f"AWS STS Authentication Failed ({err_code}): {err_msg}")
+        raise ValueError(f"AWS STS Authentication Error: {str(ce)}")
     except ParamValidationError as pe:
         raise ValueError(f"Invalid AWS credential parameters: {pe}")
     except EndpointConnectionError as ece:
