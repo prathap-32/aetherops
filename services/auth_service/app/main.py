@@ -40,6 +40,7 @@ def get_dynamic_callback_uri(request: Request, default_path: str = "/api/v1/auth
     return f"{str(request.base_url).rstrip('/')}{default_path}"
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("auth-service")
 
 # Load root .env if not loaded
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
