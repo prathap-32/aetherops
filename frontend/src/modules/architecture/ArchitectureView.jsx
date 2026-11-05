@@ -243,19 +243,7 @@ export default function ArchitectureView({ onNavigate, activeProject, activeEnvi
       localStorage.setItem('aether_last_validation', JSON.stringify(valRes));
     } catch (e) {}
 
-    // Userflow: "then validate architecture goes to architecture designer . to make a neat and clean user flow."
-    if (onNavigate) {
-      setTimeout(() => {
-        onNavigate('architecture_designer', '/architecture-designer', {
-          sizingOutput: activeSizing,
-          validationResult: valRes,
-          fromStudio: true,
-          autoValidated: true,
-          activeProject,
-          activeEnvironment,
-        });
-      }, 400);
-    }
+    // Well-Architected Check completed. User retains manual control of next action.
   };
 
   // Generate Terraform HCL Preview
