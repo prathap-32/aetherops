@@ -561,23 +561,30 @@ resource "aws_instance" "compute" {
               })}
             </div>
 
-            {/* Two-Way Decision Flow Control Panel (Topology OK -> HCL Code Generator | Needs Changes -> Architecture Designer) */}
+            {/* Two-Way Decision Flow Control Panel (Topology OK -> Approval Gate & AI HCL Synthesis | Needs Changes -> Architecture Designer) */}
             <div className="p-5 bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-2xl shadow-md space-y-4">
               <div className="flex items-center gap-2.5">
                 <Sparkles className="w-5 h-5 text-amber-400" />
-                <h3 className="text-sm font-bold tracking-tight">VPC Topology Review &amp; Next Action Flow</h3>
+                <h3 className="text-sm font-bold tracking-tight">VPC Topology Review &amp; Approval Gate Flow</h3>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Review your VPC topology and sizing. Choose your next step: proceed directly to generate Terraform HCL code if approved, or edit the existing design in the Architecture Designer if modifications are needed.
+                Review your VPC topology and sizing. If approved, proceed to the Pre-Deployment Approval Gate where status is verified and AI synthesizes Terraform HCL code. If modifications are needed, edit your design in the Architecture Designer first.
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                {/* Path 1: Topology OK -> Terraform HCL Code Generator */}
+                {/* Path 1: Topology OK -> Approval Gate & AI HCL Synthesis */}
                 <button
                   type="button"
                   onClick={() => {
                     const nav = onNavigate || (() => {});
-                    nav('iac', '/terraform');
+                    nav('execution', '/execution', {
+                      sizingOutput: activeSizing,
+                      fromStudio: true,
+                      status: 'ACCESS_GRANTED',
+                      autoSynthesizeAiHcl: true,
+                      activeProject,
+                      activeEnvironment,
+                    });
                   }}
                   className="p-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-between shadow-sm cursor-pointer group"
                 >
@@ -585,7 +592,7 @@ resource "aws_instance" "compute" {
                     <span className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center text-xs">✓</span>
                     <div className="text-left">
                       <div>1. Topology Is OK</div>
-                      <div className="text-[10px] text-emerald-100 font-normal">Generate Terraform HCL Code</div>
+                      <div className="text-[10px] text-emerald-100 font-normal">Approval Gate &amp; AI HCL Synthesis</div>
                     </div>
                   </div>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition" />
@@ -596,7 +603,12 @@ resource "aws_instance" "compute" {
                   type="button"
                   onClick={() => {
                     const nav = onNavigate || (() => {});
-                    nav('architecture_designer', '/architecture-designer');
+                    nav('architecture_designer', '/architecture-designer', {
+                      sizingOutput: activeSizing,
+                      fromStudio: true,
+                      activeProject,
+                      activeEnvironment,
+                    });
                   }}
                   className="p-3.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-between border border-slate-700 shadow-sm cursor-pointer group"
                 >

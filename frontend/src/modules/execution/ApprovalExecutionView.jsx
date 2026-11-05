@@ -227,30 +227,55 @@ export default function ApprovalExecutionView({ onNavigate, activeProject, activ
           )}
 
           {/* Action Step 2: Execution Trigger */}
-          {isApproved && !isComplete && (
-            <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="text-xs text-emerald-800 font-medium">
-                  Plan officially approved by {approvedReceipt.approved_by || 'platform engineer'}.
+          {/* Action Step 2: Once Approved, Generate AI Terraform HCL Code & Execute */}
+          {isApproved && (
+            <div className="pt-4 border-t border-slate-100 space-y-4">
+              <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <div>
+                    <div className="text-xs font-bold text-emerald-900">Architecture Review Passed &amp; Approval Granted</div>
+                    <div className="text-[11px] text-emerald-700">Access status verified. AI is ready to synthesize and generate Terraform HCL code for your topology.</div>
+                  </div>
                 </div>
-                <select
-                  value={executionMode}
-                  onChange={(e) => setExecutionMode(e.target.value)}
-                  className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 font-semibold"
+                <button
+                  onClick={() => {
+                    const nav = onNavigate || (() => {});
+                    nav('iac', '/terraform', { fromApproval: true, sizingOutput: activeSizing });
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition flex items-center gap-2 cursor-pointer shadow-xs shrink-0"
                 >
-                  <option value="TEST_SANDBOX">Test Sandbox Runner (Isolated)</option>
-                  <option value="REAL">Real AWS Cloud Apply</option>
-                </select>
+                  <span>Generate AI Terraform HCL Code</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
               </div>
 
-              <button
-                onClick={handleExecute}
-                disabled={executing}
-                className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition flex items-center gap-2 cursor-pointer shadow-xs disabled:opacity-50 shrink-0"
-              >
-                {executing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-                <span>{executing ? 'Executing Terraform Apply...' : 'Execute Deployment Plan'}</span>
-              </button>
+              {!isComplete && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
+                  <div className="flex items-center gap-3">
+                    <div className="text-xs text-slate-700 font-medium">
+                      Plan approved by {approvedReceipt.approved_by || 'platform engineer'}.
+                    </div>
+                    <select
+                      value={executionMode}
+                      onChange={(e) => setExecutionMode(e.target.value)}
+                      className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 font-semibold"
+                    >
+                      <option value="TEST_SANDBOX">Test Sandbox Runner (Isolated)</option>
+                      <option value="REAL">Real AWS Cloud Apply</option>
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={handleExecute}
+                    disabled={executing}
+                    className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition flex items-center gap-2 cursor-pointer shadow-xs disabled:opacity-50 shrink-0"
+                  >
+                    {executing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                    <span>{executing ? 'Executing Terraform Apply...' : 'Execute Deployment Plan'}</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
