@@ -5,8 +5,18 @@ import hashlib
 import datetime
 import xml.etree.ElementTree as ET
 import logging
-from typing import Optional, Dict, Any
 import httpx
+from typing import Optional, Dict, Any
+try:
+    import boto3
+    from botocore.config import Config
+    from botocore.exceptions import ClientError, EndpointConnectionError, ParamValidationError
+except ImportError:
+    boto3 = None
+    Config = None
+    ClientError = Exception
+    EndpointConnectionError = Exception
+    ParamValidationError = Exception
 
 logger = logging.getLogger("source-cloud-aws-service")
 
@@ -184,10 +194,8 @@ async def validate_aws_access_keys(
 
     # 1. Primary Attempt: Official AWS Boto3 SDK (most accurate & handles all 39 regions)
     try:
-        import boto3
-        from botocore.config import Config
-        from botocore.exceptions import ClientError, EndpointConnectionError, ParamValidationError
-
+        if not boto3:
+            raise ImportError("boto3 is not installed")
         boto_cfg = Config(
             connect_timeout=8,
             read_timeout=8,
