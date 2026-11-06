@@ -1,7 +1,6 @@
 // frontend/src/pages/LoginPage.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Shield,
   Lock,
   Mail,
   User,
@@ -11,7 +10,6 @@ import {
   FolderGit2,
   Sparkles,
   CheckCircle2,
-  Check,
   Send,
   ExternalLink,
   Eye,
@@ -21,17 +19,41 @@ import { useAuth } from '../context/AuthContext';
 import { authApi } from '../services/api';
 
 export default function LoginPage({ onLoginSuccess }) {
-  const { login, register, updateProfile, setSessionManually } = useAuth();
+  const { login, register, setSessionManually } = useAuth();
 
   const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register'
+
+  // Sign In credentials state
   const [loginId, setLoginId] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+
+  // Create Account credentials state (strictly isolated to prevent credential persistence or autofill bleed)
+  const [regUsername, setRegUsername] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
+
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  const resetCreateAccountForm = () => {
+    setRegUsername('');
+    setRegEmail('');
+    setRegPassword('');
+    setRegConfirmPassword('');
+    setShowRegPassword(false);
+    setShowRegConfirmPassword(false);
+    setEmailStatus('idle');
+  };
+
+  const resetSignInForm = () => {
+    setLoginId('');
+    setLoginPassword('');
+    setShowLoginPassword(false);
+  };
 
   // Live letter-by-letter email existence check
   const [emailStatus, setEmailStatus] = useState('idle'); // 'idle' | 'checking' | 'available' | 'taken' | 'invalid'
@@ -61,6 +83,12 @@ export default function LoginPage({ onLoginSuccess }) {
       document.body.classList.add('light');
     }
   }, []);
+  // Reset form inputs on mount to prevent any credential persistence from previous sessions
+  useEffect(() => {
+    resetCreateAccountForm();
+    resetSignInForm();
+  }, []);
+
 
   // Check URL query parameters on load for email verification token or OAuth redirects
   useEffect(() => {
@@ -164,7 +192,7 @@ export default function LoginPage({ onLoginSuccess }) {
       setEmailStatus('idle');
       return;
     }
-    const trimmed = email.trim().toLowerCase();
+    const trimmed = regEmail.trim().toLowerCase();
     if (!trimmed) {
       setEmailStatus('idle');
       return;
@@ -190,11 +218,11 @@ export default function LoginPage({ onLoginSuccess }) {
     }, 220);
 
     return () => clearTimeout(timer);
-  }, [email, activeTab]);
+  }, [regEmail, activeTab]);
 
   // Dynamic Password Strength Meter with Name/Email restriction
   const passwordStrength = useMemo(() => {
-    if (!password) {
+    if (!regPassword) {
       return {
         score: 0,
         percent: 0,
@@ -208,9 +236,9 @@ export default function LoginPage({ onLoginSuccess }) {
       };
     }
 
-    const userLower = (loginId || '').trim().toLowerCase();
-    const emailPrefix = (email || '').split('@')[0].trim().toLowerCase();
-    const passLower = password.toLowerCase();
+    const userLower = (regUsername || '').trim().toLowerCase();
+    const emailPrefix = (regEmail || '').split('@')[0].trim().toLowerCase();
+    const passLower = regPassword.toLowerCase();
 
     let containsNameOrEmail = false;
     if (userLower.length >= 3 && passLower.includes(userLower)) {
@@ -220,10 +248,10 @@ export default function LoginPage({ onLoginSuccess }) {
       containsNameOrEmail = true;
     }
 
-    const hasLength = password.length >= 8;
-    const hasUpperLower = /[A-Z]/.test(password) && /[a-z]/.test(password);
-    const hasNumberSymbol = /[0-9]/.test(password) && /[^a-zA-Z0-9]/.test(password);
-    const hasExtraLength = password.length >= 12;
+    const hasLength = regPassword.length >= 8;
+    const hasUpperLower = /[A-Z]/.test(regPassword) && /[a-z]/.test(regPassword);
+    const hasNumberSymbol = /[0-9]/.test(regPassword) && /[^a-zA-Z0-9]/.test(regPassword);
+    const hasExtraLength = regPassword.length >= 12;
 
     let score = 0;
     if (hasLength) score++;
@@ -261,19 +289,21 @@ export default function LoginPage({ onLoginSuccess }) {
       hasUpperLower,
       hasNumberSymbol,
     };
-  }, [password, loginId, email]);
+  }, [regPassword, regUsername, regEmail]);
 
   const handleSignIn = async (e) => {
     e.preventDefault();
     setErrorMessage('');
-    if (!loginId.trim() || !password) {
+    if (!loginId.trim() || !loginPassword) {
       setErrorMessage('Please enter your Login ID (Username, Email, or 12-digit Account ID) and password.');
       return;
     }
 
     setIsLoading(true);
     try {
-      await login(loginId.trim(), password);
+      await login(loginId.trim(), loginPassword);
+      resetSignInForm();
+      resetCreateAccountForm();
       if (onLoginSuccess) onLoginSuccess();
     } catch (err) {
       if (err.message && err.message.toLowerCase().includes('not confirmed')) {
@@ -293,7 +323,7 @@ export default function LoginPage({ onLoginSuccess }) {
     e.preventDefault();
     setErrorMessage('');
 
-    if (!loginId.trim() || !email.trim() || !password) {
+    if (!regUsername.trim() || !regEmail.trim() || !regPassword) {
       setErrorMessage('Please complete all registration fields.');
       return;
     }
@@ -313,16 +343,27 @@ export default function LoginPage({ onLoginSuccess }) {
       return;
     }
 
-    if (password !== confirmPassword) {
+    if (regPassword !== regConfirmPassword) {
       setErrorMessage('Passwords do not match. Please verify both passwords match.');
       return;
     }
 
+    const usernameToRegister = regUsername.trim();
+    const emailToRegister = regEmail.trim();
+    const passwordToRegister = regPassword;
+
+    // Immediately clear sensitive password values upon entering/submitting form
+    setRegPassword('');
+    setRegConfirmPassword('');
+
     setIsLoading(true);
     try {
-      const res = await register(loginId.trim(), email.trim(), password, 'USER');
+      const res = await register(usernameToRegister, emailToRegister, passwordToRegister, 'USER');
+      // Wipe all create account form fields so value is gone in that form
+      resetCreateAccountForm();
+
       if (res && (res.requires_verification || res.status === 'VERIFICATION_SENT')) {
-        const registeredEmail = res.email || email.trim();
+        const registeredEmail = res.email || emailToRegister;
         setIsVerificationSent(true);
         setVerificationEmail(registeredEmail);
         setSimulatedVerificationUrl(res.verification_url || '');
@@ -335,21 +376,13 @@ export default function LoginPage({ onLoginSuccess }) {
             })
           );
         } catch (e) {}
-        // Clear form fields immediately so inputs do not stay dirty
-        setLoginId('');
-        setEmail('');
-        setPassword('');
-        setConfirmPassword('');
-        setEmailStatus('idle');
       } else if (onLoginSuccess) {
-        setLoginId('');
-        setEmail('');
-        setPassword('');
-        setConfirmPassword('');
-        setEmailStatus('idle');
         onLoginSuccess();
       }
     } catch (err) {
+      // Clear passwords on error so credentials do not linger in DOM or state
+      setRegPassword('');
+      setRegConfirmPassword('');
       setErrorMessage(err.message || 'Registration failed. Username may already be in use.');
     } finally {
       setIsLoading(false);
@@ -562,11 +595,8 @@ export default function LoginPage({ onLoginSuccess }) {
                     setIsVerificationSent(false);
                     setVerificationEmail('');
                     setSimulatedVerificationUrl('');
-                    setLoginId('');
-                    setEmail('');
-                    setPassword('');
-                    setConfirmPassword('');
-                    setEmailStatus('idle');
+                    resetCreateAccountForm();
+                    resetSignInForm();
                     setActiveTab('login');
                     setErrorMessage('');
                   }}
@@ -585,6 +615,7 @@ export default function LoginPage({ onLoginSuccess }) {
                   onClick={() => {
                     setActiveTab('login');
                     setErrorMessage('');
+                    resetCreateAccountForm();
                   }}
                   className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition ${
                     activeTab === 'login'
@@ -599,6 +630,7 @@ export default function LoginPage({ onLoginSuccess }) {
                   onClick={() => {
                     setActiveTab('register');
                     setErrorMessage('');
+                    resetCreateAccountForm();
                   }}
                   className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition ${
                     activeTab === 'register'
@@ -670,16 +702,22 @@ export default function LoginPage({ onLoginSuccess }) {
               {activeTab === 'login' ? (
                 <form onSubmit={handleSignIn} className="space-y-4" autoComplete="off">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    <label
+                      htmlFor="sign-in-login-id"
+                      className="block text-xs font-bold text-slate-700 mb-1.5"
+                    >
                       Login ID (Username, Email, or 12-Digit Account ID)
                     </label>
                     <div className="relative">
-                      <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
+                        id="sign-in-login-id"
+                        name="username"
                         type="text"
                         placeholder="e.g. admin, user@company.com, or Account ID"
                         value={loginId}
                         onChange={(e) => setLoginId(e.target.value)}
+                        autoComplete="username"
                         className="w-full h-10 pl-9 pr-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-cyan-500/20 font-medium transition"
                         required
                       />
@@ -690,26 +728,32 @@ export default function LoginPage({ onLoginSuccess }) {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    <label
+                      htmlFor="sign-in-password"
+                      className="block text-xs font-bold text-slate-700 mb-1.5"
+                    >
                       Password
                     </label>
                     <div className="relative">
-                      <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
-                        type={showPassword ? 'text' : 'password'}
+                        id="sign-in-password"
+                        name="password"
+                        type={showLoginPassword ? 'text' : 'password'}
                         placeholder="••••••••••••"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        autoComplete="current-password"
                         className="w-full h-10 pl-9 pr-10 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-cyan-500/20 font-medium transition"
                         required
                       />
                       <button
                         type="button"
-                        onClick={() => setShowPassword(!showPassword)}
+                        onClick={() => setShowLoginPassword(!showLoginPassword)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                         tabIndex={-1}
                       >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
                   </div>
@@ -735,20 +779,27 @@ export default function LoginPage({ onLoginSuccess }) {
                   </div>
                 </form>
               ) : (
-                /* Create Account Form */
                 <form onSubmit={handleSignUp} className="space-y-4" autoComplete="off">
                   {/* Username */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    <label
+                      htmlFor="create-account-username"
+                      className="block text-xs font-bold text-slate-700 mb-1.5"
+                    >
                       Account Username / Handle
                     </label>
                     <div className="relative">
-                      <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
+                        id="create-account-username"
+                        name="create_account_username"
                         type="text"
                         placeholder="e.g. cloud_engineer"
-                        value={loginId}
-                        onChange={(e) => setLoginId(e.target.value)}
+                        value={regUsername}
+                        onChange={(e) => setRegUsername(e.target.value)}
+                        autoComplete="off"
+                        autoCapitalize="none"
+                        spellCheck="false"
                         className="w-full h-10 pl-9 pr-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-cyan-500/20 font-medium transition"
                         required
                       />
@@ -757,16 +808,24 @@ export default function LoginPage({ onLoginSuccess }) {
 
                   {/* Email with Live Letter-by-Letter Data Indexing Lookup */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    <label
+                      htmlFor="create-account-email"
+                      className="block text-xs font-bold text-slate-700 mb-1.5"
+                    >
                       Email Address
                     </label>
                     <div className="relative">
-                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
+                        id="create-account-email"
+                        name="create_account_email"
                         type="email"
                         placeholder="engineer@company.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        value={regEmail}
+                        onChange={(e) => setRegEmail(e.target.value)}
+                        autoComplete="off"
+                        autoCapitalize="none"
+                        spellCheck="false"
                         className={`w-full h-10 pl-9 pr-9 bg-white border rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none font-medium transition ${
                           emailStatus === 'taken'
                             ? 'border-rose-400 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20'
@@ -818,16 +877,21 @@ export default function LoginPage({ onLoginSuccess }) {
 
                   {/* Password + Strength Range Bar */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    <label
+                      htmlFor="create-account-password"
+                      className="block text-xs font-bold text-slate-700 mb-1.5"
+                    >
                       Password
-                     </label>
-                     <div className="relative">
-                       <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
-                        type={showPassword ? 'text' : 'password'}
+                        id="create-account-password"
+                        name="create_account_password"
+                        type={showRegPassword ? 'text' : 'password'}
                         placeholder="Minimum 8 characters"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        value={regPassword}
+                        onChange={(e) => setRegPassword(e.target.value)}
                         autoComplete="new-password"
                         className={`w-full h-10 pl-9 pr-10 bg-white border rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none font-medium transition ${
                           passwordStrength.containsNameOrEmail
@@ -836,18 +900,18 @@ export default function LoginPage({ onLoginSuccess }) {
                         }`}
                         required
                       />
-                       <button
-                         type="button"
-                         onClick={() => setShowPassword(!showPassword)}
-                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                         tabIndex={-1}
-                       >
-                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                       </button>
-                     </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowRegPassword(!showRegPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        tabIndex={-1}
+                      >
+                        {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
 
-                     {/* Password Strength Range Bar */}
-                     {password && (
+                    {/* Password Strength Range Bar */}
+                    {regPassword && (
                        <div className="mt-2 space-y-1.5">
                          <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
                            <div
@@ -885,39 +949,44 @@ export default function LoginPage({ onLoginSuccess }) {
 
                    {/* Confirm Password */}
                    <div>
-                     <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                     <label
+                       htmlFor="create-account-confirm-password"
+                       className="block text-xs font-bold text-slate-700 mb-1.5"
+                     >
                        Confirm Password
                      </label>
                      <div className="relative">
-                       <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        placeholder="Re-enter password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        autoComplete="new-password"
-                        className={`w-full h-10 pl-9 pr-10 bg-white border rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none font-medium transition ${
-                          confirmPassword && confirmPassword !== password
-                            ? 'border-rose-400 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20'
-                            : confirmPassword && confirmPassword === password
-                            ? 'border-emerald-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
-                            : 'border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-cyan-500/20'
-                        }`}
-                        required
-                      />
+                       <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                       <input
+                         id="create-account-confirm-password"
+                         name="create_account_confirm_password"
+                         type={showRegConfirmPassword ? 'text' : 'password'}
+                         placeholder="Re-enter password"
+                         value={regConfirmPassword}
+                         onChange={(e) => setRegConfirmPassword(e.target.value)}
+                         autoComplete="new-password"
+                         className={`w-full h-10 pl-9 pr-10 bg-white border rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none font-medium transition ${
+                           regConfirmPassword && regConfirmPassword !== regPassword
+                             ? 'border-rose-400 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20'
+                             : regConfirmPassword && regConfirmPassword === regPassword
+                             ? 'border-emerald-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
+                             : 'border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-cyan-500/20'
+                         }`}
+                         required
+                       />
                        <button
                          type="button"
-                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                         onClick={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                          tabIndex={-1}
                        >
-                         {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                         {showRegConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                        </button>
                      </div>
 
-                     {confirmPassword && (
+                     {regConfirmPassword && (
                        <div className="mt-1 text-[10px]">
-                         {confirmPassword === password ? (
+                         {regConfirmPassword === regPassword ? (
                            <span className="font-semibold text-emerald-600 flex items-center gap-1">
                              <CheckCircle2 className="w-3 h-3 shrink-0" />
                              Passwords match!
@@ -939,7 +1008,7 @@ export default function LoginPage({ onLoginSuccess }) {
                          isLoading ||
                          emailStatus === 'taken' ||
                          passwordStrength.containsNameOrEmail ||
-                         (confirmPassword && confirmPassword !== password)
+                         (regConfirmPassword && regConfirmPassword !== regPassword)
                        }
                        className="w-full h-11 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-500 hover:via-indigo-500 hover:to-cyan-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-600/20 hover:shadow-cyan-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                      >
