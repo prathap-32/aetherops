@@ -21,7 +21,6 @@ import {
   Edit3,
   ShieldCheck,
   Globe,
-  ChevronRight,
   Boxes,
   FolderKanban,
   GitBranch,
@@ -227,7 +226,7 @@ export default function RepoAnalyzerView({
         verifiedSpec[item.key] = item.value;
       });
 
-      // Include base technical primitives
+      // Include base detected parameters
       if (scanReport?.summary_dict) {
         Object.assign(verifiedSpec, scanReport.summary_dict, verifiedSpec);
       }
@@ -266,7 +265,7 @@ export default function RepoAnalyzerView({
       setWorkflowStep(3);
       setStatusMessage({
         type: 'success',
-        text: `Tech stack specification verified! Synthesized AWS recommendations for ${selectedEnvTier.toUpperCase()}. Forwarding to Cloud Architecture Studio...`,
+        text: `Tech stack confirmed! Generating AWS recommendations for ${selectedEnvTier.toUpperCase()}. Forwarding to Cloud Architecture Studio...`,
       });
 
       // Userflow: "after analyse of aws service recommendation want to in cloud architecture studio , after click verify then it shows that"
@@ -355,55 +354,10 @@ export default function RepoAnalyzerView({
   return (
     <div className="space-y-6">
       {/* Module Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-              Source Code Analyzer &amp; Architecture Sizing
-            </h1>
-          </div>
-          <p className="text-sm text-slate-500 mt-1">
-            Deterministic AST analysis across languages and frameworks, paired with environment-driven AWS right-sizing.
-          </p>
-        </div>
-
-        {/* Workflow Step Indicator */}
-        <div className="flex items-center gap-2">
-          <div
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${
-              workflowStep === 1
-                ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-2xs'
-                : 'bg-slate-50 text-slate-500 border-slate-200'
-            }`}
-          >
-            <span className="w-4 h-4 rounded-full bg-current/10 flex items-center justify-center text-[10px]">1</span>
-            Scan Codebase
-          </div>
-          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-          <div
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${
-              workflowStep === 2
-                ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-2xs'
-                : workflowStep > 2
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : 'bg-slate-50 text-slate-500 border-slate-200'
-            }`}
-          >
-            <span className="w-4 h-4 rounded-full bg-current/10 flex items-center justify-center text-[10px]">2</span>
-            Verify &amp; Accept Report
-          </div>
-          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-          <div
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${
-              workflowStep === 3
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-2xs'
-                : 'bg-slate-50 text-slate-500 border-slate-200'
-            }`}
-          >
-            <span className="w-4 h-4 rounded-full bg-current/10 flex items-center justify-center text-[10px]">3</span>
-            AWS Sizing Blueprint
-          </div>
-        </div>
+      <div className="pb-4 border-b border-slate-200">
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+          Source Code Analyzer &amp; Architecture Sizing
+        </h1>
       </div>
 
       {/* Global Status Message */}
@@ -525,7 +479,7 @@ export default function RepoAnalyzerView({
             <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500">
               <span className="flex items-center gap-1 text-emerald-700">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span><strong>Zero-Clone In-Memory Inspection:</strong> Manifests inspected via GitHub API. Zero proprietary code stored on server.</span>
+                <span><strong>Secure Manifest Inspection:</strong> Analyzes repository structure and manifests via API without storing code.</span>
               </span>
               {readinessResult?.inspection_mode && (
                 <span className="text-slate-400 font-mono text-[10px] shrink-0">
@@ -600,7 +554,7 @@ export default function RepoAnalyzerView({
         </div>
       </form>
 
-      {/* STEP 2: Human-Understandable Key:Value Specification Report */}
+      {/* STEP 2: Detected Tech Stack & Configuration */}
       {workflowStep >= 2 && scanReport && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden animate-in fade-in space-y-0">
           <div className="p-5 bg-slate-50/80 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -610,21 +564,14 @@ export default function RepoAnalyzerView({
                   2
                 </span>
                 <h3 className="text-sm font-bold text-slate-900">
-                  Codebase &amp; Architecture Specification Report (Human-in-the-Loop Review)
+                  Review Detected Tech Stack &amp; Configuration
                 </h3>
               </div>
-              <p className="text-xs text-slate-500 mt-1">
-                Verify the detected technical primitives. You may edit any field before accepting and right-sizing AWS infrastructure.
-              </p>
             </div>
 
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-blue-50 text-blue-800 border border-blue-200">
                 Environment: {selectedEnvTier.toUpperCase()}
-              </span>
-              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Zero Source Code Leaked
               </span>
             </div>
           </div>
@@ -672,12 +619,7 @@ export default function RepoAnalyzerView({
           </div>
 
           {/* Acceptance Action Bar */}
-          <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="text-xs text-slate-500 flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>Verifying tech stack will right-size AWS architecture and open <strong>Cloud Architecture Studio</strong>.</span>
-            </div>
-
+          <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-end gap-3">
             <button
               type="button"
               onClick={handleAcceptAndSize}
@@ -687,12 +629,12 @@ export default function RepoAnalyzerView({
               {isSizing ? (
                 <>
                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  Synthesizing AWS Architecture (Gemini)...
+                  Generating AWS Architecture...
                 </>
               ) : (
                 <>
                   <Check className="w-4 h-4" />
-                  Verify Tech Stack &amp; View in Cloud Architecture Studio ➔
+                  Confirm Stack &amp; Open Architecture Studio ➔
                 </>
               )}
             </button>
@@ -710,11 +652,11 @@ export default function RepoAnalyzerView({
                   3
                 </span>
                 <h3 className="text-lg font-bold text-slate-900">
-                  AWS Deployment Infrastructure Blueprint &amp; Service Customizer
+                  Recommended AWS Infrastructure &amp; Service Configuration
                 </h3>
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                Right-sized for <strong>{selectedEnvTier.toUpperCase()}</strong> in <strong>{targetRegion}</strong>. You can customize the proposed services below, re-analyze what you edited, and proceed to Cloud Architecture Studio.
+                Configured for <strong>{selectedEnvTier.toUpperCase()}</strong> in <strong>{targetRegion}</strong>. You can customize the proposed services below, recalculate costs, and proceed to Cloud Architecture Studio.
               </p>
             </div>
 
@@ -991,12 +933,12 @@ export default function RepoAnalyzerView({
               {isRecalculating ? (
                 <>
                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  Re-analyzing Edited Services...
+                  Recalculating Architecture...
                 </>
               ) : (
                 <>
                   <RefreshCw className="w-3.5 h-3.5" />
-                  Analyze &amp; Recalculate Architecture
+                  Recalculate Architecture
                 </>
               )}
             </button>

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 import os
+import sys
 import json
 import time
 import asyncio
@@ -19,30 +20,17 @@ import httpx
 logger = logging.getLogger("repo-analyzer-service.gemini")
 
 
-def load_dotenv_if_exists():
-    """Load key-values from .env files if present without external dependencies."""
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    candidates = [
-        os.path.join(base_dir, ".env"),
-        os.path.join(os.path.dirname(os.path.dirname(base_dir)), ".env"),
-    ]
-    for env_file in candidates:
-        if os.path.exists(env_file):
-            try:
-                with open(env_file, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith("#") and "=" in line:
-                            k, v = line.split("=", 1)
-                            k = k.strip()
-                            v = v.strip().strip("'\"")
-                            if k not in os.environ and v:
-                                os.environ[k] = v
-            except Exception as e:
-                logger.warning(f"Failed to read {env_file}: {e}")
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+SHARED_DIR = os.path.join(ROOT_DIR, "shared")
+for p in (SHARED_DIR, ROOT_DIR):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
-
-load_dotenv_if_exists()
+try:
+    from aetherops_common.secrets import load_application_secrets
+    load_application_secrets()
+except Exception as _sec_err:
+    logger.warning("AWS Secrets Manager initialization notice in gemini_sizer: %s", _sec_err)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

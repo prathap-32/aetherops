@@ -285,7 +285,7 @@ resource "aws_instance" "compute" {
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Cloud Architecture Studio</h1>
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            Visual topology synthesis of multi-tier AWS networks, compute runtimes, and Well-Architected placements.
+            Interactive AWS architecture topology, network tiering, and Well-Architected validation.
           </p>
         </div>
 
@@ -345,9 +345,9 @@ resource "aws_instance" "compute" {
             <Palette className="w-8 h-8" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-slate-900">No Architecture Synthesized Yet</h2>
+            <h2 className="text-lg font-bold text-slate-900">No Architecture Generated Yet</h2>
             <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
-              Connect your repository and run the Source Code Analyzer to right-size and synthesize an AWS production topology, or build a custom diagram on the interactive canvas.
+              Connect your repository and run the Source Code Analyzer to generate recommended AWS infrastructure, or create a custom diagram on the interactive canvas.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
@@ -457,7 +457,7 @@ resource "aws_instance" "compute" {
                   </div>
                   <div className="text-xs font-bold text-slate-800">No architecture modules added yet</div>
                   <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                    Cloud Architecture Studio is completely clean. Click <strong>"+ Add AWS Module Manually"</strong> above to build your custom VPC topology module by module.
+                    No modules added yet. Click <strong>"+ Add AWS Module Manually"</strong> above to build your VPC topology module by module.
                   </p>
                   <button
                     type="button"

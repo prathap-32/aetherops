@@ -123,18 +123,10 @@ async def google_oauth_login(request: Request, redirect_uri: Optional[str] = Non
     Initiates Google OAuth 2.0 flow.
     Prompts account selector ('select_account') so all browser accounts are displayed to choose from.
     """
-    google_cid = os.getenv("GOOGLE_CLIENT_ID", "")
+    from aetherops_common.secrets import get_application_setting
+    google_cid = get_application_setting("GOOGLE_CLIENT_ID")
     if not google_cid:
-        # Check root .env
-        env_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "..", ".env")
-        if os.path.exists(env_root):
-            with open(env_root, "r", encoding="utf-8") as f:
-                for line in f:
-                    if line.startswith("GOOGLE_CLIENT_ID="):
-                        google_cid = line.split("=", 1)[1].strip().strip("'\"")
-
-    if not google_cid:
-        raise HTTPException(status_code=400, detail="Google OAuth Client ID is not configured in .env.")
+        raise HTTPException(status_code=400, detail="Google OAuth Client ID is not configured in AWS Secrets Manager or environment.")
 
     cb = redirect_uri or (lambda req: (lambda h=req.headers.get("x-forwarded-host") or req.headers.get("host"), p=req.headers.get("x-forwarded-proto") or ("https" if req.url.scheme=="https" or (h and "ts.net" in h) else "http"): f"{p}://{h}/api/v1/auth/google/callback" if h else f"{str(req.base_url).rstrip('/')}/api/v1/auth/google/callback"))(request)
     state = str(uuid.uuid4())
@@ -176,19 +168,9 @@ async def google_oauth_callback(
     if not code:
         return JSONResponse(status_code=400, content={"error": "Missing code parameter."})
 
-    google_cid = os.getenv("GOOGLE_CLIENT_ID", "")
-    google_sec = os.getenv("GOOGLE_CLIENT_SECRET", "")
-    if not (google_cid and google_sec):
-        # Load from root .env if not in memory
-        env_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "..", ".env")
-        if os.path.exists(env_root):
-            with open(env_root, "r", encoding="utf-8") as f:
-                for line in f:
-                    if line.startswith("GOOGLE_CLIENT_ID="):
-                        google_cid = line.split("=", 1)[1].strip().strip("'\"")
-                    elif line.startswith("GOOGLE_CLIENT_SECRET="):
-                        google_sec = line.split("=", 1)[1].strip().strip("'\"")
-
+    from aetherops_common.secrets import get_application_setting
+    google_cid = get_application_setting("GOOGLE_CLIENT_ID")
+    google_sec = get_application_setting("GOOGLE_CLIENT_SECRET")
     cb = os.getenv("GOOGLE_REDIRECT_URI", f"{str(request.base_url).rstrip('/')}/api/v1/auth/google/callback")
 
     user_info = {}

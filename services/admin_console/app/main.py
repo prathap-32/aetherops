@@ -8,7 +8,19 @@ import time
 import logging
 import asyncio
 import os
+import sys
 
+# Centralized Application Secrets Manager
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+SHARED_DIR = os.path.join(ROOT_DIR, "shared")
+for p in (SHARED_DIR, ROOT_DIR):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+try:
+    from aetherops_common.secrets import load_application_secrets
+    load_application_secrets()
+except Exception:
+    pass
 from app.database import init_db_for_region, SUPPORTED_REGIONS, get_sessionmaker_for_region
 from app.cache import cache_manager, get_region_catalog
 from app.auth import init_admin_security

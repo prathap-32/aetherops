@@ -2,7 +2,20 @@
 import asyncio
 import logging
 import os
+import sys
 import time
+
+# Centralized Application Secrets Manager
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+SHARED_DIR = os.path.join(ROOT_DIR, "shared")
+for p in (SHARED_DIR, ROOT_DIR):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+try:
+    from aetherops_common.secrets import load_application_secrets
+    load_application_secrets()
+except Exception:
+    pass
 from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, HTTPException, status, Request, Query
 from fastapi.middleware.cors import CORSMiddleware

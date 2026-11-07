@@ -1,5 +1,6 @@
 # services/source_and_cloud_connection/app/github_service.py
 import os
+import sys
 import logging
 from typing import Optional, Dict, Any, List
 import datetime
@@ -9,31 +10,17 @@ import httpx
 logger = logging.getLogger("source-cloud-github-service")
 
 
-def load_dotenv_if_exists():
-    """Load key-values from .env files if present without external dependencies."""
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    candidates = [
-        os.path.join(base_dir, ".env"),
-        os.path.join(os.path.dirname(os.path.dirname(base_dir)), ".env"),
-    ]
-    for env_file in candidates:
-        if os.path.exists(env_file):
-            try:
-                with open(env_file, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith("#") and "=" in line:
-                            k, v = line.split("=", 1)
-                            k = k.strip()
-                            v = v.strip().strip("'\"")
-                            if k not in os.environ and v:
-                                os.environ[k] = v
-            except Exception as e:
-                logger.warning(f"Failed to read {env_file}: {e}")
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+SHARED_DIR = os.path.join(ROOT_DIR, "shared")
+for p in (SHARED_DIR, ROOT_DIR):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
-
-# Initialize environment on module load
-load_dotenv_if_exists()
+try:
+    from aetherops_common.secrets import load_application_secrets
+    load_application_secrets()
+except Exception as _sec_err:
+    logger.warning("AWS Secrets Manager initialization notice in github_service: %s", _sec_err)
 
 
 class GitHubConfigManager:
@@ -64,44 +51,7 @@ class GitHubConfigManager:
             self._redirect_uri = redirect_uri.strip()
             os.environ["GITHUB_OAUTH_REDIRECT_URI"] = self._redirect_uri
 
-        # Persist to local service .env file for durability across restarts
-        try:
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            env_file = os.path.join(base_dir, ".env")
-            existing_lines = []
-            if os.path.exists(env_file):
-                with open(env_file, "r", encoding="utf-8") as f:
-                    existing_lines = f.readlines()
-
-            keys_written = set()
-            new_lines = []
-            for line in existing_lines:
-                raw = line.strip()
-                if raw.startswith("GITHUB_CLIENT_ID="):
-                    new_lines.append(f"GITHUB_CLIENT_ID={self._client_id}\n")
-                    keys_written.add("GITHUB_CLIENT_ID")
-                elif raw.startswith("GITHUB_CLIENT_SECRET="):
-                    new_lines.append(f"GITHUB_CLIENT_SECRET={self._client_secret}\n")
-                    keys_written.add("GITHUB_CLIENT_SECRET")
-                elif raw.startswith("GITHUB_OAUTH_REDIRECT_URI=") and redirect_uri:
-                    new_lines.append(f"GITHUB_OAUTH_REDIRECT_URI={self._redirect_uri}\n")
-                    keys_written.add("GITHUB_OAUTH_REDIRECT_URI")
-                else:
-                    new_lines.append(line)
-
-            if "GITHUB_CLIENT_ID" not in keys_written:
-                new_lines.append(f"GITHUB_CLIENT_ID={self._client_id}\n")
-            if "GITHUB_CLIENT_SECRET" not in keys_written:
-                new_lines.append(f"GITHUB_CLIENT_SECRET={self._client_secret}\n")
-            if redirect_uri and "GITHUB_OAUTH_REDIRECT_URI" not in keys_written:
-                new_lines.append(f"GITHUB_OAUTH_REDIRECT_URI={self._redirect_uri}\n")
-
-            with open(env_file, "w", encoding="utf-8") as f:
-                f.writelines(new_lines)
-            logger.info("Persisted GitHub OAuth configuration to .env")
-        except Exception as exc:
-            logger.warning(f"Could not write .env file: {exc}")
-
+        logger.info("Updated GitHub OAuth configuration in memory and runtime environment.")
 
 github_config = GitHubConfigManager()
 

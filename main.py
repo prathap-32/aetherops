@@ -44,12 +44,21 @@ from rich.layout import Layout
 from rich import box
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+SHARED_DIR = os.path.join(ROOT_DIR, "shared")
+for p in (SHARED_DIR, ROOT_DIR):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+# Initialize centralized application secrets from AWS Secrets Manager
+try:
+    from aetherops_common.secrets import load_application_secrets
+    load_application_secrets()
+except Exception as _sec_err:
+    print(f"[WARN] AWS Secrets Manager initialization: {_sec_err}")
 
 # Resolve Python executable
 VENV_PYTHON = os.path.join(ROOT_DIR, ".venv", "bin", "python")
 PYTHON_EXE = VENV_PYTHON if os.path.exists(VENV_PYTHON) else sys.executable
-
-
 @dataclass
 class ServiceSpec:
     id: str
@@ -244,8 +253,8 @@ class RealTimeFleetOrchestrator:
         self.free_port_if_occupied(spec.port)
         cwd = os.path.join(ROOT_DIR, spec.dir)
         env = os.environ.copy()
-        env["PYTHONPATH"] = cwd
-
+        existing_ppath = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = f"{cwd}:{SHARED_DIR}:{ROOT_DIR}:{existing_ppath}".rstrip(":")
         host = self.get_bind_host(spec.port)
         cmd = [
             PYTHON_EXE,

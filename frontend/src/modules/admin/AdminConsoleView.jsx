@@ -42,8 +42,8 @@ export default function AdminConsoleView() {
         adminApi.getModules().catch((e) => [
           { code: 'projects', name: 'Project & Environment Management', port: 8001, status: 'ONLINE', description: 'Multi-tenant workspace isolation and environment fleets' },
           { code: 'source', name: 'Source & Cloud Connection', port: 8002, status: 'ONLINE', description: 'GitHub OAuth/PAT and AWS IAM credential validation' },
-          { code: 'repo', name: 'Source Code Analyzer', port: 8003, status: 'ONLINE', description: 'Codebase AST analysis and AWS architecture right-sizing' },
-          { code: 'architecture', name: 'Cloud Architecture Studio', port: 8004, status: 'ONLINE', description: 'Visual topology synthesis and Well-Architected validation' },
+          { code: 'repo', name: 'Source Code Analyzer', port: 8003, status: 'ONLINE', description: 'Codebase analysis and AWS architecture recommendations' },
+          { code: 'architecture', name: 'Cloud Architecture Studio', port: 8004, status: 'ONLINE', description: 'Visual topology planning and Well-Architected validation' },
           { code: 'gateway', name: 'API Gateway & Orchestrator', port: 8000, status: 'ONLINE', description: 'Central reverse proxy and secure API routing' },
         ]),
         adminApi.getAuditLogs().catch((e) => ({

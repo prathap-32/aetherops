@@ -42,20 +42,18 @@ def get_dynamic_callback_uri(request: Request, default_path: str = "/api/v1/auth
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("auth-service")
 
-# Load root .env if not loaded
+# Centralized Application Secrets Manager
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-ENV_PATH = os.path.join(ROOT_DIR, ".env")
-if os.path.exists(ENV_PATH):
-    with open(ENV_PATH, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, v = line.split("=", 1)
-                k = k.strip()
-                v = v.strip().strip("'\"")
-                if k not in os.environ:
-                    os.environ[k] = v
+SHARED_DIR = os.path.join(ROOT_DIR, "shared")
+for p in (SHARED_DIR, ROOT_DIR):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
+try:
+    from aetherops_common.secrets import load_application_secrets
+    load_application_secrets()
+except Exception as _sec_err:
+    logger.warning("AWS Secrets Manager initialization notice in auth_service: %s", _sec_err)
 ENVIRONMENT = os.getenv("AETHER_ENV", os.getenv("ENVIRONMENT", "development")).lower()
 INSECURE_DEV_JWT_SECRETS = {
     "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master",

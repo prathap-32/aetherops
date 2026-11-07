@@ -40,6 +40,7 @@ Responsibilities:
 """
 
 import os
+import sys
 import time
 import logging
 import secrets
@@ -54,6 +55,18 @@ import httpx
 import jwt
 from rich.logging import RichHandler
 
+# Centralized Application Secrets Manager
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+SHARED_DIR = os.path.join(ROOT_DIR, "shared")
+for p in (SHARED_DIR, ROOT_DIR):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+try:
+    from aetherops_common.secrets import load_application_secrets, get_application_secrets_status
+    load_application_secrets()
+except Exception as _sec_err:
+    pass
 ENVIRONMENT = os.getenv("AETHER_ENV", os.getenv("ENVIRONMENT", "development")).lower()
 INSECURE_DEV_JWT_SECRETS = {
     "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master",
@@ -215,6 +228,7 @@ PUBLIC_API_PREFIXES = (
     "/api/v1/connections/github/callback",
     "/api/v1/connections/github/oauth",
     "/api/v1/meta",
+    "/api/v1/health/secrets",
 )
 
 
@@ -269,9 +283,14 @@ async def get_favicon():
 
 
 def _get_shell_response():
-    """Serves the compiled SPA shell index.html."""
+    """Serves the compiled SPA shell index.html with cache-busting headers."""
+    headers = {
+        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    }
     if os.path.exists(INDEX_HTML):
-        return FileResponse(INDEX_HTML, media_type="text/html")
+        return FileResponse(INDEX_HTML, media_type="text/html", headers=headers)
     # Fallback minimal HTML
     return HTMLResponse(
         content="""<!DOCTYPE html>
@@ -290,7 +309,8 @@ async def _proxy_to_upstream(
     timeout_sec: float = 30.0,
 ) -> Response:
     """Transparently proxies an incoming HTTP request to upstream microservice."""
-    url = f"{upstream_base_url.rstrip('/')}/{upstream_path.lstrip('/')}"
+    clean_base = str(upstream_base_url).strip().replace(": //", "://")
+    url = f"{clean_base.rstrip('/')}/{upstream_path.lstrip('/')}"
     query = request.url.query
     if query:
         url = f"{url}?{query}"
@@ -455,6 +475,15 @@ async def health_check():
         "port": 8000,
         "timestamp": time.time(),
     }
+
+@app.get("/api/v1/health/secrets", status_code=status.HTTP_200_OK)
+async def secrets_health_check():
+    """Reports AWS Secrets Manager connectivity and metadata without exposing credentials."""
+    try:
+        from aetherops_common.secrets import get_application_secrets_status
+        return get_application_secrets_status()
+    except Exception as e:
+        return {"connected": False, "provider": "failed", "error": str(e), "credentials": "REDACTED"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

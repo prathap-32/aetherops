@@ -27,6 +27,10 @@ if [ ! -d ".venv" ]; then
 fi
 
 PYTHON="$SCRIPT_DIR/.venv/bin/python"
+export PYTHONPATH="$SCRIPT_DIR:$SCRIPT_DIR/shared:${PYTHONPATH:-}"
+export AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-ap-south-1}}"
+export AWS_SECRET_ID="${AWS_SECRET_ID:-${AETHER_SECRET_ID:-aetherops/platform}}"
+
 
 # 1. Auth Service - Port 7999
 echo -e "${GREEN}[1/14]${NC} Starting Auth Service (Port 7999)..."

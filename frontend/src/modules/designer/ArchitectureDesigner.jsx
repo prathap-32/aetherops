@@ -2579,7 +2579,7 @@ resource "aws_security_group_rule" "rule_${idx + 1}" {
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                 You haven't run the Source Code Analyzer for project{' '}
                 <strong className="text-slate-800">{activeProject?.name || 'current'}</strong> yet.
-                Analyzing your repository code will automatically right-size and synthesize an AWS cloud topology.
+                Analyzing your repository code will automatically generate an AWS cloud architecture topology.
               </p>
             </div>
             <div className="flex items-center justify-end gap-2 pt-2">

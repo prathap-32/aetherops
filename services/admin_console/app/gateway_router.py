@@ -133,7 +133,8 @@ async def _proxy_to_upstream(
     microservice, streaming the response body and preserving all relevant headers.
     """
     # 1. Construct target URL preserving query string
-    url = f"{upstream_base_url.rstrip('/')}/{upstream_path.lstrip('/')}"
+    clean_base = str(upstream_base_url).strip().replace(": //", "://")
+    url = f"{clean_base.rstrip('/')}/{upstream_path.lstrip('/')}"
     query = request.url.query
     if query:
         url = f"{url}?{query}"

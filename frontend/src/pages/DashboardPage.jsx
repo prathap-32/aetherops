@@ -103,7 +103,6 @@ export default function DashboardPage() {
     return typeof window !== 'undefined' && window.location.pathname.startsWith('/account');
   });
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
 
   // Active Project & Environment Context
   const [activeProject, setActiveProject] = useState(() => {
@@ -203,7 +202,6 @@ export default function DashboardPage() {
         return (
           <ProjectsView
             onNavigate={handleNavigate}
-            searchQuery={searchQuery}
             isCreateModalOpen={isCreateProjectModalOpen}
             onCloseCreateModal={() => setIsCreateProjectModalOpen(false)}
             onOpenCreateProject={() => setIsCreateProjectModalOpen(true)}
@@ -350,17 +348,7 @@ export default function DashboardPage() {
         {/* Unified Top Navbar */}
         <Navbar
           activeView={activeView}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
           onOpenMobileSidebar={() => setMobileSidebarOpen((prev) => !prev)}
-          onOpenCreateProject={() => {
-            handleNavigate('projects', '/projects');
-            setIsCreateProjectModalOpen(true);
-          }}
-          onOpenAccountModal={() => setIsAccountModalOpen(true)}
-          onOpenAccount={() => setIsAccountModalOpen(true)}
-          activeProject={activeProject}
-          activeEnvironment={activeEnvironment}
         />
 
         {/* Dynamic Workspace Container */}

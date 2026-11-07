@@ -3,9 +3,17 @@ import sys
 import os
 
 _service_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _service_dir not in sys.path:
-    sys.path.insert(0, _service_dir)
+_root_dir = os.path.dirname(_service_dir)
+_shared_dir = os.path.join(_root_dir, "shared")
+for p in (_service_dir, _shared_dir, _root_dir):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
+try:
+    from aetherops_common.secrets import load_application_secrets
+    load_application_secrets()
+except Exception:
+    pass
 import logging
 import time
 from contextlib import asynccontextmanager
