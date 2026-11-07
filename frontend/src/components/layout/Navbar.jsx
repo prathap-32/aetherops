@@ -1,11 +1,7 @@
 // frontend/src/components/layout/Navbar.jsx
 import React from 'react';
-import { Menu } from 'lucide-react';
 
-export default function Navbar({
-  activeView,
-  onOpenMobileSidebar,
-}) {
+export default function Navbar({ activeView }) {
   const VIEW_TITLES = {
     dashboard: 'Platform Dashboard',
     projects: 'Projects & Workspaces',
@@ -33,22 +29,10 @@ export default function Navbar({
   const currentTitle = VIEW_TITLES[activeView] || 'Console';
 
   return (
-    <header className="sticky top-0 z-20 h-14 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between gap-4">
-      {/* Left: Mobile hamburger & Module Title only */}
-      <div className="flex items-center gap-3 min-w-0">
-        <button
-          onClick={onOpenMobileSidebar}
-          className="p-1.5 -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-          aria-label="Toggle sidebar menu"
-          title="Toggle sidebar menu (Expand text / Show icons only)"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
-
-        <span className="font-bold text-slate-900 tracking-tight text-sm sm:text-base truncate">
-          {currentTitle}
-        </span>
-      </div>
+    <header className="sticky top-0 z-20 h-14 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 flex items-center min-w-0">
+      <span className="font-bold text-slate-900 tracking-tight text-sm sm:text-base truncate">
+        {currentTitle}
+      </span>
     </header>
   );
 }

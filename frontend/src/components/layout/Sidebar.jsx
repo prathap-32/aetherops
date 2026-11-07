@@ -26,7 +26,6 @@ import {
   ChevronDown,
   ChevronRight,
   X,
-  Menu,
 } from 'lucide-react';
 
 const NAV_GROUPS = [
@@ -109,20 +108,25 @@ export default function Sidebar({
                 if (setMobileOpen) setMobileOpen(true);
                 else navItemClick('dashboard', '/');
               }}
-              className="w-9 h-9 rounded-xl bg-[#1e40af] text-white flex items-center justify-center font-bold text-xs shadow-xs hover:bg-blue-800 transition cursor-pointer group select-none"
+              className="w-10 h-10 rounded-xl hover:bg-slate-100 flex items-center justify-center transition cursor-pointer group select-none"
               title="Click to expand sidebar and show text"
               aria-label="Expand sidebar"
               onContextMenu={(e) => e.preventDefault()}
             >
               <img
-                src="/static/logo/logo.png"
+                src="/static/logo/aetherops_light_icon.png"
                 alt="AetherOps"
-                className="w-6 h-6 object-contain select-none pointer-events-none drop-shadow-xs"
+                className="w-8 h-8 object-contain select-none pointer-events-none group-hover:scale-105 transition"
                 draggable={false}
                 onContextMenu={(e) => e.preventDefault()}
-                style={{ WebkitUserDrag: 'none', userSelect: 'none' }}
-                width="24"
-                height="24"
+                style={{
+                  WebkitUserDrag: 'none',
+                  userSelect: 'none',
+                  WebkitTouchCallout: 'none',
+                  pointerEvents: 'none',
+                }}
+                width="32"
+                height="32"
               />
             </button>
           </div>
@@ -211,21 +215,25 @@ export default function Sidebar({
             <div className="h-14 px-4 border-b border-slate-100 flex items-center justify-between">
               <div
                 onClick={() => navItemClick('dashboard', '/')}
-                className="cursor-pointer group flex items-center gap-2"
+                className="cursor-pointer group flex items-center gap-2 select-none"
+                onContextMenu={(e) => e.preventDefault()}
+                style={{ WebkitUserDrag: 'none', userSelect: 'none' }}
               >
-                <picture className="select-none pointer-events-none" onContextMenu={(e) => e.preventDefault()}>
-                  <source srcSet="/static/logo/aetherops_transparent.webp" type="image/webp" />
-                  <img
-                    src="/static/logo/aetherops_transparent.png"
-                    alt="AetherOps"
-                    className="h-8 max-w-[170px] object-contain object-left transition-opacity group-hover:opacity-90 select-none pointer-events-none"
-                    draggable={false}
-                    onContextMenu={(e) => e.preventDefault()}
-                    style={{ WebkitUserDrag: 'none', userSelect: 'none' }}
-                    width="170"
-                    height="43"
-                  />
-                </picture>
+                <img
+                  src="/static/logo/aetherops_light_full.png"
+                  alt="AetherOps"
+                  className="h-8 max-w-[170px] w-auto object-contain object-left transition-opacity group-hover:opacity-90 select-none pointer-events-none"
+                  draggable={false}
+                  onContextMenu={(e) => e.preventDefault()}
+                  style={{
+                    WebkitUserDrag: 'none',
+                    userSelect: 'none',
+                    WebkitTouchCallout: 'none',
+                    pointerEvents: 'none',
+                  }}
+                  width="170"
+                  height="43"
+                />
               </div>
 
               {/* Close Button 'X' */}

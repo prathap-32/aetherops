@@ -346,10 +346,7 @@ export default function DashboardPage() {
       {/* Main Orchestrator Workspace */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Unified Top Navbar */}
-        <Navbar
-          activeView={activeView}
-          onOpenMobileSidebar={() => setMobileSidebarOpen((prev) => !prev)}
-        />
+        <Navbar activeView={activeView} />
 
         {/* Dynamic Workspace Container */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
