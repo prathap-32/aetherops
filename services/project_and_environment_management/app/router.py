@@ -1,5 +1,6 @@
 # services/project_and_environment_management/app/router.py
 import os
+import json
 import uuid
 import logging
 import datetime
@@ -11,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import AetherProject, AetherEnvironment, Tenant, TenantMembership
+from app.models import AetherProject, AetherEnvironment, Tenant, TenantMembership, AetherDashboardPreference
 from app.schemas import (
     ProjectCreate, ProjectUpdate,
     EnvironmentCreate, EnvironmentUpdate, EnvironmentStatusUpdate,
@@ -1236,3 +1237,290 @@ async def _get_env_or_404(db: AsyncSession, env_id: str, project_id: str) -> Aet
     if not env:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Environment '{env_id}' not found.")
     return env
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DASHBOARD AGGREGATION & ADAPTIVE PREFERENCES ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+DEFAULT_DASHBOARD_PREFERENCES = {
+    "widget_order": [
+        "getting_started",
+        "recommendations",
+        "attention_required",
+        "overview_metrics",
+        "recent_projects",
+        "environments_summary",
+        "deployments_overview",
+        "system_health",
+        "recent_activity",
+    ],
+    "widget_visibility": {
+        "getting_started": True,
+        "recommendations": True,
+        "attention_required": True,
+        "overview_metrics": True,
+        "recent_projects": True,
+        "environments_summary": True,
+        "deployments_overview": True,
+        "system_health": True,
+        "recent_activity": True,
+    },
+    "widget_sizes": {
+        "getting_started": "full",
+        "recommendations": "full",
+        "attention_required": "full",
+        "overview_metrics": "full",
+        "recent_projects": "full",
+        "environments_summary": "half",
+        "deployments_overview": "half",
+        "system_health": "half",
+        "recent_activity": "half",
+    },
+    "pinned_widgets": [],
+}
+
+
+@router.get("/api/v1/dashboard")
+async def get_dashboard_summary(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """
+    Adaptive Dashboard Aggregator:
+    Computes user lifecycle stage, widget eligibility, project metrics,
+    and next recommended actions based on deterministic business rules.
+    """
+    owner = ctx.user["username"]
+    user_uuid = ctx.user.get("uuid")
+
+    # 1. Fetch user projects
+    proj_query = select(AetherProject).where(
+        (AetherProject.tenant_id == ctx.tenant.id)
+        | ((AetherProject.tenant_id.is_(None)) & (AetherProject.owner == owner))
+        | (AetherProject.owner == owner)
+        | ((AetherProject.created_by_user_id.is_not(None)) & (AetherProject.created_by_user_id == user_uuid))
+    ).order_by(AetherProject.created_at.desc())
+
+    proj_res = await db.execute(proj_query)
+    projects = proj_res.scalars().all()
+    total_projects = len(projects)
+
+    project_ids = [p.id for p in projects]
+
+    # 2. Fetch environments for user's projects
+    environments = []
+    if project_ids:
+        env_query = select(AetherEnvironment).where(
+            AetherEnvironment.project_id.in_(project_ids)
+        ).order_by(AetherEnvironment.created_at.desc())
+        env_res = await db.execute(env_query)
+        environments = env_res.scalars().all()
+
+    total_environments = len(environments)
+
+    # 3. Categorization summaries
+    projects_by_type: Dict[str, int] = {}
+    projects_by_status: Dict[str, int] = {}
+    for p in projects:
+        pt = p.project_type or "web_application"
+        projects_by_type[pt] = projects_by_type.get(pt, 0) + 1
+        st = p.status or "CREATED"
+        projects_by_status[st] = projects_by_status.get(st, 0) + 1
+
+    environments_by_region: Dict[str, int] = {}
+    environments_by_type: Dict[str, int] = {}
+    for e in environments:
+        reg = e.aws_region or "us-east-1"
+        environments_by_region[reg] = environments_by_region.get(reg, 0) + 1
+        et = e.env_type or "development"
+        environments_by_type[et] = environments_by_type.get(et, 0) + 1
+
+    # 4. Determine lifecycle stage (Deterministic Rule Engine)
+    if total_projects == 0:
+        lifecycle_stage = "stage_1_onboarding"
+    elif total_environments == 0:
+        lifecycle_stage = "stage_2_project_created"
+    elif total_environments <= 2:
+        lifecycle_stage = "stage_3_infrastructure_workflow"
+    else:
+        lifecycle_stage = "stage_4_active_operations"
+
+    # 5. Widget eligibility based on lifecycle & data state
+    widget_eligibility = {
+        "getting_started": total_projects == 0,
+        "overview_metrics": total_projects > 0,
+        "recent_projects": total_projects > 0,
+        "environments_summary": total_environments > 0,
+        "deployments_overview": True,
+        "attention_required": True,
+        "system_health": True,
+        "recent_activity": True,
+        "recommendations": True,
+    }
+
+    # 6. Intelligent deterministic recommendation
+    if lifecycle_stage == "stage_1_onboarding":
+        recommended_action = {
+            "id": "create_first_project",
+            "title": "Create Your First Project Workspace",
+            "description": "Provision an isolated project workspace to begin designing architectures and automating cloud infrastructure.",
+            "action_label": "Create Project",
+            "route": "/projects",
+            "action_type": "modal",
+        }
+    elif lifecycle_stage == "stage_2_project_created":
+        recommended_action = {
+            "id": "connect_sources",
+            "title": "Link Cloud Credentials & Git Repository",
+            "description": "Connect your AWS deployment credentials and repository to enable automated AST codebase analysis.",
+            "action_label": "Connect Cloud & Git",
+            "route": "/source-connection",
+            "action_type": "navigate",
+        }
+    elif lifecycle_stage == "stage_3_infrastructure_workflow":
+        recommended_action = {
+            "id": "analyze_codebase",
+            "title": "Run Source Code & Architecture Sizing",
+            "description": "Inspect repository frameworks, services, and sizing parameters to generate production AWS architecture.",
+            "action_label": "Analyze Codebase",
+            "route": "/source-analysis",
+            "action_type": "navigate",
+        }
+    else:
+        recommended_action = {
+            "id": "review_fleet",
+            "title": "Review Target Environments & Deployments",
+            "description": "Monitor active cloud infrastructure workloads, approval gates, and drift across fleet environments.",
+            "action_label": "Inspect Deployments",
+            "route": "/deployment",
+            "action_type": "navigate",
+        }
+
+    # 7. Recent projects projection (top 6)
+    recent_projects_out = [
+        {
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "project_type": p.project_type,
+            "status": p.status,
+            "environment_count": p.environment_count,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+            "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+        }
+        for p in projects[:6]
+    ]
+
+    # 8. Recent environments projection (top 6)
+    recent_environments_out = [
+        {
+            "id": e.id,
+            "project_id": e.project_id,
+            "name": e.name,
+            "env_type": e.env_type,
+            "aws_region": e.aws_region,
+            "status": e.status,
+            "created_at": e.created_at.isoformat() if e.created_at else None,
+        }
+        for e in environments[:6]
+    ]
+
+    return {
+        "lifecycle_stage": lifecycle_stage,
+        "summary": {
+            "total_projects": total_projects,
+            "total_environments": total_environments,
+            "projects_by_type": projects_by_type,
+            "projects_by_status": projects_by_status,
+            "environments_by_region": environments_by_region,
+            "environments_by_type": environments_by_type,
+        },
+        "recent_projects": recent_projects_out,
+        "recent_environments": recent_environments_out,
+        "widget_eligibility": widget_eligibility,
+        "recommended_action": recommended_action,
+        "user": {
+            "username": owner,
+            "tenant_id": ctx.tenant.id,
+            "tenant_name": ctx.tenant.name,
+        },
+    }
+
+
+@router.get("/api/v1/dashboard/preferences")
+async def get_dashboard_preferences(
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Retrieve persistent dashboard layout preferences for the authenticated user."""
+    user_key = ctx.user.get("uuid") or ctx.user.get("username")
+    query = select(AetherDashboardPreference).where(AetherDashboardPreference.user_id == user_key)
+    res = await db.execute(query)
+    pref_record = res.scalar_one_or_none()
+
+    if pref_record and pref_record.layout:
+        try:
+            parsed = json.loads(pref_record.layout)
+            # Merge with defaults in case new widgets were added
+            merged = {
+                "widget_order": parsed.get("widget_order") or DEFAULT_DASHBOARD_PREFERENCES["widget_order"],
+                "widget_visibility": {**DEFAULT_DASHBOARD_PREFERENCES["widget_visibility"], **(parsed.get("widget_visibility") or {})},
+                "widget_sizes": {**DEFAULT_DASHBOARD_PREFERENCES["widget_sizes"], **(parsed.get("widget_sizes") or {})},
+                "pinned_widgets": parsed.get("pinned_widgets") or [],
+            }
+            return merged
+        except Exception:
+            pass
+
+    return DEFAULT_DASHBOARD_PREFERENCES
+
+
+@router.put("/api/v1/dashboard/preferences")
+async def save_dashboard_preferences(
+    payload: Dict[str, Any],
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Persist updated dashboard layout preferences for the authenticated user."""
+    user_key = ctx.user.get("uuid") or ctx.user.get("username")
+    layout_json = json.dumps(payload)
+
+    query = select(AetherDashboardPreference).where(AetherDashboardPreference.user_id == user_key)
+    res = await db.execute(query)
+    pref_record = res.scalar_one_or_none()
+
+    if pref_record:
+        pref_record.layout = layout_json
+        pref_record.updated_at = datetime.datetime.utcnow()
+    else:
+        pref_record = AetherDashboardPreference(
+            id=str(uuid.uuid4()),
+            user_id=user_key,
+            tenant_id=ctx.tenant.id,
+            layout=layout_json,
+        )
+        db.add(pref_record)
+
+    await db.commit()
+    await db.refresh(pref_record)
+    return json.loads(pref_record.layout)
+
+
+@router.post("/api/v1/dashboard/preferences/reset")
+async def reset_dashboard_preferences(
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Reset dashboard preferences to system defaults for the authenticated user."""
+    user_key = ctx.user.get("uuid") or ctx.user.get("username")
+    query = select(AetherDashboardPreference).where(AetherDashboardPreference.user_id == user_key)
+    res = await db.execute(query)
+    pref_record = res.scalar_one_or_none()
+
+    if pref_record:
+        await db.delete(pref_record)
+        await db.commit()
+
+    return DEFAULT_DASHBOARD_PREFERENCES

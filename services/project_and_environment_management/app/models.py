@@ -151,3 +151,28 @@ class AetherEnvironment(Base):
             "created_at":         self.created_at.isoformat() if self.created_at else None,
             "updated_at":         self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+class AetherDashboardPreference(Base):
+    """
+    Stores persistent dashboard layout and personalization preferences per user.
+    """
+    __tablename__ = "aether_dashboard_preferences"
+
+    id         = Column(String(36),  primary_key=True, index=True)
+    user_id    = Column(String(100), nullable=False, unique=True, index=True)
+    tenant_id  = Column(String(36),  nullable=True, index=True)
+    layout     = Column(String(4000), nullable=True)
+    created_at = Column(DateTime,    nullable=False, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime,    nullable=False, default=datetime.datetime.utcnow,
+                        onupdate=datetime.datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id":         self.id,
+            "user_id":    self.user_id,
+            "tenant_id":  self.tenant_id,
+            "layout":     self.layout,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

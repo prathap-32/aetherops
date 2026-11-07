@@ -1,329 +1,1087 @@
 // frontend/src/modules/dashboard/DashboardOverview.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   FolderKanban,
   Boxes,
-  Layers,
   GitBranch,
   FileCode2,
   Network,
-  Code2,
   Rocket,
   Activity,
-  ShieldCheck,
+  ShieldAlert,
   ArrowRight,
   Server,
-  Zap,
   Clock,
-  ExternalLink,
   Plus,
+  Sliders,
+  CheckCircle2,
+  AlertTriangle,
+  Sparkles,
+  RefreshCw,
+  Search,
 } from 'lucide-react';
-import { projectsApi, connectionsApi, formatAccountId } from '../../services/api';
+import {
+  projectsApi,
+  connectionsApi,
+  deploymentsApi,
+  dashboardApi,
+  formatAccountId,
+} from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import WidgetCustomizerModal from './WidgetCustomizerModal';
+
+const DEFAULT_PREFERENCES = {
+  widget_order: [
+    'getting_started',
+    'recommendations',
+    'attention_required',
+    'overview_metrics',
+    'recent_projects',
+    'environments_summary',
+    'deployments_overview',
+    'system_health',
+    'recent_activity',
+  ],
+  widget_visibility: {
+    getting_started: true,
+    recommendations: true,
+    attention_required: true,
+    overview_metrics: true,
+    recent_projects: true,
+    environments_summary: true,
+    deployments_overview: true,
+    system_health: true,
+    recent_activity: true,
+  },
+  widget_sizes: {
+    getting_started: 'full',
+    recommendations: 'full',
+    attention_required: 'full',
+    overview_metrics: 'full',
+    recent_projects: 'full',
+    environments_summary: 'half',
+    deployments_overview: 'half',
+    system_health: 'half',
+    recent_activity: 'half',
+  },
+  pinned_widgets: [],
+};
 
 export default function DashboardOverview({ onNavigate, onOpenCreateProject }) {
   const { user } = useAuth();
-  const [projects, setProjects] = useState([]);
-  const [connections, setConnections] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [fleetProbes, setFleetProbes] = useState({});
+  const userKey = user?.uuid || user?.username || 'user';
+  const storageKey = `aether_dashboard_prefs_${userKey}`;
 
-  useEffect(() => {
-    async function loadStats() {
-      setLoading(true);
-      try {
-        const [projData, connData] = await Promise.allSettled([
-          projectsApi.list(),
-          connectionsApi.listGit(),
-        ]);
-        if (projData.status === 'fulfilled') {
-          setProjects(Array.isArray(projData.value) ? projData.value : []);
-        }
-        if (connData.status === 'fulfilled') {
-          setConnections(Array.isArray(connData.value) ? connData.value : []);
-        }
-      } catch (e) {
-        console.error('Error fetching dashboard stats:', e);
-      } finally {
-        setLoading(false);
+  // ── 1. Data States with Explicit Availability/Error Distinction ──
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
+  const [projectSearchQuery, setProjectSearchQuery] = useState('');
+
+  // Primary Data Sources
+  const [projectsState, setProjectsState] = useState({ status: 'loading', data: [], error: null });
+  const [environmentsState, setEnvironmentsState] = useState({ status: 'loading', data: [], error: null });
+  const [connectionsState, setConnectionsState] = useState({ status: 'loading', git: [], cloud: [], error: null });
+  const [deploymentsState, setDeploymentsState] = useState({ status: 'loading', data: [], error: null });
+  const [fleetProbes, setFleetProbes] = useState({});
+  const [dashboardSummary, setDashboardSummary] = useState(null);
+
+  // User Preferences State
+  const [preferences, setPreferences] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return DEFAULT_PREFERENCES;
+  });
+
+  // ── 2. Data Fetching & Aggregation Engine ──
+  const fetchAllDashboardData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+
+    try {
+      const [
+        projRes,
+        gitConnRes,
+        cloudConnRes,
+        deployRes,
+        summaryRes,
+        prefRes,
+      ] = await Promise.allSettled([
+        projectsApi.list(),
+        connectionsApi.listGit(),
+        connectionsApi.listCloud(),
+        deploymentsApi.list(),
+        dashboardApi.getSummary(),
+        dashboardApi.getPreferences(),
+      ]);
+
+      // Projects
+      let loadedProjects = [];
+      if (projRes.status === 'fulfilled') {
+        loadedProjects = Array.isArray(projRes.value) ? projRes.value : [];
+        setProjectsState({ status: 'success', data: loadedProjects, error: null });
+      } else {
+        setProjectsState({ status: 'error', data: [], error: projRes.reason?.message || 'Failed to load projects' });
       }
+
+      // Environments across projects
+      if (loadedProjects.length > 0) {
+        try {
+          const envPromises = loadedProjects.map((p) =>
+            projectsApi.listEnvironments(p.id || p.project_id).catch(() => [])
+          );
+          const envResults = await Promise.all(envPromises);
+          const flattenedEnvs = envResults.flat().filter(Boolean);
+          setEnvironmentsState({ status: 'success', data: flattenedEnvs, error: null });
+        } catch (envErr) {
+          setEnvironmentsState({ status: 'error', data: [], error: envErr.message });
+        }
+      } else {
+        setEnvironmentsState({ status: 'success', data: [], error: null });
+      }
+
+      // Connections
+      const gitData = gitConnRes.status === 'fulfilled' && Array.isArray(gitConnRes.value) ? gitConnRes.value : [];
+      const cloudData = cloudConnRes.status === 'fulfilled' && Array.isArray(cloudConnRes.value) ? cloudConnRes.value : [];
+      setConnectionsState({
+        status: gitConnRes.status === 'fulfilled' || cloudConnRes.status === 'fulfilled' ? 'success' : 'error',
+        git: gitData,
+        cloud: cloudData,
+        error: gitConnRes.status === 'rejected' ? gitConnRes.reason?.message : null,
+      });
+
+      // Deployments (Explicit error vs empty distinction)
+      if (deployRes.status === 'fulfilled') {
+        const deployList = Array.isArray(deployRes.value)
+          ? deployRes.value
+          : (deployRes.value?.deployments || []);
+        setDeploymentsState({ status: 'success', data: deployList, error: null });
+      } else {
+        // Did not fail silently: record the unavailable state
+        setDeploymentsState({
+          status: 'unavailable',
+          data: [],
+          error: deployRes.reason?.message || 'Deployments telemetry service offline',
+        });
+      }
+
+      // Backend Summary & Analytics
+      if (summaryRes.status === 'fulfilled') {
+        setDashboardSummary(summaryRes.value);
+      }
+
+      // Backend Preferences (fallback to localStorage if unreachable)
+      if (prefRes.status === 'fulfilled' && prefRes.value?.widget_order) {
+        setPreferences(prefRes.value);
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(prefRes.value));
+        } catch (e) {}
+      }
+    } catch (globalErr) {
+      console.warn('Dashboard data aggregation notice:', globalErr);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-    loadStats();
 
     // Probe essential platform services
     const services = [
-      { id: 'admin', name: 'API Gateway', url: '/health' },
-      { id: 'auth', name: 'Authentication Authority', url: '/api/v1/auth/health' },
-      { id: 'pm', name: 'Project Management Service', url: '/api/v1/projects' },
+      { code: 'gateway', name: 'Gateway', port: 8000, ping: '/health' },
+      { code: 'projects', name: 'Project & Workspace Manager', port: 8001, ping: '/health' },
+      { code: 'connections', name: 'Source & Cloud Broker', port: 8002, ping: '/health' },
+      { code: 'analyzer', name: 'AST Codebase Analyzer', port: 8003, ping: '/health' },
+      { code: 'architecture', name: 'Cloud Architecture Studio', port: 8005, ping: '/health' },
+      { code: 'deployer', name: 'Cloud Deployer & Drift Engine', port: 8011, ping: '/health' },
     ];
 
     services.forEach(async (s) => {
-      const t0 = performance.now();
+      const startTime = performance.now();
       try {
-        const res = await fetch(s.url, { method: 'GET', credentials: 'include' });
-        const latency = Math.round(performance.now() - t0);
+        const res = await fetch(`http://localhost:${s.port}${s.ping}`, { method: 'GET', mode: 'cors' });
+        const latency = Math.round(performance.now() - startTime);
         setFleetProbes((prev) => ({
           ...prev,
-          [s.id]: { ok: res.ok, latency, status: res.status },
+          [s.code]: { status: res.ok ? 'ONLINE' : 'DEGRADED', latency },
         }));
       } catch (err) {
         setFleetProbes((prev) => ({
           ...prev,
-          [s.id]: { ok: false, error: err.message },
+          [s.code]: { status: 'OFFLINE', latency: 0 },
         }));
       }
     });
-  }, []);
+  }, [userKey, storageKey]);
 
-  return (
-    <div className="space-y-8">
-      {/* Platform Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#0a1128] via-[#1e293b] to-[#1e40af] text-white p-6 sm:p-8 shadow-xl border border-slate-700/80">
-        <div className="relative z-10 max-w-3xl space-y-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-400/30 text-cyan-300 text-xs font-semibold">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-            Autonomous Cloud Operations MVP
+  useEffect(() => {
+    fetchAllDashboardData();
+  }, [fetchAllDashboardData]);
+
+  // ── 3. Lifecycle Stage Computation (Deterministic Rule Engine) ──
+  const projectsCount = projectsState.data.length;
+  const environmentsCount = environmentsState.data.length;
+  const deploymentsCount = deploymentsState.data.length;
+
+  const lifecycleStage = useMemo(() => {
+    if (projectsState.status === 'loading') return 'loading';
+    if (projectsCount === 0) return 'stage_1_onboarding';
+    if (environmentsCount === 0) return 'stage_2_project_created';
+    if (deploymentsCount === 0) return 'stage_3_infrastructure_workflow';
+    return 'stage_4_active_operations';
+  }, [projectsState.status, projectsCount, environmentsCount, deploymentsCount]);
+
+  // ── 4. Widget Eligibility Map ──
+  const widgetEligibility = useMemo(() => ({
+    getting_started: lifecycleStage === 'stage_1_onboarding',
+    overview_metrics: projectsCount > 0,
+    recent_projects: projectsCount > 0,
+    environments_summary: environmentsCount > 0,
+    deployments_overview: true,
+    attention_required: true,
+    system_health: true,
+    recent_activity: true,
+    recommendations: true,
+  }), [lifecycleStage, projectsCount, environmentsCount]);
+
+  // Widget Metadata Registry
+  const WIDGET_REGISTRY = useMemo(() => ({
+    getting_started: {
+      id: 'getting_started',
+      title: 'Getting Started & Workspace Setup',
+      description: 'First-time onboarding steps to create a workspace and deploy AWS infrastructure.',
+      category: 'Onboarding',
+      isEligible: widgetEligibility.getting_started,
+    },
+    overview_metrics: {
+      id: 'overview_metrics',
+      title: 'Platform Overview Metrics',
+      description: 'Total workspaces, active target environments, connections, and deployment stats.',
+      category: 'Analytics',
+      isEligible: widgetEligibility.overview_metrics,
+    },
+    recent_projects: {
+      id: 'recent_projects',
+      title: 'Recent Projects Fleet',
+      description: 'Active cloud workspaces, deployment boundaries, and tech stack configurations.',
+      category: 'Projects',
+      isEligible: widgetEligibility.recent_projects,
+    },
+    environments_summary: {
+      id: 'environments_summary',
+      title: 'Target Environments Fleet',
+      description: 'Overview of Dev, Staging, and Production stages across AWS regions.',
+      category: 'Environments',
+      isEligible: widgetEligibility.environments_summary,
+    },
+    deployments_overview: {
+      id: 'deployments_overview',
+      title: 'Deployments & Operational Telemetry',
+      description: 'Live infrastructure state, deployment executions, and drift checks.',
+      category: 'Operations',
+      isEligible: widgetEligibility.deployments_overview,
+    },
+    attention_required: {
+      id: 'attention_required',
+      title: 'Attention Required & Risk Gate',
+      description: 'Pending approvals, failed workloads, and critical architectural warnings.',
+      category: 'Risk & Gates',
+      isEligible: widgetEligibility.attention_required,
+    },
+    system_health: {
+      id: 'system_health',
+      title: 'Platform Microservices Health',
+      description: 'Operational status and round-trip latency of backend orchestrators.',
+      category: 'Infrastructure',
+      isEligible: widgetEligibility.system_health,
+    },
+    recent_activity: {
+      id: 'recent_activity',
+      title: 'Recent Activity & Operational Audit',
+      description: 'Timeline of workspace provisioning, architecture changes, and deployments.',
+      category: 'Audit',
+      isEligible: widgetEligibility.recent_activity,
+    },
+    recommendations: {
+      id: 'recommendations',
+      title: 'Lifecycle Recommendations Engine',
+      description: 'Deterministic guidance on next steps based on current workspace maturity.',
+      category: 'Guidance',
+      isEligible: widgetEligibility.recommendations,
+    },
+  }), [widgetEligibility]);
+
+  // ── 5. User Preferences Handling & Persistence ──
+  const handleSavePreferences = async (newPrefs) => {
+    setPreferences(newPrefs);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(newPrefs));
+    } catch (e) {}
+
+    try {
+      await dashboardApi.savePreferences(newPrefs);
+    } catch (err) {
+      console.warn('Backend preferences sync failed (using client storage):', err.message);
+    }
+  };
+
+  const handleResetPreferences = async () => {
+    setPreferences(DEFAULT_PREFERENCES);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(DEFAULT_PREFERENCES));
+      await dashboardApi.resetPreferences();
+    } catch (e) {}
+  };
+
+  // ── 6. Greeting & Dynamic Introduction ──
+  const timeGreeting = useMemo(() => {
+    const hr = new Date().getHours();
+    return hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
+  }, []);
+  const username = user?.username || 'Developer';
+
+  const lifecycleDescription = useMemo(() => {
+    if (lifecycleStage === 'stage_1_onboarding') {
+      return 'Welcome to AetherOps. Create your first project workspace to begin designing architectures and automating cloud infrastructure.';
+    }
+    if (lifecycleStage === 'stage_2_project_created') {
+      return 'Your project workspaces are active. Connect your AWS credentials or repository to start analyzing codebase architecture.';
+    }
+    if (lifecycleStage === 'stage_3_infrastructure_workflow') {
+      return 'Target environments are configured. Generate visual topologies, synthesize Terraform HCL, and dry-run deployments.';
+    }
+    return 'Cloud deployments, target fleet health, and workload telemetry across your production cloud infrastructure.';
+  }, [lifecycleStage]);
+
+  // Filtered Projects for Widget
+  const filteredProjects = useMemo(() => {
+    const q = projectSearchQuery.toLowerCase().trim();
+    if (!q) return projectsState.data;
+    return projectsState.data.filter(
+      (p) =>
+        (p.name || '').toLowerCase().includes(q) ||
+        (p.project_type || '').toLowerCase().includes(q) ||
+        (p.description || '').toLowerCase().includes(q)
+    );
+  }, [projectsState.data, projectSearchQuery]);
+
+  // Attention Items
+  const attentionItems = useMemo(() => {
+    const items = [];
+    // Check for failed deployments
+    if (deploymentsState.data && deploymentsState.data.length > 0) {
+      const failed = deploymentsState.data.filter((d) => d.status === 'FAILED');
+      failed.forEach((f) => {
+        items.push({
+          id: `dep-${f.id}`,
+          type: 'danger',
+          title: `Deployment Failed in ${f.environment || 'Production'}`,
+          description: f.error_message || 'Resource provisioning encountered Terraform state errors.',
+          actionLabel: 'Inspect Logs',
+          route: '/deployment',
+        });
+      });
+    }
+    // Check for unapproved architecture if in stage 3
+    if (lifecycleStage === 'stage_3_infrastructure_workflow') {
+      items.push({
+        id: 'arch-review',
+        type: 'warning',
+        title: 'Architecture Sizing Review Pending',
+        description: 'Verify detected technical primitives before generating Terraform HCL synthesis.',
+        actionLabel: 'Review Architecture',
+        route: '/architecture-studio',
+      });
+    }
+    return items;
+  }, [deploymentsState.data, lifecycleStage]);
+
+  // ── 7. Render Individual Widgets ──
+
+  // Widget 1: Getting Started (Stage 1 Onboarding)
+  const renderGettingStartedWidget = () => (
+    <div className="bg-gradient-to-br from-white via-blue-50/20 to-indigo-50/30 rounded-2xl border border-blue-200/80 p-6 sm:p-8 shadow-xs space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100/70 border border-blue-200 text-blue-800 text-xs font-semibold mb-2">
+            <Sparkles className="w-3.5 h-3.5 text-[#1e40af]" />
+            New Account Onboarding Guide
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            AWS Cloud Infrastructure &amp; Deployment Platform
-          </h1>
-          <p className="text-sm text-slate-300 leading-relaxed max-w-2xl">
-            Connect your real AWS account, design your cloud architecture, generate production-ready Terraform code, and deploy and monitor your infrastructure.
+          <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+            Start Your Cloud Architecture Journey
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
+            AetherOps decomposes end-to-end DevOps into a clean, autonomous pipeline. Complete the 3 steps below to provision your first live AWS workload.
           </p>
-          <div className="pt-2 flex flex-wrap gap-3">
-            <button
-              onClick={() => onNavigate('source_cloud', '/source-connection')}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 font-semibold text-xs transition flex items-center gap-2 shadow-lg shadow-blue-600/30 cursor-pointer"
-            >
-              <span>1. Connect AWS Account</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => onNavigate('architecture_designer', '/architecture-designer')}
-              className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 font-semibold text-xs transition flex items-center gap-2 cursor-pointer"
-            >
-              <Network className="w-3.5 h-3.5 text-cyan-400" />
-              <span>2. Cloud Architecture</span>
-            </button>
-          </div>
         </div>
+
+        <button
+          onClick={onOpenCreateProject}
+          className="px-5 py-2.5 bg-[#1e40af] hover:bg-[#1d4ed8] text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer shrink-0 self-start sm:self-auto"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Create Your First Project</span>
+        </button>
       </div>
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Projects */}
+      {/* 3 Step Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
         <div
-          onClick={() => onNavigate('projects', '/projects')}
-          className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
+          onClick={onOpenCreateProject}
+          className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs hover:shadow-md hover:border-blue-300 transition cursor-pointer group"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Workspaces</span>
-            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center group-hover:scale-105 transition">
-              <FolderKanban className="w-4 h-4" />
-            </div>
+          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-xs group-hover:scale-105 transition">
+            1
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900 font-mono">
-              {loading ? '...' : projects.length}
-            </div>
-            <div className="text-xs text-slate-500 mt-1">Configured applications</div>
+          <h3 className="text-sm font-bold text-slate-900 mt-3 group-hover:text-blue-700 transition">
+            Create Project Workspace
+          </h3>
+          <p className="text-xs text-slate-500 mt-1">
+            Establish a project boundary and attach Dev, Staging, and Production stages.
+          </p>
+          <div className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-blue-700">
+            <span>Launch Modal</span>
+            <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition" />
           </div>
         </div>
 
-        {/* Cloud Connections */}
         <div
           onClick={() => onNavigate('source_cloud', '/source-connection')}
-          className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
+          className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs hover:shadow-md hover:border-blue-300 transition cursor-pointer group"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Cloud &amp; Repos</span>
-            <div className="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-700 flex items-center justify-center group-hover:scale-105 transition">
-              <GitBranch className="w-4 h-4" />
-            </div>
+          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-xs group-hover:scale-105 transition">
+            2
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900 font-mono">
-              {loading ? '...' : connections.length}
-            </div>
-            <div className="text-xs text-slate-500 mt-1">AWS &amp; Git Connections</div>
+          <h3 className="text-sm font-bold text-slate-900 mt-3 group-hover:text-indigo-700 transition">
+            Connect AWS &amp; Git
+          </h3>
+          <p className="text-xs text-slate-500 mt-1">
+            Securely authorize GitHub manifest inspection and validate AWS IAM deployment roles.
+          </p>
+          <div className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-indigo-700">
+            <span>Connect Accounts</span>
+            <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition" />
           </div>
         </div>
 
-        {/* Terraform / IaC */}
         <div
-          onClick={() => onNavigate('iac', '/terraform')}
-          className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
+          onClick={() => onNavigate('repo_analyzer', '/source-analysis')}
+          className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs hover:shadow-md hover:border-blue-300 transition cursor-pointer group"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Terraform IaC</span>
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center group-hover:scale-105 transition">
-              <Code2 className="w-4 h-4" />
-            </div>
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-xs group-hover:scale-105 transition">
+            3
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900 font-mono">Ready</div>
-            <div className="text-xs text-slate-500 mt-1">Validated HCL stacks</div>
+          <h3 className="text-sm font-bold text-slate-900 mt-3 group-hover:text-emerald-700 transition">
+            Synthesize &amp; Deploy
+          </h3>
+          <p className="text-xs text-slate-500 mt-1">
+            AST scanner automatically right-sizes AWS services and synthesizes Terraform HCL.
+          </p>
+          <div className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+            <span>Run Scanner</span>
+            <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition" />
           </div>
         </div>
+      </div>
+    </div>
+  );
 
-        {/* Microservices Health */}
-        <div
-          onClick={() => onNavigate('monitoring', '/monitoring')}
-          className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">System Status</span>
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition">
-              <Activity className="w-4 h-4" />
-            </div>
+  // Widget 2: Platform Metrics Overview (Layer B)
+  const renderOverviewMetricsWidget = () => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Total Projects */}
+      <div
+        onClick={() => onNavigate('projects', '/projects')}
+        className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-500">Workspaces &amp; Projects</span>
+          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center group-hover:scale-105 transition">
+            <FolderKanban className="w-4 h-4" />
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-emerald-600 font-mono">14 / 14</div>
-            <div className="text-xs text-emerald-600 font-medium flex items-center gap-1 mt-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>All Services Healthy</span>
-            </div>
+        </div>
+        <div className="mt-3">
+          <div className="text-2xl font-bold text-slate-900">{projectsCount}</div>
+          <div className="text-[11px] text-slate-500 mt-0.5">Isolated tenant boundaries</div>
+        </div>
+      </div>
+
+      {/* Environments Fleet */}
+      <div
+        onClick={() => onNavigate('environments', '/environments')}
+        className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-500">Target Environments</span>
+          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center group-hover:scale-105 transition">
+            <Boxes className="w-4 h-4" />
+          </div>
+        </div>
+        <div className="mt-3">
+          <div className="text-2xl font-bold text-slate-900">{environmentsCount}</div>
+          <div className="text-[11px] text-slate-500 mt-0.5">Dev, Staging &amp; Production</div>
+        </div>
+      </div>
+
+      {/* Connected Accounts */}
+      <div
+        onClick={() => onNavigate('source_cloud', '/source-connection')}
+        className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-500">Connected Cloud &amp; Git</span>
+          <div className="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-700 flex items-center justify-center group-hover:scale-105 transition">
+            <GitBranch className="w-4 h-4" />
+          </div>
+        </div>
+        <div className="mt-3">
+          <div className="text-2xl font-bold text-slate-900">
+            {connectionsState.git.length + connectionsState.cloud.length}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5">
+            {connectionsState.cloud.length > 0 ? 'Live AWS Role Linked' : 'Awaiting AWS IAM connection'}
           </div>
         </div>
       </div>
 
-      {/* Clean 4-Step MVP Guided Workflow */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-5">
+      {/* Deployments Status */}
+      <div
+        onClick={() => onNavigate('deployments', '/deployment')}
+        className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-500">Deployments Executed</span>
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition">
+            <Rocket className="w-4 h-4" />
+          </div>
+        </div>
+        <div className="mt-3">
+          <div className="text-2xl font-bold text-slate-900">
+            {deploymentsState.status === 'success' ? deploymentsCount : 'Live'}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5">
+            {deploymentsState.status === 'success' ? 'Validated infrastructure runs' : 'Deployments engine ready'}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Widget 3: Recent Projects Fleet (Layer B)
+  const renderRecentProjectsWidget = () => (
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+      <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
         <div>
-          <h2 className="text-base font-bold text-slate-900">End-to-End Cloud Workflow</h2>
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <FolderKanban className="w-4 h-4 text-blue-600" />
+            <span>Active Cloud Workspaces ({projectsCount})</span>
+          </h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            Follow these core steps to provision and monitor infrastructure on your AWS account.
+            Projects configured with isolated environments and deployment boundaries.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            {
-              step: '1',
-              title: 'Connect AWS & Git',
-              desc: 'Enter AWS Access Key, Secret, and region to authorize infrastructure creation.',
-              view: 'source_cloud',
-              path: '/source-connection',
-              icon: GitBranch,
-              color: 'text-blue-600',
-              badge: 'Authentication',
-            },
-            {
-              step: '2',
-              title: 'Cloud Architecture',
-              desc: 'Design and review your multi-tier VPC, compute, container, and database topology.',
-              view: 'architecture_designer',
-              path: '/architecture-designer',
-              icon: Network,
-              color: 'text-cyan-600',
-              badge: 'Architecture',
-            },
-            {
-              step: '3',
-              title: 'Generate Terraform',
-              desc: 'Synthesize clean, validated HashiCorp HCL Terraform configuration files.',
-              view: 'iac',
-              path: '/terraform',
-              icon: Code2,
-              color: 'text-indigo-600',
-              badge: 'IaC Synthesis',
-            },
-            {
-              step: '4',
-              title: 'Deploy & Monitor',
-              desc: 'Execute deployment to AWS and view live resource metrics, CPU, and alarms.',
-              view: 'deployments',
-              path: '/deployment',
-              icon: Rocket,
-              color: 'text-emerald-600',
-              badge: 'Operation',
-            },
-          ].map((item) => {
-            const Icon = item.icon;
-            return (
-              <div
-                key={item.step}
-                onClick={() => onNavigate(item.view, item.path)}
-                className="p-5 rounded-xl border border-slate-200/80 hover:border-blue-500 hover:shadow-md transition cursor-pointer group flex flex-col justify-between space-y-4 bg-slate-50/40 hover:bg-white"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="w-7 h-7 rounded-lg bg-blue-100 text-blue-800 font-bold font-mono text-xs flex items-center justify-center">
-                      {item.step}
-                    </span>
-                    <Icon className={`w-5 h-5 ${item.color}`} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition">
-                      {item.title}
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                      {item.desc}
-                    </p>
-                  </div>
-                </div>
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-blue-600 group-hover:text-blue-700">
-                  <span>Launch Step {item.step}</span>
-                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition" />
-                </div>
-              </div>
-            );
-          })}
+        <div className="flex items-center gap-2">
+          <div className="relative w-44 sm:w-56">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Filter projects..."
+              value={projectSearchQuery}
+              onChange={(e) => setProjectSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+            />
+          </div>
+
+          <button
+            onClick={() => onNavigate('projects', '/projects')}
+            className="px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition cursor-pointer shrink-0"
+          >
+            View All ({projectsCount})
+          </button>
         </div>
       </div>
 
-      {/* Recent Projects Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Recent Projects</h3>
-            <p className="text-xs text-slate-500">Active application workspaces</p>
-          </div>
-          <button
-            onClick={() => onNavigate('projects', '/projects')}
-            className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition flex items-center gap-1 cursor-pointer"
-          >
-            <span>View All</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+      {projectsState.status === 'loading' ? (
+        <div className="p-8 text-center text-xs text-slate-500">Loading workspaces...</div>
+      ) : filteredProjects.length === 0 ? (
+        <div className="p-8 text-center space-y-2">
+          <p className="text-xs text-slate-500">No projects match your filter query.</p>
         </div>
-
-        {loading ? (
-          <div className="p-8 text-center text-xs text-slate-400">Loading live project data...</div>
-        ) : projects.length === 0 ? (
-          <div className="p-8 text-center text-xs text-slate-400">
-            No projects created yet. Click "New Project" to create your first cloud project.
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {projects.slice(0, 5).map((p) => (
-              <div
-                key={p.id}
-                onClick={() => onNavigate('projects', `/projects/${p.id}`)}
-                className="p-4 hover:bg-slate-50/70 transition flex items-center justify-between cursor-pointer"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center font-bold text-sm text-slate-700 font-mono">
-                    {p.name.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-900">{p.name}</div>
-                    <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
-                      <span className="font-mono text-slate-600">{p.project_type}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    {p.status || 'Active'}
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {filteredProjects.slice(0, 5).map((project) => (
+            <div
+              key={project.id || project.name}
+              className="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/70 transition"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xs font-bold text-slate-900 hover:text-blue-600 transition truncate cursor-pointer" onClick={() => onNavigate('projects', '/projects')}>
+                    {project.name}
                   </span>
-                  <ArrowRight className="w-4 h-4 text-slate-400" />
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-slate-100 text-slate-700 border border-slate-200 capitalize">
+                    {project.project_type?.replace(/_/g, ' ') || 'Web App'}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    {project.status || 'ACTIVE'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1 truncate max-w-xl">
+                  {project.description || 'Configured cloud workspace for architecture synthesis and deployments.'}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-xs text-slate-500 font-mono">
+                  {project.environment_count || 0} envs
+                </span>
+                <button
+                  onClick={() => onNavigate('repo_analyzer', '/source-analysis', { projectId: project.id })}
+                  className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition cursor-pointer"
+                >
+                  Analyze Code
+                </button>
+                <button
+                  onClick={() => onNavigate('architecture_studio', '/architecture-studio', { projectId: project.id })}
+                  className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition cursor-pointer"
+                >
+                  Architecture Studio
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // Widget 4: Target Environments Fleet Summary (Layer B)
+  const renderEnvironmentsSummaryWidget = () => (
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+      <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Boxes className="w-4 h-4 text-indigo-600" />
+            <span>Target Environments Fleet ({environmentsCount})</span>
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Active deployment stages and target AWS regions.
+          </p>
+        </div>
+        <button
+          onClick={() => onNavigate('environments', '/environments')}
+          className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition cursor-pointer"
+        >
+          Manage Fleet ➔
+        </button>
+      </div>
+
+      {environmentsCount === 0 ? (
+        <div className="p-6 text-center text-xs text-slate-500">
+          No environments configured yet. Add Dev, Staging, or Production to a project.
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+          {environmentsState.data.slice(0, 6).map((env, idx) => (
+            <div key={env.id || idx} className="p-3.5 px-5 flex items-center justify-between gap-3 hover:bg-slate-50/50 transition">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-800 truncate">{env.name}</span>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold uppercase ${
+                    env.env_type === 'production'
+                      ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                      : env.env_type === 'staging'
+                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                      : 'bg-blue-50 text-blue-700 border border-blue-200'
+                  }`}>
+                    {env.env_type}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                  Region: {env.aws_region || 'us-east-1'}
                 </div>
               </div>
-            ))}
+
+              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                {env.status || 'ACTIVE'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // Widget 5: Attention Required & Risk Gate (Layer B - Never hidden if critical)
+  const renderAttentionRequiredWidget = () => (
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+      <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-rose-600" />
+            <span>Attention Required &amp; Governance Gates</span>
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Operational blockers, pending architecture approvals, and security alerts.
+          </p>
+        </div>
+        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+          attentionItems.length > 0
+            ? 'bg-rose-50 text-rose-700 border border-rose-200'
+            : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+        }`}>
+          {attentionItems.length > 0 ? `${attentionItems.length} Action Needed` : 'All Systems Clear'}
+        </span>
+      </div>
+
+      {attentionItems.length === 0 ? (
+        <div className="p-6 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          <span>No critical security alerts, drift anomalies, or failed deployments detected.</span>
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {attentionItems.map((item) => (
+            <div key={item.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/60 transition">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className={`w-4 h-4 mt-0.5 shrink-0 ${item.type === 'danger' ? 'text-rose-600' : 'text-amber-600'}`} />
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">{item.title}</h4>
+                  <p className="text-xs text-slate-500 mt-0.5">{item.description}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => onNavigate(item.route.replace('/', ''), item.route)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg shadow-2xs transition shrink-0 cursor-pointer ${
+                  item.type === 'danger'
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                    : 'bg-amber-600 hover:bg-amber-700 text-white'
+                }`}
+              >
+                {item.actionLabel}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // Widget 6: Deployments Overview (Layer B)
+  const renderDeploymentsOverviewWidget = () => (
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+      <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Rocket className="w-4 h-4 text-emerald-600" />
+            <span>Deployment Pipeline &amp; Drift</span>
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Real AWS infrastructure deployments and terraform state runs.
+          </p>
+        </div>
+        <button
+          onClick={() => onNavigate('deployments', '/deployment')}
+          className="text-xs font-semibold text-emerald-600 hover:text-emerald-800 transition cursor-pointer"
+        >
+          View Pipeline ➔
+        </button>
+      </div>
+
+      {deploymentsState.status === 'unavailable' ? (
+        <div className="p-6 text-center space-y-2">
+          <p className="text-xs text-slate-500">Deployments service is standing by. Generate Terraform code to run execution plans.</p>
+          <button
+            onClick={() => onNavigate('iac', '/terraform')}
+            className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg transition"
+          >
+            Check IaC Generator
+          </button>
+        </div>
+      ) : deploymentsCount === 0 ? (
+        <div className="p-6 text-center space-y-2">
+          <p className="text-xs text-slate-500">No deployments triggered yet for active projects.</p>
+          <button
+            onClick={() => onNavigate('deployments', '/deployment')}
+            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-2xs transition"
+          >
+            Open Execution Gate
+          </button>
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {deploymentsState.data.slice(0, 4).map((dep, idx) => (
+            <div key={dep.id || idx} className="p-3.5 px-5 flex items-center justify-between gap-3 hover:bg-slate-50/50 transition">
+              <div>
+                <span className="text-xs font-bold text-slate-800">{dep.project_name || 'Cloud Workload'}</span>
+                <div className="text-[11px] text-slate-400 font-mono">
+                  {dep.environment || 'production'} • {dep.target_region || 'us-east-1'}
+                </div>
+              </div>
+              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                dep.status === 'SUCCESS' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-700'
+              }`}>
+                {dep.status || 'COMPLETED'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // Widget 7: Microservices Health Probes (Layer B)
+  const renderSystemHealthWidget = () => (
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+      <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Server className="w-4 h-4 text-blue-600" />
+            <span>Microservices Core Fleet</span>
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Decoupled service health, gateways, and broker status.
+          </p>
+        </div>
+        <button
+          onClick={() => fetchAllDashboardData(true)}
+          disabled={refreshing}
+          className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg transition cursor-pointer"
+          title="Re-probe services"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+
+      <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+        {[
+          { code: 'gateway', name: 'API Gateway', port: 8000 },
+          { code: 'projects', name: 'Project Mgr', port: 8001 },
+          { code: 'connections', name: 'Source Broker', port: 8002 },
+          { code: 'analyzer', name: 'AST Analyzer', port: 8003 },
+          { code: 'architecture', name: 'Arch Studio', port: 8005 },
+          { code: 'deployer', name: 'Deployer Engine', port: 8011 },
+        ].map((svc) => {
+          const probe = fleetProbes[svc.code] || { status: 'ONLINE', latency: 12 };
+          const isOnline = probe.status === 'ONLINE';
+
+          return (
+            <div key={svc.code} className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/70 flex flex-col justify-between gap-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-800 truncate">{svc.name}</span>
+                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-rose-500 animate-pulse'}`} />
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                <span>Port {svc.port}</span>
+                <span>{probe.latency}ms</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  // Widget 8: Recent Activity Log (Layer B)
+  const renderRecentActivityWidget = () => (
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+      <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-cyan-600" />
+            <span>Audit &amp; Operations Activity</span>
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Chronological log of workspace configurations and cloud deployments.
+          </p>
+        </div>
+        <button
+          onClick={() => onNavigate('audit', '/audit')}
+          className="text-xs font-semibold text-cyan-700 hover:text-cyan-900 transition cursor-pointer"
+        >
+          Audit History ➔
+        </button>
+      </div>
+
+      <div className="divide-y divide-slate-100 text-xs">
+        {projectsCount > 0 ? (
+          projectsState.data.slice(0, 4).map((p, idx) => (
+            <div key={p.id || idx} className="p-3.5 px-5 flex items-start gap-3">
+              <Clock className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <span className="font-semibold text-slate-800">Workspace Configured: {p.name}</span>
+                <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                  Type: {p.project_type || 'web_application'} • Tenant: {user?.account_id || 'personal'}
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="p-6 text-center text-xs text-slate-500">
+            No events recorded. Activity will automatically log as projects and architectures are modified.
           </div>
         )}
       </div>
+    </div>
+  );
+
+  // Widget 9: Recommendations Engine (Layer C - Intelligent UI)
+  const renderRecommendationsWidget = () => {
+    const rec = dashboardSummary?.recommended_action || {
+      id: 'default_rec',
+      title: lifecycleStage === 'stage_1_onboarding' ? 'Create Your First Project Workspace' : 'Continue Architecture Sizing',
+      description: lifecycleDescription,
+      action_label: lifecycleStage === 'stage_1_onboarding' ? 'Create Project' : 'Open Studio',
+      route: lifecycleStage === 'stage_1_onboarding' ? '/projects' : '/architecture-studio',
+      action_type: lifecycleStage === 'stage_1_onboarding' ? 'modal' : 'navigate',
+    };
+
+    return (
+      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-2xl p-5 sm:p-6 shadow-md border border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1 max-w-2xl">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-cyan-400/20 text-cyan-300 text-[10px] font-bold font-mono border border-cyan-400/30">
+              <Sparkles className="w-3 h-3 text-cyan-300" />
+              INTELLIGENT WORKFLOW SUGGESTION
+            </span>
+          </div>
+          <h3 className="text-base font-bold tracking-tight">{rec.title}</h3>
+          <p className="text-xs text-slate-300 leading-relaxed">{rec.description}</p>
+        </div>
+
+        <button
+          onClick={() => {
+            if (rec.action_type === 'modal') onOpenCreateProject();
+            else onNavigate(rec.route.replace('/', ''), rec.route);
+          }}
+          className="px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-500/20 transition flex items-center gap-2 cursor-pointer shrink-0"
+        >
+          <span>{rec.action_label}</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  };
+
+  // ── 8. Render Engine mapping widgets to ordered grid ──
+  const widgetRendererMap = {
+    getting_started: renderGettingStartedWidget,
+    overview_metrics: renderOverviewMetricsWidget,
+    recent_projects: renderRecentProjectsWidget,
+    environments_summary: renderEnvironmentsSummaryWidget,
+    deployments_overview: renderDeploymentsOverviewWidget,
+    attention_required: renderAttentionRequiredWidget,
+    system_health: renderSystemHealthWidget,
+    recent_activity: renderRecentActivityWidget,
+    recommendations: renderRecommendationsWidget,
+  };
+
+  // Reorder and group: pinned widgets always take precedence at top
+  const activeOrder = preferences.widget_order || DEFAULT_PREFERENCES.widget_order;
+  const visibility = preferences.widget_visibility || DEFAULT_PREFERENCES.widget_visibility;
+  const sizes = preferences.widget_sizes || DEFAULT_PREFERENCES.widget_sizes;
+  const pinned = preferences.pinned_widgets || [];
+
+  const sortedOrder = useMemo(() => {
+    const pinnedSet = new Set(pinned);
+    const pinnedList = activeOrder.filter((id) => pinnedSet.has(id));
+    const unpinnedList = activeOrder.filter((id) => !pinnedSet.has(id));
+    return [...pinnedList, ...unpinnedList];
+  }, [activeOrder, pinned]);
+  return (
+    <div className="space-y-6 animate-in fade-in duration-200">
+      {/* ── Layer A: Core UI (Greeting, Stage Intro, Action Bar, Layout Customization) ── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              {timeGreeting}, {username}
+            </h1>
+            {loading && (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600 shrink-0" />
+            )}
+            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+              TENANT: {formatAccountId(user?.account_id || '109283746519')}
+            </span>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl leading-relaxed">
+            {lifecycleDescription}
+          </p>
+        </div>
+
+        {/* Dashboard Quick Actions & Customization Button */}
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
+          <button
+            onClick={onOpenCreateProject}
+            className="px-3 py-1.5 bg-[#1e40af] hover:bg-[#1d4ed8] text-white text-xs font-semibold rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Create Project</span>
+          </button>
+
+          <button
+            onClick={() => onNavigate('repo_analyzer', '/source-analysis')}
+            className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <FileCode2 className="w-3.5 h-3.5 text-blue-600" />
+            <span className="hidden sm:inline">Analyze Code</span>
+          </button>
+
+          <button
+            onClick={() => onNavigate('architecture_studio', '/architecture-studio')}
+            className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <Network className="w-3.5 h-3.5 text-indigo-600" />
+            <span className="hidden sm:inline">Architecture Studio</span>
+          </button>
+
+          <button
+            onClick={() => setIsCustomizerOpen(true)}
+            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer border border-slate-200/80"
+            title="Configure widget layout, ordering, and visibility"
+          >
+            <Sliders className="w-3.5 h-3.5 text-slate-600" />
+            <span>Customize</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── Layer B & C: Widgets Grid with User Customization Order & Visibility ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {sortedOrder.map((widgetId) => {
+          const renderer = widgetRendererMap[widgetId];
+          if (!renderer) return null;
+
+          const isEligible = WIDGET_REGISTRY[widgetId]?.isEligible;
+          // Ineligible widgets are not rendered
+          if (!isEligible) return null;
+
+          const isVisible = visibility[widgetId] !== false;
+          // Critical warnings in attention_required cannot be hidden
+          const isCritical = widgetId === 'attention_required' && attentionItems.length > 0;
+          if (!isVisible && !isCritical) return null;
+
+          const size = sizes[widgetId] || 'full';
+          const colSpanClass = size === 'half' ? 'md:col-span-1' : 'md:col-span-2';
+
+          return (
+            <div key={widgetId} className={`${colSpanClass} transition duration-150`}>
+              {renderer()}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Widget Customization Modal ── */}
+      <WidgetCustomizerModal
+        isOpen={isCustomizerOpen}
+        onClose={() => setIsCustomizerOpen(false)}
+        widgetRegistry={WIDGET_REGISTRY}
+        preferences={preferences}
+        onSavePreferences={handleSavePreferences}
+        onResetPreferences={handleResetPreferences}
+      />
     </div>
   );
 }

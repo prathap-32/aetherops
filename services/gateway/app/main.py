@@ -547,7 +547,7 @@ async def proxy_microservice_api(module: str, request: Request, subpath: str = "
     ):
         upstream = UPSTREAM_MAP["auth"]
 
-    elif module in ("projects", "tenants", "workspaces", "environments", "meta"):
+    elif module in ("projects", "tenants", "workspaces", "environments", "meta", "dashboard"):
         upstream = UPSTREAM_MAP["projects"]
 
     elif module in ("connections", "cloud", "github", "source"):

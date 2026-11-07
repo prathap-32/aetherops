@@ -30,6 +30,7 @@ import { useAuth } from '../context/AuthContext';
 // Path-to-View mapping for clean URLs
 const PATH_VIEW_MAP = {
   '/': 'dashboard',
+  '/app': 'dashboard',
   '/dashboard': 'dashboard',
   '/projects': 'projects',
   '/environments': 'environments',

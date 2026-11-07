@@ -141,6 +141,20 @@ export const authApi = {
     apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/logout`, { method: 'POST' }).catch(() => {}),
 };
 
+export const dashboardApi = {
+  getSummary: () => apiRequest('/api/v1/dashboard'),
+  getPreferences: () => apiRequest('/api/v1/dashboard/preferences'),
+  savePreferences: (prefs) =>
+    apiRequest('/api/v1/dashboard/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(prefs),
+    }),
+  resetPreferences: () =>
+    apiRequest('/api/v1/dashboard/preferences/reset', {
+      method: 'POST',
+    }),
+};
+
 export const projectsApi = {
   list: async () => {
     const res = await apiRequest('/api/v1/projects');
