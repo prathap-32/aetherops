@@ -220,7 +220,7 @@ export default function ProjectEnvironmentView({
             }`}
           >
             <FolderKanban className="w-3.5 h-3.5" />
-            <span>Projects &amp; Workspaces</span>
+            <span>Projects</span>
             {projectsList.length > 0 && (
               <span
                 className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${

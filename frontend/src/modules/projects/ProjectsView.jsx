@@ -57,7 +57,6 @@ export default function ProjectsView({
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState('web_application');
   const [newDesc, setNewDesc] = useState('');
-  const [newPreset, setNewPreset] = useState('standard');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createError, setCreateError] = useState('');
 
@@ -98,14 +97,12 @@ export default function ProjectsView({
         name: newName.trim(),
         project_type: newType,
         description: newDesc.trim() || null,
-        environments_preset: newPreset !== 'none' ? newPreset : null,
         account_id: user?.account_id || null,
       });
 
       setNewName('');
       setNewDesc('');
       setNewType('web_application');
-      setNewPreset('standard');
       onCloseCreateModal();
       if (showToast) showToast(`Project "${newName.trim()}" created successfully!`);
       await fetchProjects();
@@ -118,7 +115,7 @@ export default function ProjectsView({
         handleNavigate('environments', '/environments', {
           projectId: created.id || created.project_id,
           project: created,
-          autoOpenModal: newPreset === 'none',
+          autoOpenModal: true,
         });
       }
     } catch (err) {
@@ -540,20 +537,6 @@ export default function ProjectsView({
                   onChange={(e) => setNewDesc(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:border-[#1e40af] focus:ring-1 focus:ring-[#1e40af]"
                 />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-700">Environment Fleet Preset</label>
-                <select
-                  value={newPreset}
-                  onChange={(e) => setNewPreset(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-[#1e40af]"
-                >
-                  <option value="standard">Standard Fleet (Dev, Staging &amp; Prod in us-east-1)</option>
-                  <option value="minimal">Minimal (Single Dev tier in us-east-1)</option>
-                  <option value="multi_region">Multi-Region (Dev-US, Staging-EU, Prod-Global)</option>
-                  <option value="none">Manual (Configure environments manually)</option>
-                </select>
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">

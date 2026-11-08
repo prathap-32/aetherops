@@ -14,7 +14,7 @@ export default function Navbar({
   const VIEW_TITLES = {
     dashboard: 'Platform Dashboard',
     project_environment: 'Project and Environment',
-    projects: 'Projects & Workspaces',
+    projects: 'Projects',
     environments: 'Environment',
     source_cloud: 'Connect AWS & Git',
     repo_analyzer: 'Source Code Analyzer',

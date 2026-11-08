@@ -224,7 +224,7 @@ export default function EnvironmentsView({
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-xs transition"
           >
             <Plus className="w-4 h-4" />
-            Provision Environment
+            New Environment
           </button>
         </div>
       </div>
@@ -450,10 +450,7 @@ export default function EnvironmentsView({
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 p-6 animate-in fade-in zoom-in-95 duration-200">
-            <h3 className="text-lg font-bold text-slate-900">Provision Fleet Environment</h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Add a deployment tier to host repository workloads and AWS resources.
-            </p>
+            <h3 className="text-lg font-bold text-slate-900">New Environment</h3>
 
             <form onSubmit={handleCreateEnv} className="mt-5 space-y-4">
               <div>
