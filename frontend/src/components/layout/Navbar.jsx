@@ -1,6 +1,6 @@
 // frontend/src/components/layout/Navbar.jsx
 import React from 'react';
-import { Menu, FolderKanban } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { formatAccountId } from '../../services/api';
 
 export default function Navbar({
@@ -13,10 +13,10 @@ export default function Navbar({
 }) {
   const VIEW_TITLES = {
     dashboard: 'Platform Dashboard',
-    project_environment: '1. Project and Environment',
-    projects: '1. Project and Environment',
-    environments: '1. Project and Environment',
-    source_cloud: '2. Connect AWS & Git',
+    project_environment: 'Project and Environment',
+    projects: 'Projects & Workspaces',
+    environments: 'Target Environments',
+    source_cloud: 'Connect AWS & Git',
     repo_analyzer: 'Source Code Analyzer',
     architecture: 'Cloud Architecture Studio',
     architecture_studio: 'Cloud Architecture Studio',
@@ -83,19 +83,6 @@ export default function Navbar({
             {currentTitle}
           </span>
 
-          {/* Active Workspace / Project Indicator */}
-          {activeProject && (
-            <div
-              onClick={() => onNavigate && onNavigate('projects', '/projects')}
-              className={`hidden md:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-200/80 max-w-[200px] truncate ${
-                onNavigate ? 'cursor-pointer hover:bg-blue-100/80 transition' : ''
-              }`}
-              title={`Active Project: ${activeProject.name} (click to view all projects)`}
-            >
-              <FolderKanban className="w-3 h-3 shrink-0 text-blue-600" />
-              <span className="truncate">{activeProject.name}</span>
-            </div>
-          )}
         </div>
       </div>
 

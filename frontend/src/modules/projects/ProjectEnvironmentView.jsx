@@ -205,7 +205,7 @@ export default function ProjectEnvironmentView({
         </div>
       )}
       {/* ── Sleek Minimalist Tab Switcher (Projects & Environments) ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-3">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -258,32 +258,6 @@ export default function ProjectEnvironmentView({
           </button>
         </div>
 
-        {/* Minimal Context Badges */}
-        {(activeProject || activeEnvironment) && (
-          <div className="flex items-center gap-2 text-xs">
-            {activeProject && (
-              <span
-                onClick={() => setActiveTab('projects')}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 font-medium cursor-pointer hover:bg-slate-100 transition"
-                title={`Active Project: ${activeProject.name}`}
-              >
-                <FolderKanban className="w-3 h-3 text-blue-600" />
-                <span className="font-semibold text-slate-800 truncate max-w-[150px]">{activeProject.name}</span>
-              </span>
-            )}
-            {activeEnvironment && (
-              <span
-                onClick={() => setActiveTab('environments')}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 font-medium cursor-pointer hover:bg-emerald-100/80 transition"
-                title={`Active Environment: ${activeEnvironment.name}`}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span className="truncate max-w-[140px]">{activeEnvironment.name}</span>
-                <span className="text-[10px] text-emerald-600 font-mono">({activeEnvironment.aws_region || activeEnvironment.region || 'us-east-1'})</span>
-              </span>
-            )}
-          </div>
-        )}
       </div>
 
       {/* ── Section Content ── */}
