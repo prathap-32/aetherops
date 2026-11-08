@@ -554,9 +554,6 @@ export default function ProjectsView({
                   <option value="multi_region">Multi-Region (Dev-US, Staging-EU, Prod-Global)</option>
                   <option value="none">Manual (Configure environments manually)</option>
                 </select>
-                <p className="text-[11px] text-slate-400">
-                  Auto-provisions pre-configured deployment tiers.
-                </p>
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
