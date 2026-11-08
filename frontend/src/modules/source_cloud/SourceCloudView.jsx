@@ -6,26 +6,24 @@ import {
   CheckCircle2,
   AlertCircle,
   RefreshCw,
-  Key,
-  ShieldCheck,
   FolderGit2,
   Layers,
-  ArrowRight,
-  ExternalLink,
   ChevronRight,
   ChevronDown,
-  Database,
-  Cpu,
-  Lock,
-  Eye,
-  EyeOff,
-  Sparkles,
   Search,
   Globe,
   Check,
-  X
+  X,
+  Plus,
+  Trash2,
+  LayoutGrid,
+  List,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  Zap,
 } from 'lucide-react';
-import { projectsApi, connectionsApi } from '../../services/api';
+import { projectsApi, connectionsApi, formatAccountId } from '../../services/api';
 import { AWS_REGIONS_39 } from '../../constants/awsRegions';
 
 export default function SourceCloudView({
@@ -48,6 +46,20 @@ export default function SourceCloudView({
   const [cloudConnections, setCloudConnections] = useState([]);
   const [selectedSnapshot, setSelectedSnapshot] = useState(null);
   const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(false);
+  const [inUseConnectionId, setInUseConnectionId] = useState(() => {
+    try {
+      return localStorage.getItem('aether_in_use_connection') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  // Modal & View Mode states
+  const [isNewConnectionModalOpen, setIsNewConnectionModalOpen] = useState(false);
+  const [newConnType, setNewConnType] = useState('git'); // 'git' | 'cloud'
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
+  const [providerFilter, setProviderFilter] = useState('all'); // 'all' | 'git' | 'cloud'
+  const [searchQuery, setSearchQuery] = useState('');
 
   // GitHub form state
   const [authMethod, setAuthMethod] = useState('pat'); // 'pat' | 'oauth'
@@ -99,7 +111,7 @@ export default function SourceCloudView({
     group: 'AWS Global'
   };
 
-  // Finalize unified submission state
+  // Submission & Loading state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -109,7 +121,7 @@ export default function SourceCloudView({
     setIsLoading(true);
     try {
       const [projList, gitList, cloudList] = await Promise.all([
-        projectsApi.list(),
+        projectsApi.list().catch(() => []),
         connectionsApi.listGit().catch(() => []),
         connectionsApi.listCloud().catch(() => []),
       ]);
@@ -118,13 +130,24 @@ export default function SourceCloudView({
       setGitConnections(gitList);
       setCloudConnections(cloudList);
 
-      if (projList.length > 0) {
+      if (projList.length > 0 && !selectedProjectId) {
         const matched = targetProjectId && projList.find(p => (p.id || p.project_id) === targetProjectId);
         const firstId = matched ? (matched.id || matched.project_id) : (projList[0].id || projList[0].project_id);
         setSelectedProjectId(firstId);
       }
+
+      // Default first connection as in-use if none explicitly set
+      if (!inUseConnectionId && (gitList.length > 0 || cloudList.length > 0)) {
+        const firstId = gitList[0]?.id || gitList[0]?.connection_id || cloudList[0]?.id || cloudList[0]?.cloud_id;
+        if (firstId) {
+          setInUseConnectionId(firstId);
+          try {
+            localStorage.setItem('aether_in_use_connection', firstId);
+          } catch {}
+        }
+      }
     } catch (err) {
-      console.error('Failed to load initial data:', err);
+      console.error('Failed to load initial connections:', err);
     } finally {
       setIsLoading(false);
     }
@@ -132,6 +155,15 @@ export default function SourceCloudView({
 
   useEffect(() => {
     loadInitialData();
+
+    // Auto-refresh polling every 6 seconds
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        loadInitialData();
+      }
+    }, 6000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // When project changes, fetch its environments
@@ -176,7 +208,7 @@ export default function SourceCloudView({
     }
   };
 
-  // Listen for OAuth completion from popup or URL parameters
+  // Listen for OAuth completion
   useEffect(() => {
     const handleOAuthMessage = async (event) => {
       if (event.data && event.data.type === 'GITHUB_CONNECTION_SUCCESS') {
@@ -199,7 +231,6 @@ export default function SourceCloudView({
 
     window.addEventListener('message', handleOAuthMessage);
 
-    // Also check URL parameters if redirected in full page
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('github_connected') === '1' && urlParams.get('gh_token')) {
       const token = urlParams.get('gh_token');
@@ -218,7 +249,6 @@ export default function SourceCloudView({
     return () => window.removeEventListener('message', handleOAuthMessage);
   }, []);
 
-  // Handle GitHub OAuth Popup
   const handleConnectGitHubOAuth = () => {
     setIsConnectingOAuth(true);
     setStatusMessage(null);
@@ -233,7 +263,6 @@ export default function SourceCloudView({
     );
   };
 
-  // Handle PAT verification
   const handleVerifyPat = async () => {
     if (!patToken.trim()) return;
     setIsVerifyingPat(true);
@@ -269,7 +298,6 @@ export default function SourceCloudView({
         setSelectedBranch(branchList[0].name || branchList[0] || 'main');
       }
     } catch (err) {
-      console.warn('Failed to fetch branches, defaulting to main:', err);
       setBranches(['main', 'master', 'develop']);
       setSelectedBranch('main');
     }
@@ -281,7 +309,6 @@ export default function SourceCloudView({
     loadBranchesForRepo(val, patToken.trim());
   };
 
-  // Handle AWS validation
   const handleValidateAws = async () => {
     if (!awsAccessKey.trim() || !awsSecretKey.trim()) {
       setStatusMessage({ type: 'error', text: 'Please enter both AWS Access Key ID and Secret Access Key.' });
@@ -307,15 +334,11 @@ export default function SourceCloudView({
     }
   };
 
-  // Handle Unified Finalize
+  // Finalize new connection submission
   const handleFinalize = async (e) => {
     e.preventDefault();
     if (!selectedProjectId || !selectedEnvId) {
       alert('Please select both a Project and an Environment.');
-      return;
-    }
-    if (!selectedRepo) {
-      alert('Please select or specify a GitHub repository.');
       return;
     }
 
@@ -325,7 +348,7 @@ export default function SourceCloudView({
       const payload = {
         project_id: selectedProjectId,
         environment_id: selectedEnvId,
-        repo_url: selectedRepo.startsWith('http') ? selectedRepo : `https://github.com/${selectedRepo}`,
+        repo_url: selectedRepo ? (selectedRepo.startsWith('http') ? selectedRepo : `https://github.com/${selectedRepo}`) : 'https://github.com/aetherops/sample-repo',
         branch: selectedBranch || 'main',
         pat_token: patToken.trim() || 'mock-token',
         access_token: patToken.trim() || 'mock-token',
@@ -337,21 +360,64 @@ export default function SourceCloudView({
       };
 
       const result = await connectionsApi.finalize(payload);
+      const newId = result.git_connection_id || result.cloud_connection_id || result.id;
+      if (newId) {
+        setInUseConnectionId(newId);
+        try {
+          localStorage.setItem('aether_in_use_connection', newId);
+        } catch {}
+      }
+
+      setIsNewConnectionModalOpen(false);
       setStatusMessage({
         type: 'success',
-        text: `Successfully connected Git & AWS to environment! Git ID: ${result.git_connection_id || 'Connected'}`,
+        text: 'Successfully established and registered new connection!',
       });
 
-      // Refresh connections list
       await loadInitialData();
     } catch (err) {
-      setStatusMessage({ type: 'error', text: `Finalization failed: ${err.message}` });
+      setStatusMessage({ type: 'error', text: `Connection failed: ${err.message}` });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // View Snapshot details
+  const handleSetInUse = (connId, e) => {
+    if (e) e.stopPropagation();
+    setInUseConnectionId(connId);
+    try {
+      localStorage.setItem('aether_in_use_connection', connId);
+    } catch {}
+  };
+
+  const handleDeleteConnection = async (conn, e) => {
+    if (e) e.stopPropagation();
+    const connId = conn.id || conn.connection_id;
+    const isGit = conn.kind === 'git';
+    const label = isGit
+      ? (conn.repo_name || conn.repo_url || 'this repository')
+      : (conn.account_id ? `AWS Account ${conn.account_id}` : 'this cloud connection');
+
+    if (!window.confirm(`Are you sure you want to delete connection "${label}"?`)) return;
+
+    try {
+      if (isGit) {
+        await connectionsApi.deleteGit(connId);
+      } else {
+        await connectionsApi.deleteCloud(connId);
+      }
+      if (inUseConnectionId === connId) {
+        setInUseConnectionId('');
+        try {
+          localStorage.removeItem('aether_in_use_connection');
+        } catch {}
+      }
+      await loadInitialData();
+    } catch (err) {
+      alert(`Failed to delete connection: ${err.message || err}`);
+    }
+  };
+
   const handleViewSnapshot = async (connId) => {
     setIsLoadingSnapshot(true);
     try {
@@ -364,556 +430,318 @@ export default function SourceCloudView({
     }
   };
 
+  // Build unified connection card objects
+  const unifiedGit = gitConnections.map((g) => {
+    const id = g.id || g.connection_id;
+    const proj = projects.find((p) => (p.id || p.project_id) === g.project_id);
+    return {
+      ...g,
+      id,
+      kind: 'git',
+      title: g.repo_name || (g.repo_url ? g.repo_url.replace('https://github.com/', '') : 'Git Repository'),
+      provider: 'GitHub',
+      projectName: proj?.name || g.project_id || 'Active Project',
+      envIdentifier: g.environment_id || 'Dev',
+      branch: g.branch || 'main',
+      status: g.status || 'CONNECTED',
+    };
+  });
+
+  const unifiedCloud = cloudConnections.map((c) => {
+    const id = c.id || c.cloud_id;
+    const proj = projects.find((p) => (p.id || p.project_id) === c.project_id);
+    return {
+      ...c,
+      id,
+      kind: 'cloud',
+      title: c.account_id ? `AWS Account ${formatAccountId(c.account_id)}` : 'AWS IAM Cloud Provider',
+      provider: 'AWS Cloud',
+      projectName: proj?.name || c.project_id || 'Active Project',
+      envIdentifier: c.environment_id || 'Production',
+      region: c.aws_region || 'us-east-1',
+      status: c.status || 'VERIFIED',
+    };
+  });
+
+  const allConnections = [...unifiedGit, ...unifiedCloud];
+
+  // Filtering
+  const q = searchQuery.toLowerCase().trim();
+  const filteredConnections = allConnections.filter((conn) => {
+    const matchesProvider =
+      providerFilter === 'all' ||
+      (providerFilter === 'git' && conn.kind === 'git') ||
+      (providerFilter === 'cloud' && conn.kind === 'cloud');
+
+    const matchesQuery =
+      !q ||
+      conn.title?.toLowerCase().includes(q) ||
+      conn.projectName?.toLowerCase().includes(q) ||
+      conn.envIdentifier?.toLowerCase().includes(q) ||
+      conn.branch?.toLowerCase().includes(q) ||
+      conn.region?.toLowerCase().includes(q);
+
+    return matchesProvider && matchesQuery;
+  });
+
+  const totalConnections = allConnections.length;
+  const inUseCount = allConnections.filter((c) => c.id === inUseConnectionId).length || (totalConnections > 0 ? 1 : 0);
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-6 animate-in fade-in duration-200">
+      {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Source &amp; Cloud Connection</h1>
-          </div>
-          <p className="text-sm text-slate-500 mt-1">
-            Securely link Git repositories, verify IAM credentials, and configure target AWS cloud deployment providers.
-          </p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Connect AWS &amp; Git</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
             onClick={loadInitialData}
             disabled={isLoading}
-            className="p-2 text-slate-600 hover:text-slate-900 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition shadow-xs"
-            title="Refresh"
+            className="p-2 text-slate-600 hover:text-slate-900 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 shadow-xs transition"
+            title="Refresh connections"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsNewConnectionModalOpen(true)}
+            className="px-3.5 py-2 rounded-lg bg-[#1e40af] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Connection</span>
           </button>
         </div>
       </div>
 
       {statusMessage && (
         <div
-          className={`p-4 rounded-xl border flex items-center justify-between text-sm ${
+          className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-medium animate-in fade-in duration-150 ${
             statusMessage.type === 'success'
               ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
               : 'bg-rose-50 border-rose-200 text-rose-800'
           }`}
         >
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             {statusMessage.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
             )}
             <span>{statusMessage.text}</span>
           </div>
           <button
             onClick={() => setStatusMessage(null)}
-            className="text-xs font-semibold underline hover:opacity-80 ml-4"
+            className="text-xs font-bold underline hover:opacity-80 ml-2 cursor-pointer"
           >
             Dismiss
           </button>
         </div>
       )}
 
-      {/* Main Unified Connection Wizard Form */}
-      <form onSubmit={handleFinalize} className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-          <div className="flex items-center gap-2 text-slate-900 font-semibold text-base">
-            <Sparkles className="w-5 h-5 text-blue-600" />
-            <span>Connect Git & AWS Cloud Fleet</span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Specify the destination project environment, select your repository source, and connect AWS IAM credentials.
-          </p>
-        </div>
-
-        <div className="p-6 space-y-6">
-          {/* Step 1: Environment Destination */}
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700 mb-3">
-              <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs">
-                1
-              </span>
-              Target Project &amp; Environment
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Project</label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  required
-                >
-                  {projects.map((p) => {
-                    const pid = p.id || p.project_id;
-                    return (
-                      <option key={pid} value={pid}>
-                        {p.name || p.project_name || pid}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Environment</label>
-                <select
-                  value={selectedEnvId}
-                  onChange={(e) => setSelectedEnvId(e.target.value)}
-                  className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  required
-                >
-                  {environments.length === 0 ? (
-                    <option value="">No environments in project</option>
-                  ) : (
-                    environments.map((env) => {
-                      const eid = env.id || env.env_id;
-                      return (
-                        <option key={eid} value={eid}>
-                          {env.name || env.env_name || eid} ({env.type || env.env_type || 'DEV'})
-                        </option>
-                      );
-                    })
-                  )}
-                </select>
-              </div>
+      {/* ── Summary KPI Cards (without descriptions) ── */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 space-y-2 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total</span>
+            <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#1e40af] flex items-center justify-center">
+              <Layers className="w-4 h-4" />
             </div>
           </div>
-
-          <div className="border-t border-slate-100 pt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Step 2: Git Source Connection */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
-                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs">
-                  2
-                </span>
-                <GitBranch className="w-4 h-4 text-slate-500" />
-                Git Source Repository
-              </div>
-
-              <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-lg">
-                <button
-                  type="button"
-                  onClick={() => setAuthMethod('pat')}
-                  className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition ${
-                    authMethod === 'pat' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
-                  }`}
-                >
-                  Personal Access Token (PAT)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAuthMethod('oauth')}
-                  className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition ${
-                    authMethod === 'oauth' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
-                  }`}
-                >
-                  GitHub OAuth
-                </button>
-              </div>
-
-              {/* Connected GitHub Account Badge */}
-              {githubUser && (
-                <div className="flex items-center justify-between p-3 bg-emerald-50/80 border border-emerald-200/90 rounded-xl text-xs text-emerald-900 shadow-2xs">
-                  <div className="flex items-center gap-2.5">
-                    {githubUser.avatar_url ? (
-                      <img src={githubUser.avatar_url} alt="" className="w-5 h-5 rounded-full border border-emerald-300" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    )}
-                    <div>
-                      <span className="font-semibold text-emerald-950">@{githubUser.login || githubUser.name || 'user'}</span>
-                      <span className="text-[11px] text-emerald-700 ml-1.5">
-                        {repos.length > 0 ? `(${repos.length} repositories loaded)` : '(Connected)'}
-                      </span>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-200">
-                    {authMethod === 'oauth' ? 'OAuth 2.0' : 'PAT'}
-                  </span>
-                </div>
-              )}
-
-              {authMethod === 'pat' ? (
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">GitHub PAT Token</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="password"
-                      placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                      value={patToken}
-                      onChange={(e) => setPatToken(e.target.value)}
-                      className="flex-1 text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono text-xs"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleVerifyPat}
-                      disabled={isVerifyingPat || !patToken.trim()}
-                      className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50 shrink-0 cursor-pointer"
-                    >
-                      {isVerifyingPat ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Verify'}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Requires repo or public_repo scopes to read repository metadata.
-                  </p>
-                </div>
-              ) : (
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center space-y-3">
-                  <p className="text-xs text-slate-600">
-                    Authorize AetherOps to securely read your GitHub repositories without generating manual access tokens.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleConnectGitHubOAuth}
-                    disabled={isConnectingOAuth}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-black text-white text-xs font-semibold rounded-lg shadow-2xs transition disabled:opacity-50 cursor-pointer"
-                  >
-                    {isConnectingOAuth ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <FolderGit2 className="w-4 h-4" />
-                    )}
-                    {isConnectingOAuth ? 'Connecting to GitHub...' : (githubUser && authMethod === 'oauth' ? 'Reconnect GitHub Account' : 'Connect with GitHub OAuth')}
-                  </button>
-                </div>
-              )}
-
-              {/* Repo Selector or manual repo URL */}
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Repository</label>
-                {repos.length > 0 ? (
-                  <select
-                    value={selectedRepo}
-                    onChange={handleRepoChange}
-                    className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  >
-                    {repos.map((r) => {
-                      const name = r.full_name || r.name;
-                      return (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
-                      );
-                    })}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    placeholder="https://github.com/organization/repo-name"
-                    value={selectedRepo}
-                    onChange={(e) => setSelectedRepo(e.target.value)}
-                    className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  />
-                )}
-              </div>
-
-              {/* Branch Selector */}
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Default Branch</label>
-                {branches.length > 0 ? (
-                  <select
-                    value={selectedBranch}
-                    onChange={(e) => setSelectedBranch(e.target.value)}
-                    className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  >
-                    {branches.map((b) => {
-                      const name = typeof b === 'string' ? b : b.name;
-                      return (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
-                      );
-                    })}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    placeholder="main"
-                    value={selectedBranch}
-                    onChange={(e) => setSelectedBranch(e.target.value)}
-                    className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  />
-                )}
-              </div>
-            </div>
-
-            {/* Step 3: AWS Cloud Connection */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
-                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs">
-                  3
-                </span>
-                <Cloud className="w-4 h-4 text-slate-500" />
-                AWS IAM Credentials
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">AWS Access Key ID</label>
-                <input
-                  type="text"
-                  placeholder="AKIAIOSFODNN7EXAMPLE"
-                  value={awsAccessKey}
-                  onChange={(e) => setAwsAccessKey(e.target.value)}
-                  className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">AWS Secret Access Key</label>
-                <div className="relative">
-                  <input
-                    type={showSecretKey ? 'text' : 'password'}
-                    placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-                    value={awsSecretKey}
-                    onChange={(e) => setAwsSecretKey(e.target.value)}
-                    className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 pr-10 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono text-xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowSecretKey(!showSecretKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    {showSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* AWS Region Selector (Searchable across all 39 Global Regions) */}
-              <div className="relative" ref={regionDropdownRef}>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-slate-600">
-                    AWS Region ({AWS_REGIONS_39.length} Global Regions)
-                  </label>
-                  <span className="text-[10px] text-blue-600 font-medium">
-                    {selectedRegionObj.group}
-                  </span>
-                </div>
-
-                {/* Dropdown trigger button */}
-                <button
-                  type="button"
-                  onClick={() => setIsRegionDropdownOpen(!isRegionDropdownOpen)}
-                  className="w-full text-left text-sm bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 flex items-center justify-between transition"
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <Globe className="w-4 h-4 text-blue-600 shrink-0" />
-                    <span className="font-mono text-xs font-semibold text-slate-900">{awsRegion}</span>
-                    <span className="text-slate-500 text-xs truncate">
-                      · {selectedRegionObj.label.replace(`${awsRegion} `, '').replace(/[()]/g, '')}
-                    </span>
-                  </div>
-                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${isRegionDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {/* Searchable Dropdown Popup */}
-                {isRegionDropdownOpen && (
-                  <div className="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150 max-w-full">
-                    <div className="p-2 border-b border-slate-100 bg-slate-50/80">
-                      <div className="relative">
-                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          autoFocus
-                          placeholder="Search 39 regions (e.g. ap-south-1, Mumbai, us-east-1)..."
-                          value={regionSearch}
-                          onChange={(e) => setRegionSearch(e.target.value)}
-                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-slate-200 rounded-md text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                        />
-                        {regionSearch && (
-                          <button
-                            type="button"
-                            onClick={() => setRegionSearch('')}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between mt-1 px-1 text-[10px] text-slate-400">
-                        <span>Select deployment region</span>
-                        <span>{filteredRegions.length} matches</span>
-                      </div>
-                    </div>
-
-                    <div className="max-h-56 overflow-y-auto divide-y divide-slate-100">
-                      {filteredRegions.length === 0 ? (
-                        <div className="p-4 text-center text-xs text-slate-400">
-                          No AWS regions found matching "{regionSearch}"
-                        </div>
-                      ) : (
-                        filteredRegions.map((region) => {
-                          const isSelected = region.value === awsRegion;
-                          return (
-                            <button
-                              key={region.value}
-                              type="button"
-                              onClick={() => {
-                                setAwsRegion(region.value);
-                                setIsRegionDropdownOpen(false);
-                                setRegionSearch('');
-                              }}
-                              className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-blue-50/70 transition ${
-                                isSelected ? 'bg-blue-50 font-medium text-blue-900' : 'text-slate-700'
-                              }`}
-                            >
-                              <div className="flex flex-col min-w-0 pr-2">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-mono font-semibold text-slate-900">{region.value}</span>
-                                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-sans">
-                                    {region.group}
-                                  </span>
-                                </div>
-                                <span className="text-[11px] text-slate-500 truncate mt-0.5">{region.label}</span>
-                              </div>
-                              {isSelected && <Check className="w-4 h-4 text-blue-600 shrink-0" />}
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Validate IAM Action */}
-              <div>
-                <button
-                  type="button"
-                  onClick={handleValidateAws}
-                  disabled={isValidatingAws || !awsAccessKey.trim() || !awsSecretKey.trim()}
-                  className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-2 shadow-xs"
-                >
-                  {isValidatingAws ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      Validating STS ({awsRegion})...
-                    </>
-                  ) : (
-                    <>
-                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                      Validate IAM Credentials (AWS STS)
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {awsValidationResult && (
-                <div
-                  className={`p-3 rounded-lg text-xs border ${
-                    awsValidationResult.is_valid !== false && !awsValidationResult.error
-                      ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
-                      : 'bg-rose-50 text-rose-900 border-rose-200'
-                  }`}
-                >
-                  {awsValidationResult.is_valid !== false && !awsValidationResult.error ? (
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 font-medium">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>AWS STS Validated · Account ID: <strong className="font-mono">{awsValidationResult.account_id}</strong></span>
-                      </div>
-                      <div className="pl-6 text-xs text-emerald-700 font-mono break-all">
-                        Caller ARN: {awsValidationResult.arn || 'arn:aws:iam::' + awsValidationResult.account_id + ':root'}
-                      </div>
-                      <div className="pl-6 text-xs text-emerald-600">
-                        Region: <span className="font-mono font-semibold">{awsValidationResult.region || awsRegion}</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                      <div>
-                        <div className="font-semibold text-rose-800">AWS Validation Failed</div>
-                        <div className="text-xs text-rose-700 mt-0.5">{awsValidationResult.error || 'Authentication error'}</div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold font-mono text-slate-900">{totalConnections}</span>
+            <span className="text-xs text-slate-500 font-medium">connections</span>
           </div>
         </div>
 
-        {/* Submit Bar */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3">
-          <button
-            type="submit"
-            disabled={isSubmitting || !selectedRepo}
-            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-xs transition disabled:opacity-50 flex items-center gap-2"
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 space-y-2 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">In Use</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+              <Zap className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold font-mono text-slate-900">{inUseCount}</span>
+            <span className="text-xs text-slate-500 font-medium">active</span>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 space-y-2 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">GitHub</span>
+            <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center">
+              <FolderGit2 className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold font-mono text-slate-900">{gitConnections.length}</span>
+            <span className="text-xs text-slate-500 font-medium">repos</span>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 space-y-2 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">AWS</span>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+              <Cloud className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold font-mono text-slate-900">{cloudConnections.length}</span>
+            <span className="text-xs text-slate-500 font-medium">accounts</span>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Filter Toolbar ── */}
+      <div className="bg-white border border-slate-200/80 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-slate-400 font-medium text-[11px]">Provider:</span>
+          <select
+            value={providerFilter}
+            onChange={(e) => setProviderFilter(e.target.value)}
+            className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 font-medium focus:outline-none focus:border-[#1e40af]"
           >
-            {isSubmitting ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                Connecting Pipeline...
-              </>
-            ) : (
-              <>
-                Finalize & Connect Fleet
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
+            <option value="all">All Providers</option>
+            <option value="git">GitHub</option>
+            <option value="cloud">AWS Cloud</option>
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2 flex-1 max-w-sm justify-end">
+          <div className="relative w-full">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search connections, repos, regions..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 shrink-0">
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded-md transition ${viewMode === 'grid' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-400 hover:text-slate-700'}`}
+              title="Grid View"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`p-1.5 rounded-md transition ${viewMode === 'list' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-400 hover:text-slate-700'}`}
+              title="List View"
+            >
+              <List className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Connected Connections Cards Grid / List ── */}
+      {filteredConnections.length === 0 ? (
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-12 text-center space-y-4 shadow-xs">
+          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#1e40af] flex items-center justify-center mx-auto">
+            <GitBranch className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-slate-900">No connections configured yet</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Click &quot;New Connection&quot; above to link your GitHub repository and AWS cloud credentials.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsNewConnectionModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#1e40af] hover:bg-[#1d4ed8] text-white text-xs font-semibold rounded-xl shadow-xs transition cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Connection</span>
           </button>
         </div>
-      </form>
+      ) : viewMode === 'grid' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filteredConnections.map((conn) => {
+            const isInUse = conn.id === inUseConnectionId;
+            const isGit = conn.kind === 'git';
 
-      {/* Active Fleet Connections */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-bold text-slate-900">Active Git & Cloud Connections</h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Live linkages registered in PostgreSQL database and monitored by Aether orchestrator.
-            </p>
-          </div>
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
-            {gitConnections.length} Git / {cloudConnections.length} Cloud
-          </span>
-        </div>
-
-        {gitConnections.length === 0 ? (
-          <div className="py-12 text-center">
-            <FolderGit2 className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm font-medium text-slate-700">No active Git connections</p>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Use the connection wizard above to link a repository.
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {gitConnections.map((conn) => {
-              const connId = conn.id || conn.connection_id;
-              return (
-                <div key={connId} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="flex items-start gap-3.5">
-                    <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-                      <FolderGit2 className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-semibold text-slate-900">
-                          {conn.repo_url || conn.repository || 'Connected Repository'}
-                        </h4>
-                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          {conn.status || 'CONNECTED'}
+            return (
+              <div
+                key={conn.id}
+                className={`bg-white border rounded-2xl p-5 shadow-xs hover:shadow-md transition flex flex-col justify-between space-y-4 ${
+                  isInUse ? 'border-emerald-300 ring-1 ring-emerald-400/30' : 'border-slate-200/90 hover:border-blue-300'
+                }`}
+              >
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
+                        isGit ? 'bg-purple-50 text-purple-700' : 'bg-amber-50 text-amber-700'
+                      }`}>
+                        {isGit ? <FolderGit2 className="w-4 h-4" /> : <Cloud className="w-4 h-4" />}
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-bold text-slate-900 tracking-tight truncate">
+                          {conn.title}
+                        </h3>
+                        <span className="text-[10px] font-mono text-slate-400 block truncate">
+                          {conn.provider}
                         </span>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
-                        <span>Branch: <span className="font-mono text-slate-700">{conn.branch || 'main'}</span></span>
-                        <span>•</span>
-                        <span>Env ID: <span className="font-mono text-slate-700">{conn.environment_id}</span></span>
-                      </div>
                     </div>
+
+                    {/* Denotes In Use */}
+                    {isInUse ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        In Use
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => handleSetInUse(conn.id, e)}
+                        className="text-[11px] font-medium text-slate-400 hover:text-slate-800 underline cursor-pointer shrink-0"
+                        title="Set this connection as currently active"
+                      >
+                        Set In Use
+                      </button>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-2 self-end md:self-auto">
-                    <button
-                      onClick={() => handleViewSnapshot(connId)}
-                      disabled={isLoadingSnapshot}
-                      className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
-                    >
-                      View Snapshot
-                    </button>
-                    {onNavigate && (
+                  {/* Card Details */}
+                  <div className="text-xs text-slate-500 space-y-1 bg-slate-50/70 p-3 rounded-xl border border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400 text-[11px]">Target Workspace:</span>
+                      <strong className="text-slate-800 text-[11px] font-medium truncate max-w-[150px]">{conn.projectName}</strong>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400 text-[11px]">Environment:</span>
+                      <span className="font-mono text-slate-700 text-[11px] font-medium">{conn.envIdentifier}</span>
+                    </div>
+                    {isGit ? (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 text-[11px]">Branch:</span>
+                        <span className="font-mono text-slate-700 text-[11px]">{conn.branch}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 text-[11px]">AWS Region:</span>
+                        <span className="font-mono text-slate-700 text-[11px]">{conn.region}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Card Action Footer */}
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                  <div className="flex items-center gap-1.5">
+                    {isGit && onNavigate && (
                       <button
+                        type="button"
                         onClick={() => {
                           onNavigate('repo_analyzer', '/source-analysis', {
                             projectId: conn.project_id || selectedProjectId,
@@ -924,27 +752,476 @@ export default function SourceCloudView({
                             activeEnvironment,
                           });
                         }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition cursor-pointer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition cursor-pointer"
                       >
-                        Scan in Analyzer
-                        <ChevronRight className="w-3.5 h-3.5" />
+                        <span>Scan</span>
+                        <ChevronRight className="w-3 h-3" />
+                      </button>
+                    )}
+                    {isGit && (
+                      <button
+                        type="button"
+                        onClick={() => handleViewSnapshot(conn.id)}
+                        disabled={isLoadingSnapshot}
+                        className="px-2.5 py-1 text-xs text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition cursor-pointer"
+                      >
+                        Snapshot
                       </button>
                     )}
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
 
-      {/* Snapshot Modal */}
+                  <button
+                    type="button"
+                    onClick={(e) => handleDeleteConnection(conn, e)}
+                    className="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
+                    title="Delete Connection"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-xs">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-semibold uppercase tracking-wider text-[10px]">
+                <tr>
+                  <th className="px-5 py-3.5">Connection</th>
+                  <th className="px-4 py-3.5">Provider</th>
+                  <th className="px-4 py-3.5">Workspace</th>
+                  <th className="px-4 py-3.5">Target</th>
+                  <th className="px-4 py-3.5">Usage</th>
+                  <th className="px-4 py-3.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredConnections.map((conn) => {
+                  const isInUse = conn.id === inUseConnectionId;
+                  const isGit = conn.kind === 'git';
+
+                  return (
+                    <tr key={conn.id} className="hover:bg-slate-50/70 transition">
+                      <td className="px-5 py-3.5">
+                        <div className="font-semibold text-slate-900">{conn.title}</div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                          isGit ? 'bg-purple-50 text-purple-700' : 'bg-amber-50 text-amber-700'
+                        }`}>
+                          {conn.provider}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-slate-700">{conn.projectName}</td>
+                      <td className="px-4 py-3.5 font-mono text-slate-600">
+                        {isGit ? conn.branch : conn.region}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {isInUse ? (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1 max-w-fit">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            In Use
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => handleSetInUse(conn.id, e)}
+                            className="text-xs text-slate-400 hover:text-slate-800 underline cursor-pointer"
+                          >
+                            Set In Use
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteConnection(conn, e)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
+                          title="Delete Connection"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── New Connection Modal (Card-like Input Form) ── */}
+      {isNewConnectionModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#1e40af] flex items-center justify-center font-bold text-base">
+                  +
+                </div>
+                <h3 className="text-base font-bold text-slate-900">New Connection</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNewConnectionModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-md"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleFinalize} className="space-y-4">
+              {/* Destination Selectors */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-slate-700">Project Workspace</label>
+                  <select
+                    value={selectedProjectId}
+                    onChange={(e) => setSelectedProjectId(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-[#1e40af]"
+                    required
+                  >
+                    {projects.map((p) => {
+                      const pid = p.id || p.project_id;
+                      return (
+                        <option key={pid} value={pid}>
+                          {p.name || p.project_name || pid}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-slate-700">Target Environment</label>
+                  <select
+                    value={selectedEnvId}
+                    onChange={(e) => setSelectedEnvId(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-[#1e40af]"
+                    required
+                  >
+                    {environments.length === 0 ? (
+                      <option value="">No environments in project</option>
+                    ) : (
+                      environments.map((env) => {
+                        const eid = env.id || env.env_id;
+                        return (
+                          <option key={eid} value={eid}>
+                            {env.name || env.env_name || eid} ({env.type || env.env_type || 'DEV'})
+                          </option>
+                        );
+                      })
+                    )}
+                  </select>
+                </div>
+              </div>
+
+              {/* Provider Selection Tabs */}
+              <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
+                <button
+                  type="button"
+                  onClick={() => setNewConnType('git')}
+                  className={`flex-1 py-2 text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1.5 ${
+                    newConnType === 'git'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <FolderGit2 className="w-3.5 h-3.5 text-purple-600" />
+                  <span>GitHub Repository</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewConnType('cloud')}
+                  className={`flex-1 py-2 text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1.5 ${
+                    newConnType === 'cloud'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Cloud className="w-3.5 h-3.5 text-amber-600" />
+                  <span>AWS Cloud</span>
+                </button>
+              </div>
+
+              {/* GitHub Card Form */}
+              {newConnType === 'git' && (
+                <div className="space-y-3.5 p-4 bg-slate-50/70 border border-slate-200 rounded-xl">
+                  <div className="flex items-center gap-2 p-1 bg-slate-200/60 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => setAuthMethod('pat')}
+                      className={`flex-1 py-1 text-xs font-semibold rounded-md transition ${
+                        authMethod === 'pat' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
+                      }`}
+                    >
+                      Personal Access Token (PAT)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAuthMethod('oauth')}
+                      className={`flex-1 py-1 text-xs font-semibold rounded-md transition ${
+                        authMethod === 'oauth' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
+                      }`}
+                    >
+                      GitHub OAuth
+                    </button>
+                  </div>
+
+                  {githubUser && (
+                    <div className="flex items-center justify-between p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span className="font-semibold">@{githubUser.login || githubUser.name || 'connected'}</span>
+                      </div>
+                      <span className="text-[10px] font-mono text-emerald-700">{repos.length} repos loaded</span>
+                    </div>
+                  )}
+
+                  {authMethod === 'pat' ? (
+                    <div className="space-y-1">
+                      <label className="block text-xs font-semibold text-slate-700">PAT Token</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="password"
+                          placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                          value={patToken}
+                          onChange={(e) => setPatToken(e.target.value)}
+                          className="flex-1 px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-[#1e40af]"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleVerifyPat}
+                          disabled={isVerifyingPat || !patToken.trim()}
+                          className="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50 shrink-0 cursor-pointer"
+                        >
+                          {isVerifyingPat ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Verify'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-white rounded-lg border border-slate-200 text-center space-y-2">
+                      <button
+                        type="button"
+                        onClick={handleConnectGitHubOAuth}
+                        disabled={isConnectingOAuth}
+                        className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-slate-900 hover:bg-black text-white text-xs font-semibold rounded-lg shadow-2xs transition disabled:opacity-50 cursor-pointer"
+                      >
+                        {isConnectingOAuth ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <FolderGit2 className="w-3.5 h-3.5" />}
+                        <span>{githubUser ? 'Reconnect OAuth' : 'Connect with GitHub OAuth'}</span>
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-slate-700">Repository</label>
+                    {repos.length > 0 ? (
+                      <select
+                        value={selectedRepo}
+                        onChange={handleRepoChange}
+                        className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-[#1e40af]"
+                      >
+                        {repos.map((r) => {
+                          const name = r.full_name || r.name;
+                          return (
+                            <option key={name} value={name}>
+                              {name}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="e.g. organization/repository-name"
+                        value={selectedRepo}
+                        onChange={(e) => setSelectedRepo(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-[#1e40af]"
+                      />
+                    )}
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-slate-700">Default Branch</label>
+                    {branches.length > 0 ? (
+                      <select
+                        value={selectedBranch}
+                        onChange={(e) => setSelectedBranch(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-[#1e40af]"
+                      >
+                        {branches.map((b) => {
+                          const name = typeof b === 'string' ? b : b.name;
+                          return (
+                            <option key={name} value={name}>
+                              {name}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="main"
+                        value={selectedBranch}
+                        onChange={(e) => setSelectedBranch(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-[#1e40af]"
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* AWS Cloud Card Form */}
+              {newConnType === 'cloud' && (
+                <div className="space-y-3.5 p-4 bg-slate-50/70 border border-slate-200 rounded-xl">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-slate-700">AWS Access Key ID</label>
+                    <input
+                      type="text"
+                      placeholder="AKIAIOSFODNN7EXAMPLE"
+                      value={awsAccessKey}
+                      onChange={(e) => setAwsAccessKey(e.target.value)}
+                      className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-[#1e40af]"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-slate-700">AWS Secret Access Key</label>
+                    <div className="relative">
+                      <input
+                        type={showSecretKey ? 'text' : 'password'}
+                        placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+                        value={awsSecretKey}
+                        onChange={(e) => setAwsSecretKey(e.target.value)}
+                        className="w-full px-3 py-2 pr-9 text-xs font-mono rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-[#1e40af]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSecretKey(!showSecretKey)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showSecretKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Searchable 39 AWS Global Regions */}
+                  <div className="space-y-1 relative" ref={regionDropdownRef}>
+                    <label className="block text-xs font-semibold text-slate-700">Target Region</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsRegionDropdownOpen(!isRegionDropdownOpen)}
+                      className="w-full text-left px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-1.5 truncate">
+                        <Globe className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        <span className="font-mono font-semibold">{awsRegion}</span>
+                        <span className="text-slate-500 truncate">({selectedRegionObj.label.replace(`${awsRegion} `, '').replace(/[()]/g, '')})</span>
+                      </div>
+                      <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isRegionDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isRegionDropdownOpen && (
+                      <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden max-w-full">
+                        <div className="p-2 border-b border-slate-100 bg-slate-50">
+                          <input
+                            type="text"
+                            autoFocus
+                            placeholder="Search regions..."
+                            value={regionSearch}
+                            onChange={(e) => setRegionSearch(e.target.value)}
+                            className="w-full px-2.5 py-1 text-xs border border-slate-200 rounded-md bg-white focus:outline-none"
+                          />
+                        </div>
+                        <div className="max-h-48 overflow-y-auto divide-y divide-slate-100">
+                          {filteredRegions.map((r) => (
+                            <button
+                              key={r.value}
+                              type="button"
+                              onClick={() => {
+                                setAwsRegion(r.value);
+                                setIsRegionDropdownOpen(false);
+                                setRegionSearch('');
+                              }}
+                              className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-blue-50/70 transition ${
+                                r.value === awsRegion ? 'bg-blue-50 text-blue-900 font-semibold' : 'text-slate-700'
+                              }`}
+                            >
+                              <span>{r.value} <span className="text-[10px] text-slate-400">({r.label})</span></span>
+                              {r.value === awsRegion && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleValidateAws}
+                    disabled={isValidatingAws || !awsAccessKey.trim() || !awsSecretKey.trim()}
+                    className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    {isValidatingAws ? <RefreshCw className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />}
+                    <span>{isValidatingAws ? 'Validating STS...' : 'Validate IAM Credentials'}</span>
+                  </button>
+
+                  {awsValidationResult && (
+                    <div className={`p-2.5 rounded-lg text-xs border ${
+                      awsValidationResult.is_valid !== false && !awsValidationResult.error
+                        ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                        : 'bg-rose-50 text-rose-900 border-rose-200'
+                    }`}>
+                      {awsValidationResult.is_valid !== false && !awsValidationResult.error ? (
+                        <span>✓ STS Validated · Account: <strong>{awsValidationResult.account_id}</strong></span>
+                      ) : (
+                        <span>✗ Validation failed: {awsValidationResult.error || 'Invalid credentials'}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Modal Action Buttons */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsNewConnectionModalOpen(false)}
+                  className="px-4 py-2 text-xs font-medium rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 text-xs font-semibold rounded-lg bg-[#1e40af] hover:bg-[#1d4ed8] text-white shadow-xs transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    'Connect & Finalize'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Snapshot Modal ── */}
       {selectedSnapshot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 p-6 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <h3 className="text-base font-bold text-slate-900">Repository Snapshot</h3>
               <button
+                type="button"
                 onClick={() => setSelectedSnapshot(null)}
                 className="text-slate-400 hover:text-slate-600 text-sm font-semibold"
               >
@@ -981,6 +1258,7 @@ export default function SourceCloudView({
 
             <div className="pt-3 border-t border-slate-100 flex justify-end">
               <button
+                type="button"
                 onClick={() => setSelectedSnapshot(null)}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition"
               >

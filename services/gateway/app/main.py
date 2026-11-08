@@ -250,7 +250,7 @@ ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv(
         "ALLOWED_ORIGINS",
-        "http://localhost:8000,http://127.0.0.1:8000,http://localhost:7999,http://127.0.0.1:7999,http://localhost:5173,http://127.0.0.1:5173",
+        "http://localhost:8000,http://127.0.0.1:8000,http://localhost:7999,http://127.0.0.1:7999,http://localhost:5173,http://127.0.0.1:5173,http://100.125.96.14:8000,http://100.125.96.14:7999,http://warmachine-1:8000,http://warmachine-1:7999",
     ).split(",")
     if origin.strip()
 ]
@@ -259,6 +259,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|100\.\d{1,3}\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|.*\.ts\.net|warmachine-1|.*\.local)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

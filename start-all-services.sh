@@ -35,19 +35,20 @@ fi
 export PYTHONPATH="$SCRIPT_DIR:$SCRIPT_DIR/shared:${PYTHONPATH:-}"
 export AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-ap-south-1}}"
 export AWS_SECRET_ID="${AWS_SECRET_ID:-${AETHER_SECRET_ID:-aetherops/platform}}"
-
+GATEWAY_HOST="${GATEWAY_HOST:-${HOST:-0.0.0.0}}"
+AUTH_HOST="${AUTH_HOST:-${HOST:-0.0.0.0}}"
 
 # 1. Auth Service - Port 7999
 echo -e "${GREEN}[1/14]${NC} Starting Auth Service (Port 7999)..."
 cd services/auth_service
-nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 7999 </dev/null > /tmp/aether-auth.log 2>&1 &
+nohup setsid $PYTHON -m uvicorn app.main:app --host "$AUTH_HOST" --port 7999 </dev/null > /tmp/aether-auth.log 2>&1 &
 cd ../..
 sleep 1
 
 # 2. Gateway - Port 8000
 echo -e "${GREEN}[2/14]${NC} Starting Gateway & Dashboard (Port 8000)..."
 cd services/gateway
-nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8000 </dev/null > /tmp/aether-gateway.log 2>&1 &
+nohup setsid $PYTHON -m uvicorn app.main:app --host "$GATEWAY_HOST" --port 8000 </dev/null > /tmp/aether-gateway.log 2>&1 &
 cd ../..
 sleep 1
 

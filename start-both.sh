@@ -15,7 +15,7 @@ export AWS_SECRET_ID="${AWS_SECRET_ID:-${AETHER_SECRET_ID:-aetherops/platform}}"
 
 
 PYTHON="$SCRIPT_DIR/.venv/bin/python"
-HOST="${HOST:-127.0.0.1}"
+HOST="${HOST:-0.0.0.0}"
 
 echo "Starting Auth Service on port 7999..."
 cd "$SCRIPT_DIR/services/auth_service"

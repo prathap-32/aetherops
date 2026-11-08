@@ -253,6 +253,14 @@ export const connectionsApi = {
     apiRequest(`/api/v1/connections/${connectionId}/refresh`, {
       method: 'POST',
     }),
+  deleteGit: (connectionId) =>
+    apiRequest(`/api/v1/connections/${connectionId}`, {
+      method: 'DELETE',
+    }),
+  deleteCloud: (cloudId) =>
+    apiRequest(`/api/v1/cloud/connections/${cloudId}`, {
+      method: 'DELETE',
+    }),
 };
 
 export const repoAnalyzerApi = {
