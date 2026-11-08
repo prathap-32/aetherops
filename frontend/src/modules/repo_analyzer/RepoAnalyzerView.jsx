@@ -273,10 +273,15 @@ export default function RepoAnalyzerView({
         setTimeout(() => {
           onNavigate('architecture_studio', '/architecture-studio', {
             sizingOutput: res,
+            scanReport,
+            editableKeyValue,
             selectedProjectId,
             selectedEnvId,
             selectedEnvTier,
             targetRegion,
+            trafficScale,
+            budgetTier,
+            repoPath,
             activeProject,
             activeEnvironment,
             fromAnalyzer: true,
@@ -341,12 +346,20 @@ export default function RepoAnalyzerView({
     }
 
     if (onNavigate) {
-      onNavigate('architecture_studio', {
+      onNavigate('architecture_studio', '/architecture-studio', {
         sizingOutput,
+        scanReport,
+        editableKeyValue,
         selectedProjectId,
         selectedEnvId,
         selectedEnvTier,
         targetRegion,
+        trafficScale,
+        budgetTier,
+        repoPath,
+        activeProject,
+        activeEnvironment,
+        fromAnalyzer: true,
       });
     }
   };

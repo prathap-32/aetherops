@@ -231,6 +231,17 @@ export default function ArchitectureView({ onNavigate, activeProject, activeEnvi
       setIsRecommendingAi(false);
     }
   };
+
+  // When stack data arrives from Source Code Analyzer: automatically kick off analysis if needed
+  useEffect(() => {
+    if (navState?.fromAnalyzer) {
+      if (navState.sizingOutput) {
+        setActiveSizing(navState.sizingOutput);
+      } else if (navState.repoPath || navState.scanReport) {
+        handleRePlanWithAi();
+      }
+    }
+  }, [navState]);
   const [nodes, setNodes] = useState([]);
   const [addModuleModalOpen, setAddModuleModalOpen] = useState(false);
   const [newModuleName, setNewModuleName] = useState('');
@@ -432,53 +443,6 @@ resource "aws_instance" "compute" {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">AI AWS Architecture Planning</h1>
         </div>
 
-        {/* Studio Action Controls */}
-        {activeSizing && (
-          <div className="flex items-center gap-2.5">
-            <div className="text-right hidden sm:block pr-2 border-r border-slate-200">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Monthly Budget</span>
-              <span className="text-sm font-bold text-emerald-700 font-mono">
-                ${totalCost.toFixed(2)}/mo
-              </span>
-            </div>
-
-            {onNavigate && (
-              <button
-                onClick={handleOpenInDesigner}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-xs cursor-pointer"
-                title="Create and edit this diagram in Architecture Designer"
-              >
-                <Network className="w-4 h-4 text-white" />
-                <span>Open in Architecture Designer</span>
-              </button>
-            )}
-
-            <button
-              onClick={() => setApprovalModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-xs cursor-pointer animate-pulse"
-            >
-              <ShieldCheck className="w-4 h-4 text-white" />
-              <span>Review &amp; Approve Architecture</span>
-            </button>
-
-            <button
-              onClick={() => setHclModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition shadow-xs cursor-pointer"
-            >
-              <Download className="w-4 h-4 text-slate-500" />
-              Export HCL
-            </button>
-            {onNavigate && (
-              <button
-                onClick={() => onNavigate('iac', '/terraform')}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-xs transition cursor-pointer"
-              >
-                <span>Generate IaC</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
       {/* When no sizing has been generated yet for this project/user */}
@@ -489,9 +453,6 @@ resource "aws_instance" "compute" {
           </div>
           <div>
             <h2 className="text-lg font-bold text-slate-900">No Architecture Generated Yet</h2>
-            <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
-              Connect your repository and run the Source Code Analyzer to generate recommended AWS infrastructure, or create a custom diagram on the interactive canvas.
-            </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             {onNavigate && (
@@ -529,10 +490,19 @@ resource "aws_instance" "compute" {
                   Target: {planningEnvTier.toUpperCase()}
                 </span>
               </div>
-              <span className="text-xs text-slate-500 font-medium">
-                AI recommends suitable AWS services based on environment tier, budget &amp; traffic scale
-              </span>
             </div>
+
+            {/* Analyzed Tech Stack Ingested from Source Code Analyzer */}
+            {navState?.editableKeyValue && navState.editableKeyValue.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                <span className="font-semibold text-slate-700">Analyzed Stack:</span>
+                {navState.editableKeyValue.slice(0, 5).map((item) => (
+                  <span key={item.key} className="px-2 py-0.5 rounded bg-white text-slate-700 font-mono text-[11px] border border-slate-200">
+                    {item.label}: <strong className="text-slate-900">{item.value}</strong>
+                  </span>
+                ))}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
               <div>
@@ -669,9 +639,6 @@ resource "aws_instance" "compute" {
                     <Palette className="w-5 h-5" />
                   </div>
                   <div className="text-xs font-bold text-slate-800">No architecture modules added yet</div>
-                  <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                    No modules added yet. Click <strong>"+ Add AWS Module Manually"</strong> above to build your VPC topology module by module.
-                  </p>
                   <button
                     type="button"
                     onClick={() => setAddModuleModalOpen(true)}
@@ -770,9 +737,6 @@ resource "aws_instance" "compute" {
                 <Sparkles className="w-5 h-5 text-amber-400" />
                 <h3 className="text-sm font-bold tracking-tight">VPC Topology Review &amp; Approval Gate Flow</h3>
               </div>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Review your VPC topology and sizing. If approved, proceed to the Pre-Deployment Approval Gate where status is verified and AI synthesizes Terraform HCL code. If modifications are needed, edit your design in the Architecture Designer first.
-              </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 {/* Path 1: Topology OK -> Approval Gate & AI HCL Synthesis */}
@@ -816,10 +780,7 @@ resource "aws_instance" "compute" {
                 >
                   <div className="flex items-center gap-2.5">
                     <span className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center text-xs">✓</span>
-                    <div className="text-left">
-                      <div>1. Topology Is OK</div>
-                      <div className="text-[10px] text-emerald-100 font-normal">Generate Terraform HCL Code</div>
-                    </div>
+                    <span className="font-bold">1. Topology Is OK</span>
                   </div>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition" />
                 </button>
@@ -839,22 +800,13 @@ resource "aws_instance" "compute" {
                 >
                   <div className="flex items-center gap-2.5">
                     <span className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs">✏️</span>
-                    <div className="text-left">
-                      <div>2. Needs Changes</div>
-                      <div className="text-[10px] text-slate-400 font-normal">Edit Existing Design in Designer</div>
-                    </div>
+                    <span className="font-bold">2. Needs Changes</span>
                   </div>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition" />
                 </button>
               </div>
             </div>
-            {/* Validation Trigger Bar */}
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="text-xs text-slate-600 flex items-center gap-2">
-                <Shield className="w-4 h-4 text-indigo-600" />
-                <span>Validate topology against AWS Well-Architected Framework and proceed.</span>
-              </div>
-
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-end">
               <button
                 type="button"
                 onClick={handleValidateArchitecture}
@@ -928,10 +880,6 @@ resource "aws_instance" "compute" {
                   </p>
                 </div>
 
-                <div>
-                  <p className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Description &amp; Purpose</p>
-                  <p className="text-slate-600 mt-1 leading-relaxed">{currentNode.description}</p>
-                </div>
 
                 <div className="pt-3 border-t border-slate-100 space-y-2.5">
                   <div className="flex items-center justify-between text-slate-600">
@@ -1010,7 +958,6 @@ resource "aws_instance" "compute" {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900">Architecture Review &amp; Approval Gate</h3>
-                  <p className="text-xs text-slate-500">Evaluate synthesized VPC topology and dynamic sizing for deployment.</p>
                 </div>
               </div>
               <button
@@ -1053,9 +1000,6 @@ resource "aws_instance" "compute" {
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
                 Is the synthesized architecture topology approved?
               </label>
-              <p className="text-[11px] text-slate-500">
-                Select <strong>Architecture Is OK</strong> to unlock Terraform HCL code synthesis, or <strong>Architecture Needs Changes</strong> to edit the layout in the Designer.
-              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-2">
