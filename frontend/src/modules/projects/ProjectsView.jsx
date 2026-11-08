@@ -16,6 +16,8 @@ import {
   Layers,
   ArrowRight,
   Server,
+  Activity,
+  CheckCircle2,
 } from 'lucide-react';
 
 import { PROJECT_TYPES_LIST as PROJECT_TYPES } from '../../constants/awsRegions';
@@ -142,14 +144,12 @@ export default function ProjectsView({
 
   // Metrics
   const totalProjects = projects.length;
-  let totalEnvs = 0;
-  const regionsSet = new Set();
-  projects.forEach((p) => {
-    totalEnvs += p.environment_count || (p.environments ? p.environments.length : 0);
-    (p.environments || []).forEach((env) => {
-      if (env.aws_region) regionsSet.add(env.aws_region);
-    });
-  });
+  const activeProjectsCount = projects.filter(
+    (p) => !['ARCHIVED', 'COMPLETED'].includes((p.status || 'ACTIVE').toUpperCase())
+  ).length;
+  const completedProjectsCount = projects.filter(
+    (p) => ['COMPLETED', 'ARCHIVED', 'DEPLOYED'].includes((p.status || '').toUpperCase())
+  ).length;
 
   // Filter & Search
   const q = (searchQuery || '').toLowerCase().trim();
@@ -236,7 +236,7 @@ export default function ProjectsView({
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white border border-slate-200/90 rounded-2xl p-5 space-y-2 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Workspaces</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Projects</span>
             <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#1e40af] flex items-center justify-center">
               <FolderKanban className="w-4 h-4" />
             </div>
@@ -245,44 +245,31 @@ export default function ProjectsView({
             <span className="text-3xl font-bold font-mono text-slate-900">{totalProjects}</span>
             <span className="text-xs text-slate-500 font-medium">projects</span>
           </div>
-          <p className="text-xs text-slate-500">Applications configured in your tenant</p>
-        </div>
-
-        <div
-          onClick={() => handleNavigate && handleNavigate('environments', '/environments')}
-          className="bg-white border border-slate-200/90 hover:border-blue-300 rounded-2xl p-5 space-y-2 shadow-xs cursor-pointer transition"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Target Environments</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
-              <Boxes className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold font-mono text-slate-900">{totalEnvs}</span>
-            <span className="text-xs text-slate-500 font-medium">deployed fleets</span>
-          </div>
-          <p className="text-xs text-slate-500">Dev, Staging &amp; Production clusters</p>
         </div>
 
         <div className="bg-white border border-slate-200/90 rounded-2xl p-5 space-y-2 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">AWS Regions</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#1e40af] flex items-center justify-center">
-              <Globe className="w-4 h-4" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Active</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+              <Activity className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold font-mono text-slate-900">{regionsSet.size}</span>
-            <span className="text-xs text-slate-500 font-medium">active regions</span>
+            <span className="text-3xl font-bold font-mono text-slate-900">{activeProjectsCount}</span>
+            <span className="text-xs text-slate-500 font-medium">active</span>
           </div>
-          <div className="flex flex-wrap gap-1">
-            {Array.from(regionsSet).slice(0, 3).map((r) => (
-              <span key={r} className="px-2 py-0.5 rounded text-xs font-mono bg-slate-100 text-slate-700 border border-slate-200">
-                {r}
-              </span>
-            ))}
-            {regionsSet.size === 0 && <span className="text-xs text-slate-400 italic">No regions bound</span>}
+        </div>
+
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 space-y-2 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Completed</span>
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold font-mono text-slate-900">{completedProjectsCount}</span>
+            <span className="text-xs text-slate-500 font-medium">completed</span>
           </div>
         </div>
       </section>
