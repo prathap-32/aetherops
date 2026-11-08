@@ -492,7 +492,7 @@ export default function SourceCloudView({
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Connect AWS &amp; Git</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Connect Cloud &amp; Git</h1>
         </div>
         <div className="flex items-center gap-2">
           <button

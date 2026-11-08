@@ -184,6 +184,50 @@ def init_db():
     # Indexes for fast letter-by-letter lookup and token validation
     c.execute("CREATE INDEX IF NOT EXISTS idx_users_lower_email ON users(lower(email))")
     c.execute("CREATE INDEX IF NOT EXISTS idx_verifications_token ON email_verifications(token)")
+    # Create user_sessions table
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS user_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT UNIQUE NOT NULL,
+        user_uuid TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        username TEXT NOT NULL,
+        device_type TEXT DEFAULT 'Desktop',
+        os TEXT DEFAULT 'Unknown OS',
+        browser TEXT DEFAULT 'Browser',
+        user_agent TEXT,
+        ip_address TEXT,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT NOT NULL,
+        last_active_at TEXT NOT NULL,
+        logout_at TEXT,
+        logout_reason TEXT
+    )
+    """)
+
+    # Create session_audit_logs table
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS session_audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id TEXT UNIQUE NOT NULL,
+        session_id TEXT NOT NULL,
+        user_uuid TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        username TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        device_info TEXT,
+        ip_address TEXT,
+        user_agent TEXT,
+        status TEXT DEFAULT 'SUCCESS',
+        details TEXT,
+        timestamp TEXT NOT NULL
+    )
+    """)
+
+    c.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user ON user_sessions(user_uuid, is_active)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_sessions_account ON user_sessions(account_id, is_active)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_audit_user ON session_audit_logs(user_uuid, timestamp)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_audit_account ON session_audit_logs(account_id, timestamp)")
 
     # Check for admin user
     c.execute("SELECT id FROM users WHERE username = 'admin'")
@@ -303,6 +347,113 @@ def _verify_password(plain_password: str, stored_hash: Optional[str]) -> bool:
         return False
 
 
+def parse_user_agent(ua: str) -> Dict[str, str]:
+    if not ua:
+        return {"device_type": "Desktop", "os": "Unknown OS", "browser": "Browser", "label": "Desktop · Unknown · Browser"}
+    ua_lower = ua.lower()
+
+    # Device type
+    if any(m in ua_lower for m in ("mobile", "android", "iphone", "ipod", "phone")):
+        device_type = "Mobile"
+    elif any(t in ua_lower for t in ("ipad", "tablet", "kindle")):
+        device_type = "Tablet"
+    else:
+        device_type = "Desktop"
+
+    # OS
+    if "android" in ua_lower:
+        os_name = "Android"
+    elif "iphone" in ua_lower or "ipad" in ua_lower or "ios" in ua_lower:
+        os_name = "iOS"
+    elif "macintosh" in ua_lower or "mac os" in ua_lower:
+        os_name = "macOS"
+    elif "windows" in ua_lower:
+        os_name = "Windows"
+    elif "linux" in ua_lower or "x11" in ua_lower:
+        os_name = "Linux"
+    elif "cros" in ua_lower:
+        os_name = "Chrome OS"
+    else:
+        os_name = "Desktop OS"
+
+    # Browser
+    if "edg" in ua_lower or "edge" in ua_lower:
+        browser = "Microsoft Edge"
+    elif "chrome" in ua_lower or "crios" in ua_lower:
+        browser = "Chrome"
+    elif "firefox" in ua_lower or "fxios" in ua_lower:
+        browser = "Firefox"
+    elif "safari" in ua_lower and "chrome" not in ua_lower:
+        browser = "Safari"
+    elif "opera" in ua_lower or "opr" in ua_lower:
+        browser = "Opera"
+    else:
+        browser = "Web Browser"
+
+    return {
+        "device_type": device_type,
+        "os": os_name,
+        "browser": browser,
+        "label": f"{device_type} · {os_name} · {browser}"
+    }
+
+
+def extract_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "127.0.0.1"
+
+
+def record_session_login(
+    conn,
+    user: Dict[str, Any],
+    session_id: str,
+    request: Request,
+    auth_method: str = "PASSWORD"
+) -> Dict[str, Any]:
+    c = conn.cursor()
+    ua_str = request.headers.get("user-agent", "")
+    ua_info = parse_user_agent(ua_str)
+    client_ip = extract_client_ip(request)
+    now_iso = datetime.datetime.utcnow().isoformat()
+
+    c.execute("""
+    INSERT INTO user_sessions (
+        session_id, user_uuid, account_id, username,
+        device_type, os, browser, user_agent, ip_address,
+        is_active, created_at, last_active_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+    """, (
+        session_id, user["uuid"], user["account_id"], user["username"],
+        ua_info["device_type"], ua_info["os"], ua_info["browser"],
+        ua_str[:255], client_ip, now_iso, now_iso
+    ))
+
+    evt_id = f"evt_{secrets.token_hex(12)}"
+    details = f"Logged in via {auth_method} on {ua_info['label']} from IP {client_ip}"
+    c.execute("""
+    INSERT INTO session_audit_logs (
+        event_id, session_id, user_uuid, account_id, username,
+        event_type, device_info, ip_address, user_agent, status, details, timestamp
+    ) VALUES (?, ?, ?, ?, ?, 'LOGIN', ?, ?, ?, 'SUCCESS', ?, ?)
+    """, (
+        evt_id, session_id, user["uuid"], user["account_id"], user["username"],
+        ua_info["label"], client_ip, ua_str[:255], details, now_iso
+    ))
+    return {
+        "session_id": session_id,
+        "device_info": ua_info["label"],
+        "ip_address": client_ip,
+        "login_at": now_iso
+    }
+
+
 def _create_jwt_token(
     username: str,
     role: str,
@@ -311,8 +462,10 @@ def _create_jwt_token(
     account_id: str,
     tenant_id: str,
     hours: int = JWT_EXPIRATION_HOURS,
+    session_id: Optional[str] = None,
 ) -> str:
     now = datetime.datetime.utcnow()
+    sid = session_id or f"sess_{secrets.token_hex(12)}"
     payload = {
         "sub": username,
         "uuid": user_uuid,
@@ -320,12 +473,12 @@ def _create_jwt_token(
         "email": email,
         "account_id": account_id,
         "tenant_id": tenant_id,
+        "sid": sid,
         "iat": now,
         "exp": now + datetime.timedelta(hours=hours),
         "jti": secrets.token_hex(16),
     }
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
-
 
 def _decode_jwt_token(token: str) -> Optional[Dict[str, Any]]:
     if not token:
@@ -373,11 +526,12 @@ async def health():
 
 
 @app.post("/api/v1/auth/login")
-async def login(req: LoginRequest):
+async def login(req: LoginRequest, request: Request):
     """
     Login endpoint:
     Accepts Username, Email, OR 12-digit Account ID as login identifier.
     Returns JWT with account_id and tenant_id, plus showcases account_id.
+    Records active session and audit history.
     """
     conn = get_db_connection()
     try:
@@ -385,6 +539,22 @@ async def login(req: LoginRequest):
         user = find_user_by_login_id(c, req.username)
 
         if not user or not _verify_password(req.password, user["password_hash"]):
+            client_ip = extract_client_ip(request)
+            ua_info = parse_user_agent(request.headers.get("user-agent", ""))
+            now_iso = datetime.datetime.utcnow().isoformat()
+            try:
+                c.execute("""
+                INSERT INTO session_audit_logs (
+                    event_id, session_id, user_uuid, account_id, username,
+                    event_type, device_info, ip_address, user_agent, status, details, timestamp
+                ) VALUES (?, 'none', 'unknown', 'unknown', ?, 'LOGIN_FAILED', ?, ?, ?, 'FAILED', 'Failed login attempt: invalid credentials', ?)
+                """, (
+                    f"evt_{secrets.token_hex(12)}", req.username[:50],
+                    ua_info["label"], client_ip, request.headers.get("user-agent", "")[:255], now_iso
+                ))
+                conn.commit()
+            except Exception:
+                pass
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Invalid Login ID or password. Enter Username, Email, or 12-digit Account ID."}
@@ -403,9 +573,9 @@ async def login(req: LoginRequest):
         # Update last login
         now_iso = datetime.datetime.utcnow().isoformat()
         c.execute("UPDATE users SET last_login_at = ? WHERE id = ?", (now_iso, user["id"]))
-        conn.commit()
 
         hours = 168 if req.remember_me else JWT_EXPIRATION_HOURS
+        session_id = f"sess_{secrets.token_hex(12)}"
         token = _create_jwt_token(
             username=user["username"],
             role=user["role"],
@@ -414,7 +584,12 @@ async def login(req: LoginRequest):
             account_id=user["account_id"],
             tenant_id=user["tenant_id"],
             hours=hours,
+            session_id=session_id,
         )
+
+        # Record active device session & audit log
+        record_session_login(conn, user, session_id, request, auth_method="CREDENTIALS")
+        conn.commit()
 
         resp_user = {
             "username": user["username"],
@@ -427,6 +602,7 @@ async def login(req: LoginRequest):
         return {
             "token": token,
             "user": resp_user,
+            "session_id": session_id,
             "redirect_url": "http://localhost:8000"
         }
     finally:
@@ -806,11 +982,308 @@ async def update_profile(req: ProfileUpdateRequest, request: Request):
         }
     }
 
-
 @app.post("/api/v1/auth/logout")
-async def logout():
+async def logout(request: Request):
+    """Terminates active session, records logout timestamp and audit trail."""
+    payload = _get_request_auth_payload(request)
+    now_iso = datetime.datetime.utcnow().isoformat()
+    if payload:
+        sid = payload.get("sid")
+        user_uuid = payload.get("uuid")
+        account_id = payload.get("account_id")
+        username = payload.get("sub", "")
+        conn = get_db_connection()
+        try:
+            c = conn.cursor()
+            client_ip = extract_client_ip(request)
+            ua_info = parse_user_agent(request.headers.get("user-agent", ""))
+            if sid:
+                c.execute("""
+                UPDATE user_sessions
+                SET is_active = 0, logout_at = ?, logout_reason = 'USER_LOGOUT'
+                WHERE session_id = ?
+                """, (now_iso, sid))
+            else:
+                c.execute("""
+                UPDATE user_sessions
+                SET is_active = 0, logout_at = ?, logout_reason = 'USER_LOGOUT'
+                WHERE (user_uuid = ? OR account_id = ?) AND is_active = 1
+                ORDER BY last_active_at DESC LIMIT 1
+                """, (now_iso, user_uuid, account_id))
+
+            evt_id = f"evt_{secrets.token_hex(12)}"
+            c.execute("""
+            INSERT INTO session_audit_logs (
+                event_id, session_id, user_uuid, account_id, username,
+                event_type, device_info, ip_address, user_agent, status, details, timestamp
+            ) VALUES (?, ?, ?, ?, ?, 'LOGOUT', ?, ?, ?, 'SUCCESS', ?, ?)
+            """, (
+                evt_id, sid or "unknown", user_uuid or "", account_id or "", username,
+                ua_info["label"], client_ip, request.headers.get("user-agent", "")[:255],
+                f"User logged out from {ua_info['label']}", now_iso
+            ))
+            conn.commit()
+        finally:
+            conn.close()
     return {"status": "ok", "message": "Successfully logged out"}
 
+
+@app.get("/api/v1/auth/sessions")
+async def get_user_sessions(request: Request):
+    """
+    Returns all active and past login sessions for the authenticated account,
+    including device type, OS, browser, IP address, and recent audit log history.
+    """
+    payload = _get_request_auth_payload(request)
+    if not payload:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized: Session token missing or invalid."})
+
+    user_uuid = payload.get("uuid")
+    account_id = payload.get("account_id")
+    username = payload.get("sub", "user")
+    current_sid = payload.get("sid")
+    now_iso = datetime.datetime.utcnow().isoformat()
+    client_ip = extract_client_ip(request)
+    ua_str = request.headers.get("user-agent", "")
+    ua_info = parse_user_agent(ua_str)
+
+    conn = get_db_connection()
+    try:
+        c = conn.cursor()
+
+        # Ensure current session exists in user_sessions table
+        if current_sid:
+            c.execute("SELECT id FROM user_sessions WHERE session_id = ?", (current_sid,))
+            if not c.fetchone():
+                c.execute("""
+                INSERT INTO user_sessions (
+                    session_id, user_uuid, account_id, username,
+                    device_type, os, browser, user_agent, ip_address,
+                    is_active, created_at, last_active_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                """, (
+                    current_sid, user_uuid or "0", account_id or "0", username,
+                    ua_info["device_type"], ua_info["os"], ua_info["browser"],
+                    ua_str[:255], client_ip, now_iso, now_iso
+                ))
+                c.execute("""
+                INSERT INTO session_audit_logs (
+                    event_id, session_id, user_uuid, account_id, username,
+                    event_type, device_info, ip_address, user_agent, status, details, timestamp
+                ) VALUES (?, ?, ?, ?, ?, 'LOGIN', ?, ?, ?, 'SUCCESS', ?, ?)
+                """, (
+                    f"evt_{secrets.token_hex(12)}", current_sid, user_uuid or "0", account_id or "0", username,
+                    ua_info["label"], client_ip, ua_str[:255], f"Active device connected: {ua_info['label']}", now_iso
+                ))
+                conn.commit()
+            else:
+                # Update heartbeat timestamp & IP
+                c.execute("UPDATE user_sessions SET last_active_at = ?, ip_address = ? WHERE session_id = ?", (now_iso, client_ip, current_sid))
+                conn.commit()
+
+        # Fetch all sessions for this user/account
+        c.execute("""
+        SELECT * FROM user_sessions
+        WHERE account_id = ? OR user_uuid = ?
+        ORDER BY is_active DESC, last_active_at DESC
+        """, (account_id, user_uuid))
+        rows = c.fetchall()
+
+        active_sessions = []
+        past_sessions = []
+
+        for row in rows:
+            sid = row["session_id"]
+            is_current = bool(current_sid and sid == current_sid)
+            s_dict = {
+                "session_id": sid,
+                "device_type": row["device_type"],
+                "os": row["os"],
+                "browser": row["browser"],
+                "device_info": f"{row['device_type']} · {row['os']} · {row['browser']}",
+                "ip_address": row["ip_address"] or "127.0.0.1",
+                "is_active": bool(row["is_active"]),
+                "is_current": is_current,
+                "created_at": row["created_at"],
+                "last_active_at": row["last_active_at"],
+                "logout_at": row["logout_at"],
+                "logout_reason": row["logout_reason"],
+            }
+            if row["is_active"]:
+                active_sessions.append(s_dict)
+            else:
+                past_sessions.append(s_dict)
+
+        # Fetch recent 30 audit logs
+        c.execute("""
+        SELECT * FROM session_audit_logs
+        WHERE account_id = ? OR user_uuid = ?
+        ORDER BY id DESC LIMIT 30
+        """, (account_id, user_uuid))
+        audit_rows = c.fetchall()
+        audit_logs = [
+            {
+                "id": r["id"],
+                "event_id": r["event_id"],
+                "session_id": r["session_id"],
+                "event_type": r["event_type"],
+                "device_info": r["device_info"],
+                "ip_address": r["ip_address"],
+                "status": r["status"],
+                "details": r["details"],
+                "timestamp": r["timestamp"],
+            }
+            for r in audit_rows
+        ]
+
+        return {
+            "status": "SUCCESS",
+            "active_count": len(active_sessions),
+            "past_count": len(past_sessions),
+            "current_session_id": current_sid,
+            "active_sessions": active_sessions,
+            "past_sessions": past_sessions[:15],
+            "audit_logs": audit_logs,
+        }
+    finally:
+        conn.close()
+
+
+@app.post("/api/v1/auth/sessions/{session_id}/revoke")
+async def revoke_session(session_id: str, request: Request):
+    """Terminates an active session from another device."""
+    payload = _get_request_auth_payload(request)
+    if not payload:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+
+    user_uuid = payload.get("uuid")
+    account_id = payload.get("account_id")
+    username = payload.get("sub", "")
+    now_iso = datetime.datetime.utcnow().isoformat()
+    client_ip = extract_client_ip(request)
+    ua_info = parse_user_agent(request.headers.get("user-agent", ""))
+
+    conn = get_db_connection()
+    try:
+        c = conn.cursor()
+        c.execute("""
+        SELECT * FROM user_sessions
+        WHERE session_id = ? AND (account_id = ? OR user_uuid = ?)
+        """, (session_id, account_id, user_uuid))
+        sess = c.fetchone()
+        if not sess:
+            return JSONResponse(status_code=404, content={"detail": "Session not found or not owned by caller."})
+
+        c.execute("""
+        UPDATE user_sessions
+        SET is_active = 0, logout_at = ?, logout_reason = 'REMOTE_REVOKE'
+        WHERE session_id = ?
+        """, (now_iso, session_id))
+
+        c.execute("""
+        INSERT INTO session_audit_logs (
+            event_id, session_id, user_uuid, account_id, username,
+            event_type, device_info, ip_address, user_agent, status, details, timestamp
+        ) VALUES (?, ?, ?, ?, ?, 'SESSION_REVOKED', ?, ?, ?, 'REVOKED', ?, ?)
+        """, (
+            f"evt_{secrets.token_hex(12)}", session_id, user_uuid or "", account_id or "", username,
+            f"{sess['device_type']} · {sess['os']} · {sess['browser']}", client_ip,
+            request.headers.get("user-agent", "")[:255],
+            f"Device session terminated remotely by user from {ua_info['label']}", now_iso
+        ))
+        conn.commit()
+        return {"status": "SUCCESS", "message": "Device session successfully logged out."}
+    finally:
+        conn.close()
+
+
+@app.post("/api/v1/auth/sessions/revoke-others")
+async def revoke_other_sessions(request: Request):
+    """Logs out all active sessions except the current one."""
+    payload = _get_request_auth_payload(request)
+    if not payload:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+
+    user_uuid = payload.get("uuid")
+    account_id = payload.get("account_id")
+    username = payload.get("sub", "")
+    current_sid = payload.get("sid")
+    now_iso = datetime.datetime.utcnow().isoformat()
+    client_ip = extract_client_ip(request)
+    ua_info = parse_user_agent(request.headers.get("user-agent", ""))
+
+    conn = get_db_connection()
+    try:
+        c = conn.cursor()
+        c.execute("""
+        SELECT session_id, device_type, os, browser FROM user_sessions
+        WHERE (account_id = ? OR user_uuid = ?) AND session_id != ? AND is_active = 1
+        """, (account_id, user_uuid, current_sid or ""))
+        other_sessions = c.fetchall()
+
+        c.execute("""
+        UPDATE user_sessions
+        SET is_active = 0, logout_at = ?, logout_reason = 'REVOKE_ALL_OTHERS'
+        WHERE (account_id = ? OR user_uuid = ?) AND session_id != ? AND is_active = 1
+        """, (now_iso, account_id, user_uuid, current_sid or ""))
+
+        for s in other_sessions:
+            c.execute("""
+            INSERT INTO session_audit_logs (
+                event_id, session_id, user_uuid, account_id, username,
+                event_type, device_info, ip_address, user_agent, status, details, timestamp
+            ) VALUES (?, ?, ?, ?, ?, 'SESSION_REVOKED', ?, ?, ?, 'REVOKED', ?, ?)
+            """, (
+                f"evt_{secrets.token_hex(12)}", s["session_id"], user_uuid or "", account_id or "", username,
+                f"{s['device_type']} · {s['os']} · {s['browser']}", client_ip,
+                request.headers.get("user-agent", "")[:255],
+                f"Session terminated during bulk logout from {ua_info['label']}", now_iso
+            ))
+
+        conn.commit()
+        return {"status": "SUCCESS", "revoked_count": len(other_sessions), "message": f"Successfully logged out {len(other_sessions)} other device(s)."}
+    finally:
+        conn.close()
+
+
+@app.get("/api/v1/auth/sessions/audit")
+async def get_session_audit_logs(request: Request):
+    """Returns full login session audit log history."""
+    payload = _get_request_auth_payload(request)
+    if not payload:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+
+    user_uuid = payload.get("uuid")
+    account_id = payload.get("account_id")
+
+    conn = get_db_connection()
+    try:
+        c = conn.cursor()
+        c.execute("""
+        SELECT * FROM session_audit_logs
+        WHERE account_id = ? OR user_uuid = ?
+        ORDER BY id DESC LIMIT 100
+        """, (account_id, user_uuid))
+        rows = c.fetchall()
+        return {
+            "status": "SUCCESS",
+            "audit_logs": [
+                {
+                    "id": r["id"],
+                    "event_id": r["event_id"],
+                    "session_id": r["session_id"],
+                    "event_type": r["event_type"],
+                    "device_info": r["device_info"],
+                    "ip_address": r["ip_address"],
+                    "status": r["status"],
+                    "details": r["details"],
+                    "timestamp": r["timestamp"],
+                }
+                for r in rows
+            ]
+        }
+    finally:
+        conn.close()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # OAuth Initiation & Callback Flow (Google & GitHub)

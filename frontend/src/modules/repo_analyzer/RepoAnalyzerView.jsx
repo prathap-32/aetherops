@@ -356,7 +356,7 @@ export default function RepoAnalyzerView({
       {/* Module Header */}
       <div className="pb-4 border-b border-slate-200">
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-          Source Code Analyzer &amp; Architecture Sizing
+          Source Code Analyzer
         </h1>
       </div>
 
@@ -476,17 +476,11 @@ export default function RepoAnalyzerView({
                 required
               />
             </div>
-            <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500">
-              <span className="flex items-center gap-1 text-emerald-700">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span><strong>Secure Manifest Inspection:</strong> Analyzes repository structure and manifests via API without storing code.</span>
-              </span>
-              {readinessResult?.inspection_mode && (
-                <span className="text-slate-400 font-mono text-[10px] shrink-0">
-                  Mode: {readinessResult.inspection_mode}
-                </span>
-              )}
-            </div>
+            {readinessResult?.inspection_mode && (
+              <div className="mt-1.5 text-right text-slate-400 font-mono text-[10px]">
+                Mode: {readinessResult.inspection_mode}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
@@ -790,9 +784,6 @@ export default function RepoAnalyzerView({
                   Recommended AWS Infrastructure &amp; Service Configuration
                 </h3>
               </div>
-              <p className="text-xs text-slate-500 mt-1">
-                Configured for <strong>{selectedEnvTier.toUpperCase()}</strong> in <strong>{targetRegion}</strong>. You can customize the proposed services below, recalculate costs, and proceed to Cloud Architecture Studio.
-              </p>
             </div>
 
             <div className="flex items-center gap-3">
@@ -914,9 +905,6 @@ export default function RepoAnalyzerView({
                   VPC CIDR: <strong>10.0.0.0/16</strong> | Subnets: <strong>{editedAlbEnabled ? 'Public + Private Subnets' : 'Public Subnet Direct'}</strong>
                 </div>
 
-                <div className="text-[11px] text-slate-600 pt-1 font-medium">
-                  {editedAlbEnabled ? 'ALB provides SSL termination and path routing across AZs.' : 'Direct Elastic IP saves $16.50/mo in DEV without load balancer overhead.'}
-                </div>
               </div>
             </div>
 
@@ -947,11 +935,6 @@ export default function RepoAnalyzerView({
                   </select>
                 </div>
 
-                <div className="text-[11px] text-indigo-700 pt-1 font-medium">
-                  {editedDatabaseService === 'None'
-                    ? 'Container uses local storage or external client connection.'
-                    : 'Automated daily snapshots and KMS encryption at rest.'}
-                </div>
               </div>
             </div>
 
