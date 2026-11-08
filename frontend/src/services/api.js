@@ -139,6 +139,21 @@ export const authApi = {
 
   logout: () =>
     apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/logout`, { method: 'POST' }).catch(() => {}),
+
+  getSessions: () => apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/sessions`),
+
+  revokeSession: (sessionId) =>
+    apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/sessions/${sessionId}/revoke`, {
+      method: 'POST',
+    }),
+
+  revokeOtherSessions: () =>
+    apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/sessions/revoke-others`, {
+      method: 'POST',
+    }),
+
+  getSessionAuditLogs: () =>
+    apiRequest(`${AUTH_SERVICE_URL}/api/v1/auth/sessions/audit`),
 };
 
 export const dashboardApi = {
