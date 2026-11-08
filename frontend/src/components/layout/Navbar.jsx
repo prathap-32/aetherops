@@ -18,8 +18,8 @@ export default function Navbar({
     environments: 'Environment',
     source_cloud: 'Connect Cloud and Git',
     repo_analyzer: 'Source Code Analyzer',
-    architecture: 'Cloud Architecture Studio',
-    architecture_studio: 'Cloud Architecture Studio',
+    architecture: 'AI AWS Architecture Planning',
+    architecture_studio: 'AI AWS Architecture Planning',
     architecture_designer: 'Architecture Designer',
     risk_analysis: 'Pre-Deployment Risk Engine',
     architecture_validation: 'Architecture Validation',
@@ -38,7 +38,6 @@ export default function Navbar({
 
   const currentTitle = VIEW_TITLES[activeView] || 'Console';
 
-  const initials = (user?.username || 'AO').slice(0, 2).toUpperCase();
 
   return (
     <header className="sticky top-0 z-20 h-14 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3.5 sm:px-6 flex items-center justify-between min-w-0 transition-colors">
@@ -108,16 +107,6 @@ export default function Navbar({
           </span>
         )}
 
-        {/* User Profile Avatar Button */}
-        <button
-          type="button"
-          onClick={onOpenAccountModal}
-          className="w-8 h-8 rounded-full bg-[#1e40af] hover:bg-[#1d4ed8] text-white flex items-center justify-center font-bold font-mono text-xs shadow-xs hover:scale-105 transition cursor-pointer shrink-0"
-          title={`Logged in as ${user?.username || 'User'} — click to edit profile`}
-          aria-label="User Account Profile"
-        >
-          {initials}
-        </button>
       </div>
     </header>
   );

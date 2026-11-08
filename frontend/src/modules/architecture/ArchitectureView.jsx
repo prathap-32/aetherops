@@ -27,7 +27,7 @@ import {
   Sparkles,
   Plus
 } from 'lucide-react';
-import { architectureStudioApi } from '../../services/api';
+import { architectureStudioApi, repoAnalyzerApi } from '../../services/api';
 import { formatAiProvider } from '../../utils/formatters';
 
 export default function ArchitectureView({ onNavigate, activeProject, activeEnvironment, navState, user }) {
@@ -83,6 +83,154 @@ export default function ArchitectureView({ onNavigate, activeProject, activeEnvi
   const hasCache = cacheCost > 0 || (cacheService && !cacheService.toLowerCase().includes('none'));
   const hasCdn = Boolean(activeSizing?.frontend_hosting || (activeSizing?.monthly_cost_estimate_usd?.frontend || 0) > 0);
 
+  // Planning session inputs
+  const [planningEnvTier, setPlanningEnvTier] = useState(
+    () => navState?.selectedEnvTier || activeSizing?.environment_tier || activeEnvironment?.type || 'development'
+  );
+  const [planningTraffic, setPlanningTraffic] = useState(
+    () => navState?.trafficScale || activeSizing?.traffic_scale || 'MODERATE'
+  );
+  const [planningBudget, setPlanningBudget] = useState(
+    () => navState?.budgetTier || activeSizing?.budget_tier || 'STANDARD'
+  );
+  const [planningRegion, setPlanningRegion] = useState(
+    () => navState?.targetRegion || activeSizing?.target_region || 'us-east-1'
+  );
+  const [isRecommendingAi, setIsRecommendingAi] = useState(false);
+
+  // Auto-synthesize nodes from activeSizing recommendations
+  useEffect(() => {
+    if (!activeSizing) return;
+    const initialNodes = [];
+
+    // 1. Ingress
+    if (hasAlb) {
+      initialNodes.push({
+        id: 'ingress-alb',
+        name: 'Application Load Balancer (ALB)',
+        tier: 'Public Subnet',
+        type: 'Load Balancer',
+        cidr: '10.0.1.0/24',
+        status: 'Active',
+        cost: `$${(activeSizing.networking?.monthly_cost || 16.50).toFixed(2)}/mo`,
+        serviceType: 'alb',
+        description: 'Multi-AZ Application Load Balancer with SSL/TLS termination and Layer-7 path routing.',
+        sg: 'sg-alb-ingress',
+        port: '443 / 80',
+      });
+    } else {
+      initialNodes.push({
+        id: 'ingress-eip',
+        name: 'Elastic IP (Direct Ingress)',
+        tier: 'Public Subnet',
+        type: 'Networking',
+        cidr: '10.0.1.0/24',
+        status: 'Active',
+        cost: '$0.00/mo',
+        serviceType: 'elastic_ip',
+        description: 'Direct Elastic IP bound to compute target, cost-optimized for development sandbox.',
+        sg: 'sg-public-ingress',
+        port: '80 / 443',
+      });
+    }
+
+    // 2. Compute Fleet
+    initialNodes.push({
+      id: 'compute-fleet',
+      name: `${computeService} (${computeTier})`,
+      tier: hasAlb ? 'Private Subnet' : 'Public Subnet',
+      type: 'Compute Fleet',
+      cidr: hasAlb ? '10.0.10.0/24' : '10.0.1.0/24',
+      status: 'Active',
+      cost: `$${computeCost.toFixed(2)}/mo`,
+      serviceType: computeService.toLowerCase().includes('ecs') ? 'ecs' : 'ec2',
+      description: `${computeService} right-sized for ${envTier} with automated recovery policies.`,
+      sg: 'sg-compute-nodes',
+      port: '8080 / 80',
+    });
+
+    // 3. Database Layer
+    if (hasDb) {
+      initialNodes.push({
+        id: 'database-layer',
+        name: `${dbService}`,
+        tier: 'Isolated Database Subnet',
+        type: 'Database',
+        cidr: '10.0.50.0/24',
+        status: 'Active',
+        cost: `$${dbCost.toFixed(2)}/mo`,
+        serviceType: 'rds',
+        description: 'Fully managed relational database with automated backups and KMS encryption.',
+        sg: 'sg-rds-backend',
+        port: '5432 / 3306',
+      });
+    }
+
+    // 4. In-Memory Cache
+    if (hasCache) {
+      initialNodes.push({
+        id: 'cache-layer',
+        name: `${cacheService}`,
+        tier: 'Private Subnet',
+        type: 'In-Memory Cache',
+        cidr: '10.0.20.0/24',
+        status: 'Active',
+        cost: `$${cacheCost.toFixed(2)}/mo`,
+        serviceType: 'elasticache',
+        description: 'Sub-millisecond in-memory Redis cluster for session cache and database offloading.',
+        sg: 'sg-cache-cluster',
+        port: '6379',
+      });
+    }
+
+    // 5. CDN Distribution
+    if (hasCdn) {
+      initialNodes.push({
+        id: 'cdn-distribution',
+        name: 'Amazon CloudFront + S3 Origin',
+        tier: 'Edge Layer (0.0.0.0/0)',
+        type: 'CDN & Storage',
+        cidr: 'Global Anycast',
+        status: 'Active',
+        cost: `$${(activeSizing.monthly_cost_estimate_usd?.frontend || 1.80).toFixed(2)}/mo`,
+        serviceType: 'cloudfront',
+        description: 'Global Edge Anycast caching delivering static assets with sub-20ms latency.',
+        sg: 'sg-edge-distribution',
+        port: '443 HTTPS',
+      });
+    }
+
+    setNodes(initialNodes);
+    if (initialNodes.length > 0) {
+      setSelectedNodeId(initialNodes[0].id);
+    }
+  }, [activeSizing, computeService, computeTier, computeCost, hasAlb, dbService, dbCost, hasDb, cacheService, cacheCost, hasCache, hasCdn, envTier]);
+
+  const handleRePlanWithAi = async () => {
+    setIsRecommendingAi(true);
+    try {
+      const res = await repoAnalyzerApi.acceptAndSize({
+        repo_path: navState?.repoPath || '.',
+        environment_tier: planningEnvTier.toLowerCase(),
+        target_region: planningRegion,
+        traffic_scale: planningTraffic,
+        budget_tier: planningBudget,
+        overrides: {},
+      });
+
+      setActiveSizing(res);
+      try {
+        const userKey = user?.uuid || user?.username || 'user';
+        const projectKey = activeProject?.id || activeProject?.project_id || 'default';
+        localStorage.setItem(`aether_sizing_${userKey}_${projectKey}`, JSON.stringify(res));
+        localStorage.setItem('aether_latest_sizing', JSON.stringify(res));
+      } catch (e) {}
+    } catch (err) {
+      console.warn('AI Re-Plan notice:', err);
+    } finally {
+      setIsRecommendingAi(false);
+    }
+  };
   const [nodes, setNodes] = useState([]);
   const [addModuleModalOpen, setAddModuleModalOpen] = useState(false);
   const [newModuleName, setNewModuleName] = useState('');
@@ -281,12 +429,7 @@ resource "aws_instance" "compute" {
       {/* Studio Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Cloud Architecture Studio</h1>
-          </div>
-          <p className="text-sm text-slate-500 mt-1">
-            Interactive AWS architecture topology, network tiering, and Well-Architected validation.
-          </p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">AI AWS Architecture Planning</h1>
         </div>
 
         {/* Studio Action Controls */}
@@ -374,6 +517,76 @@ resource "aws_instance" "compute" {
       ) : (
         /* Main Studio Workspace */
         <div className="space-y-6">
+          {/* AI Architecture Planning Session Parameters Toolbar */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-blue-600" />
+                <h3 className="text-sm font-bold text-slate-900">
+                  AI Architecture Planning Session
+                </h3>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
+                  Target: {planningEnvTier.toUpperCase()}
+                </span>
+              </div>
+              <span className="text-xs text-slate-500 font-medium">
+                AI recommends suitable AWS services based on environment tier, budget &amp; traffic scale
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Target Environment Tier</label>
+                <select
+                  value={planningEnvTier}
+                  onChange={(e) => setPlanningEnvTier(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-none focus:border-blue-600"
+                >
+                  <option value="development">Development (Sandbox / Lean)</option>
+                  <option value="staging">Staging (Pre-Prod Testing)</option>
+                  <option value="production">Production (High Availability)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Projected Traffic Profile</label>
+                <select
+                  value={planningTraffic}
+                  onChange={(e) => setPlanningTraffic(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-none focus:border-blue-600"
+                >
+                  <option value="LOW">Low (1-10 RPS / Dev Traffic)</option>
+                  <option value="MODERATE">Moderate (10-100 RPS / Standard)</option>
+                  <option value="HIGH">High (100-1000+ RPS / Scale-Out)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Budget Allocation Strategy</label>
+                <select
+                  value={planningBudget}
+                  onChange={(e) => setPlanningBudget(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-none focus:border-blue-600"
+                >
+                  <option value="LOW">Frugal / Lean (Cost Minimized)</option>
+                  <option value="STANDARD">Standard Production</option>
+                  <option value="ENTERPRISE">Enterprise (HA &amp; Multi-AZ)</option>
+                </select>
+              </div>
+
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={handleRePlanWithAi}
+                  disabled={isRecommendingAi}
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Sparkles className={`w-3.5 h-3.5 ${isRecommendingAi ? 'animate-spin' : ''}`} />
+                  <span>{isRecommendingAi ? 'Planning with AI...' : 'Re-Plan with AI'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
           {/* AWS Service Recommendations Overview Cards */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">

@@ -18,12 +18,31 @@ import {
   Sparkles,
   RefreshCw,
   Search,
+  Smartphone,
+  Laptop,
+  Tablet,
+  Globe,
+  Key,
+  Copy,
+  Check,
+  LogIn,
+  LogOut,
+  ShieldCheck,
+  User,
+  Mail,
+  Shield,
+  KeyRound,
+  Trash2,
+  Edit3,
+  Save,
 } from 'lucide-react';
 import {
   projectsApi,
   connectionsApi,
   deploymentsApi,
   dashboardApi,
+  authApi,
+  formatAccountId,
 } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import WidgetCustomizerModal from './WidgetCustomizerModal';
@@ -66,7 +85,7 @@ const DEFAULT_PREFERENCES = {
 };
 
 export default function DashboardOverview({ onNavigate, onOpenCreateProject, onSelectProject }) {
-  const { user } = useAuth();
+  const { user, isAdmin, updateProfile } = useAuth();
   const userKey = user?.uuid || user?.username || 'user';
   const storageKey = `aether_dashboard_prefs_${userKey}`;
 
@@ -91,6 +110,167 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
   const [fleetProbes, setFleetProbes] = useState({});
   const [dashboardSummary, setDashboardSummary] = useState(null);
 
+
+  // ── Profile & Account State (Dashboard Direct View) ──
+  const [newUsername, setNewUsername] = useState(user?.username || '');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileMsg, setProfileMsg] = useState(null);
+  const [copiedAcc, setCopiedAcc] = useState(false);
+
+  // ── Login Sessions & Audit State (Real-Time Device Tracking) ──
+  const [sessionsData, setSessionsData] = useState({
+    active_count: 0,
+    past_count: 0,
+    current_session_id: null,
+    active_sessions: [],
+    past_sessions: [],
+    audit_logs: [],
+  });
+  const [loadingSessions, setLoadingSessions] = useState(true);
+  const [refreshingSessions, setRefreshingSessions] = useState(false);
+  const [revokingId, setRevokingId] = useState(null);
+  const [revokingOthers, setRevokingOthers] = useState(false);
+  const [sessionStatusMsg, setSessionStatusMsg] = useState(null);
+  const [auditSearchQuery, setAuditSearchQuery] = useState('');
+  const [auditEventFilter, setAuditEventFilter] = useState('ALL');
+
+  const fetchSessions = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoadingSessions(true);
+    else setRefreshingSessions(true);
+    try {
+      const res = await authApi.getSessions();
+      if (res && res.status === 'SUCCESS') {
+        setSessionsData(res);
+      }
+    } catch (err) {
+      console.warn('Failed to load user sessions on dashboard:', err);
+    } finally {
+      setLoadingSessions(false);
+      setRefreshingSessions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSessions();
+    const interval = setInterval(() => {
+      fetchSessions(true);
+    }, 8000); // 8-second auto-poll for multi-device real-time sync
+    return () => clearInterval(interval);
+  }, [fetchSessions]);
+
+  const handleRevokeSession = async (sessionId, deviceLabel) => {
+    if (!window.confirm(`Log out and revoke session on ${deviceLabel}?`)) return;
+    setRevokingId(sessionId);
+    setSessionStatusMsg(null);
+    try {
+      await authApi.revokeSession(sessionId);
+      setSessionStatusMsg({ type: 'success', text: `Logged out session on ${deviceLabel}` });
+      await fetchSessions(true);
+    } catch (err) {
+      setSessionStatusMsg({ type: 'error', text: err.message || 'Failed to revoke session' });
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  const handleRevokeAllOthers = async () => {
+    if (!window.confirm('Log out all other devices? Only this current device will stay logged in.')) return;
+    setRevokingOthers(true);
+    setSessionStatusMsg(null);
+    try {
+      const res = await authApi.revokeOtherSessions();
+      setSessionStatusMsg({ type: 'success', text: res.message || 'All other devices logged out' });
+      await fetchSessions(true);
+    } catch (err) {
+      setSessionStatusMsg({ type: 'error', text: err.message || 'Failed to revoke other devices' });
+    } finally {
+      setRevokingOthers(false);
+    }
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    if (!newUsername.trim()) return;
+    setIsSavingProfile(true);
+    setProfileMsg(null);
+    try {
+      await updateProfile(newUsername.trim());
+      setProfileMsg({ type: 'success', text: `Handle updated to @${newUsername.trim()}` });
+      setTimeout(() => setProfileMsg(null), 3000);
+    } catch (err) {
+      setProfileMsg({ type: 'error', text: err.message || 'Failed to update handle' });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const copyAccountId = () => {
+    const acc = user?.account_id || '109283746519';
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(acc);
+      setCopiedAcc(true);
+      setTimeout(() => setCopiedAcc(false), 2000);
+    }
+  };
+
+  const renderDeviceIcon = (deviceType) => {
+    const type = String(deviceType || '').toLowerCase();
+    if (type.includes('mobile') || type.includes('phone') || type.includes('android') || type.includes('ios')) {
+      return <Smartphone className="w-5 h-5 text-indigo-600" />;
+    }
+    if (type.includes('tablet')) {
+      return <Tablet className="w-5 h-5 text-amber-600" />;
+    }
+    return <Laptop className="w-5 h-5 text-blue-600" />;
+  };
+
+  const formatSessionTime = (isoStr) => {
+    if (!isoStr) return '—';
+    try {
+      const d = new Date(isoStr);
+      return d.toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+      });
+    } catch {
+      return isoStr;
+    }
+  };
+
+  const formatSessionTimeAgo = (isoStr) => {
+    if (!isoStr) return 'Active now';
+    try {
+      const diffMs = Date.now() - new Date(isoStr).getTime();
+      const diffSec = Math.floor(diffMs / 1000);
+      if (diffSec < 45) return 'Active now';
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return `${diffMin}m ago`;
+      const diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24) return `${diffHr}h ago`;
+      const diffDays = Math.floor(diffHr / 24);
+      return `${diffDays}d ago`;
+    } catch {
+      return 'Recently';
+    }
+  };
+
+  const filteredAuditLogs = (sessionsData.audit_logs || []).filter((item) => {
+    if (auditEventFilter !== 'ALL' && item.event_type !== auditEventFilter) return false;
+    if (auditSearchQuery.trim()) {
+      const q = auditSearchQuery.toLowerCase();
+      const matchDevice = String(item.device_info || '').toLowerCase().includes(q);
+      const matchIp = String(item.ip_address || '').toLowerCase().includes(q);
+      const matchDetails = String(item.details || '').toLowerCase().includes(q);
+      const matchEvent = String(item.event_type || '').toLowerCase().includes(q);
+      return matchDevice || matchIp || matchDetails || matchEvent;
+    }
+    return true;
+  });
   // User Preferences State
   const [preferences, setPreferences] = useState(() => {
     try {
@@ -1057,6 +1237,392 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
             <span className="hidden sm:inline">Architecture Studio</span>
             <span className="sm:hidden">Studio</span>
           </button>
+        </div>
+      </div>
+      {/* ── 1. ACCOUNT PROFILE SECTION ── */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#1e40af] text-white flex items-center justify-center font-bold font-mono text-sm shadow-xs shrink-0">
+              {(user?.username || 'AO').slice(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                  <User className="w-4 h-4 text-blue-600" />
+                  <span>Account Profile &amp; Workspace Identity</span>
+                </h2>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200 font-mono">
+                  {user?.role || 'USER'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-mono mt-0.5">
+                Account ID: {formatAccountId(user?.account_id || '109283746519')}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={copyAccountId}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+              title="Copy 12-Digit Account ID"
+            >
+              {copiedAcc ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
+              <span>{copiedAcc ? 'Copied Account ID' : 'Copy ID'}</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          {/* Identity Info */}
+          <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-100 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-slate-400" />
+                Display Handle:
+              </span>
+              <span className="font-mono font-bold text-slate-900">{user?.username || 'Developer'}</span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-slate-400" />
+                Work Email:
+              </span>
+              <span className="font-mono text-slate-700 truncate max-w-[160px]">{user?.email || 'user@aetherops.cloud'}</span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5 text-slate-400" />
+                Role:
+              </span>
+              <span className="font-mono font-semibold text-slate-800">{user?.role || 'USER'}</span>
+            </div>
+          </div>
+
+          {/* Security Status */}
+          <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-100 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5 text-slate-400" />
+                Session Token:
+              </span>
+              <span className="text-[11px] font-mono text-emerald-700 font-semibold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Multi-Device JWT
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-slate-400" />
+                Network Access:
+              </span>
+              <span className="font-mono text-slate-700 font-medium">Tailscale Mesh / Local</span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
+                Multi-Device Sync:
+              </span>
+              <span className="font-mono text-emerald-700 font-semibold">Active &amp; Monitored</span>
+            </div>
+          </div>
+
+          {/* Update Display Handle Form */}
+          <form onSubmit={handleSaveProfile} className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-100 flex flex-col justify-between gap-2">
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                Update Display Handle
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  required
+                  minLength={3}
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  placeholder="e.g. cloud_architect"
+                  className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-900"
+                />
+                <button
+                  type="submit"
+                  disabled={isSavingProfile}
+                  className="px-3 py-1.5 bg-[#1e40af] hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-2xs transition disabled:opacity-50 shrink-0 cursor-pointer"
+                >
+                  {isSavingProfile ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+            {profileMsg && (
+              <span className={`text-[10px] font-medium ${profileMsg.type === 'success' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                {profileMsg.text}
+              </span>
+            )}
+          </form>
+        </div>
+      </div>
+
+      {/* ── 2. LOGIN SESSIONS & CONNECTED DEVICES SECTION ── */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-indigo-600" />
+                <span>Login Sessions &amp; Connected Devices</span>
+              </h2>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                {sessionsData.active_count} Active {sessionsData.active_count === 1 ? 'Device' : 'Devices'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Real-time multi-device detection (e.g. mobile phone &amp; laptop). Automatically synchronizes across all clients.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {sessionsData.active_count > 1 && (
+              <button
+                type="button"
+                onClick={handleRevokeAllOthers}
+                disabled={revokingOthers}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 shadow-2xs transition flex items-center gap-1.5 cursor-pointer shrink-0 disabled:opacity-50"
+                title="Disconnect all other devices"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{revokingOthers ? 'Logging out...' : 'Log Out All Others'}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => fetchSessions(false)}
+              disabled={loadingSessions || refreshingSessions}
+              className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg transition cursor-pointer"
+              title="Refresh sessions"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshingSessions ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* Feedback Alert */}
+        {sessionStatusMsg && (
+          <div className={`p-3 mx-5 mt-4 rounded-xl text-xs font-medium flex items-center justify-between ${
+            sessionStatusMsg.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
+          }`}>
+            <span>{sessionStatusMsg.text}</span>
+            <button onClick={() => setSessionStatusMsg(null)} className="font-bold text-slate-400 hover:text-slate-600">✕</button>
+          </div>
+        )}
+
+        <div className="p-5 space-y-4">
+          {/* Active Devices Grid */}
+          {sessionsData.active_sessions.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-400">Loading active devices...</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {sessionsData.active_sessions.map((sess) => (
+                 <div
+                   key={sess.session_id}
+                   className={`p-4 rounded-xl border transition flex flex-col justify-between shadow-2xs ${
+                     sess.is_current
+                       ? 'bg-blue-50/40 border-blue-200 ring-1 ring-blue-500/20'
+                       : 'bg-white border-slate-200 hover:border-slate-300'
+                   }`}
+                 >
+                   <div>
+                     <div className="flex items-start justify-between gap-3">
+                       <div className="flex items-center gap-3">
+                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                           sess.is_current ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'
+                         }`}>
+                           {renderDeviceIcon(sess.device_type)}
+                         </div>
+                         <div>
+                           <div className="text-xs font-bold text-slate-900">
+                             {sess.device_info || `${sess.device_type} · ${sess.os} · ${sess.browser}`}
+                           </div>
+                           <div className="text-[11px] text-slate-500">
+                             OS: <strong>{sess.os}</strong> • Browser: <strong>{sess.browser}</strong>
+                           </div>
+                         </div>
+                       </div>
+
+                       {sess.is_current ? (
+                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-300 flex items-center gap-1 shrink-0">
+                           <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+                           This Device
+                         </span>
+                       ) : (
+                         <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 shrink-0">
+                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                           {formatSessionTimeAgo(sess.last_active_at)}
+                         </span>
+                       )}
+                     </div>
+
+                     <div className="mt-3 pt-2.5 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
+                       <div className="bg-slate-50 p-2 rounded-lg font-mono text-[11px] text-slate-700 truncate flex items-center gap-1">
+                         <Globe className="w-3 h-3 text-slate-400 shrink-0" />
+                         <span>{sess.ip_address}</span>
+                       </div>
+                       <div className="bg-slate-50 p-2 rounded-lg font-mono text-[11px] text-slate-600 truncate flex items-center gap-1">
+                         <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                         <span>{formatSessionTime(sess.created_at)}</span>
+                       </div>
+                     </div>
+                   </div>
+
+                   {!sess.is_current && (
+                     <div className="mt-3 pt-2.5 border-t border-slate-100 flex justify-end">
+                       <button
+                         type="button"
+                         onClick={() => handleRevokeSession(sess.session_id, sess.device_info)}
+                         disabled={revokingId === sess.session_id}
+                         className="px-3 py-1 text-xs font-semibold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                       >
+                         <LogOut className="w-3.5 h-3.5" />
+                         <span>{revokingId === sess.session_id ? 'Logging out...' : 'Log Out Device'}</span>
+                       </button>
+                     </div>
+                   )}
+                 </div>
+               ))}
+             </div>
+           )}
+
+          {/* Historical Logged Out Sessions */}
+          {sessionsData.past_sessions && sessionsData.past_sessions.length > 0 && (
+            <div className="pt-2">
+              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                Recent Disconnected Devices (Saved in Database)
+              </div>
+              <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50 text-xs">
+                {sessionsData.past_sessions.slice(0, 4).map((p) => (
+                  <div key={p.session_id} className="p-2.5 px-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {renderDeviceIcon(p.device_type)}
+                      <span className="font-semibold text-slate-800">{p.device_info}</span>
+                      <span className="text-[10px] text-slate-400 font-mono">({p.ip_address})</span>
+                    </div>
+                    <div className="text-[10px] font-mono text-slate-500 flex items-center gap-2">
+                      <span className="px-1.5 py-0.2 rounded bg-slate-200 text-slate-700">
+                        {p.logout_reason || 'DISCONNECTED'}
+                      </span>
+                      <span>{formatSessionTime(p.logout_at || p.last_active_at)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── 3. SESSION SECURITY AUDIT TRAIL SECTION ── */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/60 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-blue-600" />
+                <span>Session Security Audit Trail</span>
+              </h2>
+              <span className="px-2 py-0.5 rounded text-xs font-mono font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                {filteredAuditLogs.length} Events Recorded
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Chronological cryptographic security ledger of all device logins, logouts, and remote revocations.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={auditSearchQuery}
+                onChange={(e) => setAuditSearchQuery(e.target.value)}
+                placeholder="Filter by IP, device..."
+                className="pl-8 pr-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 w-44"
+              />
+            </div>
+
+            <div className="flex items-center gap-1">
+              {['ALL', 'LOGIN', 'LOGOUT', 'SESSION_REVOKED'].map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setAuditEventFilter(filter)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${
+                    auditEventFilter === filter
+                      ? 'bg-blue-600 text-white shadow-2xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {filter === 'ALL' ? 'All' : filter.replace('_', ' ')}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-0">
+          {filteredAuditLogs.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-400">
+              No audit records matching criteria.
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100 text-xs">
+              {filteredAuditLogs.slice(0, 8).map((log) => {
+                const isLogin = log.event_type === 'LOGIN';
+                const isLogout = log.event_type === 'LOGOUT';
+                const isRevoked = log.event_type === 'SESSION_REVOKED';
+
+                return (
+                  <div key={log.id} className="p-3.5 px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-slate-50/60 transition">
+                    <div className="flex items-start sm:items-center gap-3 min-w-0">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                        isLogin ? 'bg-emerald-100 text-emerald-700' : isRevoked ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {isLogin ? <LogIn className="w-4 h-4" /> : isRevoked ? <ShieldAlert className="w-4 h-4" /> : <LogOut className="w-4 h-4" />}
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-bold uppercase ${
+                            isLogin
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                              : isRevoked
+                              ? 'bg-rose-50 text-rose-800 border border-rose-200'
+                              : 'bg-slate-100 text-slate-700 border border-slate-200'
+                          }`}>
+                            {log.event_type}
+                          </span>
+                          <span className="font-bold text-slate-900">{log.device_info}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">({log.ip_address})</span>
+                        </div>
+                        <p className="text-slate-500 text-[11px] mt-0.5 break-words">
+                          {log.details}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] font-mono text-slate-400 text-right shrink-0">
+                      {formatSessionTime(log.timestamp)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
