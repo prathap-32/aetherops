@@ -15,7 +15,6 @@ import {
   ChevronRight,
   Shield,
   Trash2,
-  Copy,
 } from 'lucide-react';
 import { projectsApi, formatAccountId } from '../../services/api';
 import { AWS_REGIONS_39, TIER_TYPES_LIST } from '../../constants/awsRegions';
@@ -47,26 +46,17 @@ export default function EnvironmentsView({
   const [region, setRegion] = useState('us-east-1');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [cloningEnvId, setCloningEnvId] = useState(null);
+  const handleDeleteEnv = async (env, e) => {
+    if (e) e.stopPropagation();
+    const envId = env.id || env.env_id;
+    const name = env.name || env.env_name || 'this environment';
+    if (!window.confirm(`Are you sure you want to delete environment "${name}"?`)) return;
 
-  const handleCloneEnv = async (env) => {
-    const defaultNewName = `${env.name || env.env_name}-copy`;
-    const newName = window.prompt(`Enter a new name to clone "${env.name || env.env_name}":`, defaultNewName);
-    if (!newName || !newName.trim()) return;
-
-    setCloningEnvId(env.id || env.env_id);
     try {
-      await projectsApi.cloneEnvironment(env.projectId, env.id || env.env_id, {
-        new_name: newName.trim(),
-        aws_region: env.aws_region || env.region || 'us-east-1',
-        env_type: env.env_type || env.type || 'development',
-        account_id: user?.account_id || null,
-      });
+      await projectsApi.deleteEnvironment(env.projectId, envId);
       await loadData();
     } catch (err) {
-      alert('Failed to clone environment: ' + (err.message || err));
-    } finally {
-      setCloningEnvId(null);
+      alert(`Failed to delete environment: ${err.message || err}`);
     }
   };
   const targetProjectId = navState?.projectId || activeProject?.id || activeProject?.project_id || null;
@@ -411,17 +401,6 @@ export default function EnvironmentsView({
                   </div>
 
                   <div className="flex items-center gap-2 self-end md:self-auto">
-                    <button
-                      type="button"
-                      onClick={() => handleCloneEnv(env)}
-                      disabled={cloningEnvId === envId}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition cursor-pointer disabled:opacity-50"
-                      title="Clone environment configuration"
-                    >
-                      <Copy className={`w-3.5 h-3.5 text-slate-500 ${cloningEnvId === envId ? 'animate-spin' : ''}`} />
-                      <span className="hidden sm:inline">Clone</span>
-                    </button>
-
                     {onNavigate && (
                       <button
                         onClick={() => {
@@ -438,6 +417,15 @@ export default function EnvironmentsView({
                         <ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     )}
+
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteEnv(env, e)}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
+                      title="Delete Environment"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               );
