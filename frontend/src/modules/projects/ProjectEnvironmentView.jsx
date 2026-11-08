@@ -32,8 +32,6 @@ export default function ProjectEnvironmentView({
   const [environmentsList, setEnvironmentsList] = useState([]);
   const { user } = useAuth();
   const [actionNotice, setActionNotice] = useState(null);
-  const [lastSynced, setLastSynced] = useState(new Date());
-  const [isSyncing, setIsSyncing] = useState(false);
   // Sync navState updates
   useEffect(() => {
     if (navState?.tab) {
@@ -90,14 +88,10 @@ export default function ProjectEnvironmentView({
     const syncTimer = setInterval(async () => {
       if (document.hidden) return;
       await loadSummaryCounts();
-      setLastSynced(new Date());
     }, 6000);
 
     const handleFocus = async () => {
-      setIsSyncing(true);
       await loadSummaryCounts();
-      setLastSynced(new Date());
-      setIsSyncing(false);
     };
 
     window.addEventListener('focus', handleFocus);
