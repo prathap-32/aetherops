@@ -14,7 +14,6 @@ import {
   ExternalLink,
   Trash2,
   Layers,
-  ArrowRight,
   Server,
   Activity,
   CheckCircle2,
@@ -371,17 +370,6 @@ export default function ProjectsView({
                         <h3 className="text-sm font-bold text-slate-900 tracking-tight truncate group-hover:text-[#1e40af] transition">
                           {project.name}
                         </h3>
-                        <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-mono text-slate-400 mt-0.5">
-                          <span>user: <strong className="text-slate-600">{project.owner}</strong></span>
-                          <span>•</span>
-                          <span>act: <strong className="text-slate-600">{formatAccountId(project.account_id || user?.account_id || '109283746519')}</strong></span>
-                          {project.tenant_id && (
-                            <>
-                              <span>•</span>
-                              <span>tenant: <strong className="text-slate-600">{project.tenant_id.length > 10 ? project.tenant_id.slice(0, 8) + '…' : project.tenant_id}</strong></span>
-                            </>
-                          )}
-                        </div>
                       </div>
                     </div>
                     {getStatusBadge(project.status)}
@@ -402,30 +390,13 @@ export default function ProjectsView({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => {
-                        if (onSelectProject) onSelectProject(project);
-                        if (handleNavigate) {
-                          handleNavigate('environments', '/environments', {
-                            projectId: project.id,
-                            project: project,
-                          });
-                        }
-                      }}
-                      className="p-1 text-slate-400 hover:text-blue-600 rounded transition cursor-pointer"
-                      title="Manage Environments"
-                    >
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => handleDeleteProject(project.id, project.name, e)}
-                      className="p-1 text-slate-400 hover:text-rose-600 rounded transition"
-                      title="Delete Project"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <button
+                    onClick={(e) => handleDeleteProject(project.id, project.name, e)}
+                    className="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
+                    title="Delete Project"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             );
@@ -462,12 +433,6 @@ export default function ProjectsView({
                   >
                     <td className="px-5 py-3.5">
                       <div className="font-semibold text-slate-900">{project.name}</div>
-                      <div className="text-[10px] font-mono text-slate-400 flex items-center gap-1.5 flex-wrap">
-                        <span>user: {project.owner}</span>
-                        <span>•</span>
-                        <span>act: {formatAccountId(project.account_id || user?.account_id || '109283746519')}</span>
-                        {project.tenant_id && <span>• tenant: {project.tenant_id.length > 10 ? project.tenant_id.slice(0, 8) + '…' : project.tenant_id}</span>}
-                      </div>
                     </td>
                     <td className="px-4 py-3.5 font-mono text-slate-600">
                       {project.project_type?.replace('_', ' ')}
