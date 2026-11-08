@@ -160,7 +160,11 @@ export default function ProjectsView({
       p.description?.toLowerCase().includes(q) ||
       p.id?.toLowerCase().includes(q);
     const matchesType = filterType === 'all' || p.project_type === filterType;
-    const matchesStatus = filterStatus === 'all' || p.status === filterStatus;
+    const matchesStatus =
+      filterStatus === 'all' ||
+      (filterStatus === 'ACTIVE'
+        ? !['ARCHIVED', 'COMPLETED'].includes((p.status || 'ACTIVE').toUpperCase())
+        : ['COMPLETED', 'ARCHIVED', 'DEPLOYED'].includes((p.status || '').toUpperCase()));
     return matchesQ && matchesType && matchesStatus;
   });
 
@@ -174,26 +178,18 @@ export default function ProjectsView({
   });
 
   const getStatusBadge = (status) => {
-    if (status === 'ACTIVE') {
+    if (['COMPLETED', 'ARCHIVED', 'DEPLOYED'].includes((status || '').toUpperCase())) {
       return (
-        <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-          Active
-        </span>
-      );
-    }
-    if (status === 'ARCHIVED') {
-      return (
-        <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-          Archived
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+          Completed
         </span>
       );
     }
     return (
-      <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-blue-50 text-[#1e40af] border border-blue-200 flex items-center gap-1.5">
-        <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-        Ready
+      <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+        Active
       </span>
     );
   };
@@ -203,15 +199,7 @@ export default function ProjectsView({
       {/* Page Title & Top Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Projects</h1>
-            <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-[#1e40af] border border-blue-100">
-              {totalProjects} registered
-            </span>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Manage your autonomous cloud workspaces, target infrastructure, and container environments.
-          </p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Projects</h1>
         </div>
 
         <div className="flex items-center gap-2">
@@ -297,9 +285,8 @@ export default function ProjectsView({
             className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 font-medium focus:outline-none focus:border-[#1e40af]"
           >
             <option value="all">All Status</option>
-            <option value="CREATED">CREATED</option>
-            <option value="ACTIVE">ACTIVE</option>
-            <option value="ARCHIVED">ARCHIVED</option>
+            <option value="ACTIVE">Active</option>
+            <option value="COMPLETED">Completed</option>
           </select>
         </div>
 
