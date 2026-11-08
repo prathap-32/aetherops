@@ -491,13 +491,6 @@ export default function ProjectsView({
             )}
 
             <form onSubmit={handleCreateProject} className="space-y-4">
-              {/* User Identity, Tenant & Docker DB Context Preview */}
-              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] font-mono text-slate-600 flex flex-wrap items-center justify-between gap-2">
-                <span>Account: <strong className="text-slate-900">{formatAccountId(user?.account_id || '109283746519')}</strong></span>
-                <span>Tenant: <strong className="text-slate-900">{user?.tenant_id || 'personal'}</strong></span>
-                <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Docker Postgres DB</span>
-              </div>
-
               <div className="space-y-1">
                 <label className="block text-xs font-semibold text-slate-700">
                   Project Name <span className="text-rose-500">*</span>

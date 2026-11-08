@@ -147,7 +147,11 @@ class ScanReportResponse(BaseModel):
     requires_user_acceptance: bool = True
     is_remote: bool = False
     inspection_mode: str = "LOCAL_FILESYSTEM"  # LOCAL_FILESYSTEM | IN_MEMORY_ZERO_CLONE
-
+    repo_metadata: Optional[dict[str, Any]] = None
+    languages_breakdown: Optional[list[dict[str, Any]]] = None
+    inspected_manifests: Optional[list[str]] = None
+    accuracy_score: Optional[int] = 98
+    accuracy_method: Optional[str] = "DETERMINISTIC_PARSING_ZERO_AI"
 
 class AcceptAndSizeRequest(BaseModel):
     repo_path: Optional[str] = Field(default="", description="Repository identifier or path")

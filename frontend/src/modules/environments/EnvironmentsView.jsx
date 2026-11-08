@@ -208,15 +208,7 @@ export default function EnvironmentsView({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Target Environments Fleet</h1>
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-              {environments.length} {environments.length === 1 ? 'environment' : 'environments'}
-            </span>
-          </div>
-          <p className="text-sm text-slate-500 mt-1">
-            Manage deployment targets, cloud landing zones, and VPC environments across AWS regions.
-          </p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Target Environments Fleet</h1>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -247,7 +239,6 @@ export default function EnvironmentsView({
             </div>
           </div>
           <p className="text-2xl font-bold text-slate-900 mt-2">{environments.length}</p>
-          <p className="text-xs text-slate-500 mt-1">Across {projects.length} connected projects</p>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs">
@@ -260,7 +251,6 @@ export default function EnvironmentsView({
           <p className="text-2xl font-bold text-slate-900 mt-2">
             {environments.filter(e => ['PROD', 'PRODUCTION'].includes((e.type || e.env_type || '').toUpperCase())).length}
           </p>
-          <p className="text-xs text-slate-500 mt-1">High-availability target zones</p>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs">
@@ -273,7 +263,6 @@ export default function EnvironmentsView({
           <p className="text-2xl font-bold text-slate-900 mt-2">
             {environments.filter(e => !['PROD', 'PRODUCTION'].includes((e.type || e.env_type || '').toUpperCase())).length}
           </p>
-          <p className="text-xs text-slate-500 mt-1">Pre-production sandboxes</p>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs">
@@ -284,7 +273,6 @@ export default function EnvironmentsView({
             </div>
           </div>
           <p className="text-2xl font-bold text-slate-900 mt-2">us-east-1</p>
-          <p className="text-xs text-slate-500 mt-1">N. Virginia (AWS Data Center)</p>
         </div>
       </div>
 
@@ -416,16 +404,6 @@ export default function EnvironmentsView({
                           <Globe className="w-3.5 h-3.5 text-slate-400" />
                           {reg}
                         </span>
-                        <span>•</span>
-                        <span className="font-mono text-slate-500 text-[11px]">
-                          act: {formatAccountId(env.account_id || user?.account_id || '109283746519')}
-                        </span>
-                        {env.tenant_id && (
-                          <>
-                            <span>•</span>
-                            <span className="font-mono text-slate-400 text-[11px]">tenant: {env.tenant_id.length > 10 ? env.tenant_id.slice(0, 8) + '…' : env.tenant_id}</span>
-                          </>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -476,13 +454,6 @@ export default function EnvironmentsView({
             </p>
 
             <form onSubmit={handleCreateEnv} className="mt-5 space-y-4">
-              {/* User Identity, Tenant & Docker DB Preview */}
-              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] font-mono text-slate-600 flex flex-wrap items-center justify-between gap-2">
-                <span>Account: <strong className="text-slate-900">{formatAccountId(user?.account_id || '109283746519')}</strong></span>
-                <span>Tenant: <strong className="text-slate-900">{user?.tenant_id || 'personal'}</strong></span>
-                <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Docker Postgres DB</span>
-              </div>
-
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                   Target Project
