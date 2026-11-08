@@ -301,12 +301,13 @@ async def get_current_admin(request: Request) -> Dict[str, Any]:
         payload = decode_access_token(auth_header.split(" ", 1)[1].strip())
         if payload:
             return {
-                "username":  payload.get("sub"),
-                "uuid":      payload.get("uuid"),
-                "role":      payload.get("role"),
-                "email":     payload.get("email"),
-                "tenant_id": payload.get("tenant_id"),
-                "auth_type": "bearer",
+                "username":   payload.get("sub"),
+                "uuid":       payload.get("uuid"),
+                "role":       payload.get("role"),
+                "email":      payload.get("email"),
+                "tenant_id":  payload.get("tenant_id") or request.headers.get("x-tenant-id") or request.headers.get("X-Tenant-ID"),
+                "account_id": payload.get("account_id") or request.headers.get("x-account-id") or request.headers.get("X-Account-ID") or "109283746519",
+                "auth_type":  "bearer",
             }
 
     # 2. Cookie (ambient browser session)
@@ -315,23 +316,26 @@ async def get_current_admin(request: Request) -> Dict[str, Any]:
         payload = decode_access_token(token)
         if payload:
             return {
-                "username":  payload.get("sub"),
-                "uuid":      payload.get("uuid"),
-                "role":      payload.get("role"),
-                "email":     payload.get("email"),
-                "tenant_id": payload.get("tenant_id"),
-                "auth_type": "cookie",
+                "username":   payload.get("sub"),
+                "uuid":       payload.get("uuid"),
+                "role":       payload.get("role"),
+                "email":      payload.get("email"),
+                "tenant_id":  payload.get("tenant_id") or request.headers.get("x-tenant-id") or request.headers.get("X-Tenant-ID"),
+                "account_id": payload.get("account_id") or request.headers.get("x-account-id") or request.headers.get("X-Account-ID") or "109283746519",
+                "auth_type":  "cookie",
             }
 
     # 3. X-Admin-Key
     admin_key = request.headers.get("X-Admin-Key", "")
     if admin_key and MASTER_ADMIN_KEY and secrets.compare_digest(admin_key.strip(), MASTER_ADMIN_KEY):
         return {
-            "username":  "root_admin",
-            "uuid":      "00000000-0000-0000-0000-000000000001",
-            "role":      "SUPER_ADMIN",
-            "email":     "root@aetherops.cloud",
-            "auth_type": "api_key",
+            "username":   "root_admin",
+            "uuid":       "00000000-0000-0000-0000-000000000001",
+            "role":       "SUPER_ADMIN",
+            "email":      "root@aetherops.cloud",
+            "tenant_id":  request.headers.get("x-tenant-id") or request.headers.get("X-Tenant-ID") or "ten_default",
+            "account_id": request.headers.get("x-account-id") or request.headers.get("X-Account-ID") or "109283746519",
+            "auth_type":  "api_key",
         }
 
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized: valid session required.")

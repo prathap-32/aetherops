@@ -128,8 +128,10 @@ async def init_projects_db():
             for table, col, col_type in [
                 ("aether_projects", "tenant_id", "VARCHAR(36)"),
                 ("aether_projects", "created_by_user_id", "VARCHAR(36)"),
+                ("aether_projects", "account_id", "VARCHAR(36)"),
                 ("aether_environments", "tenant_id", "VARCHAR(36)"),
                 ("aether_environments", "created_by_user_id", "VARCHAR(36)"),
+                ("aether_environments", "account_id", "VARCHAR(36)"),
             ]:
                 try:
                     await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
@@ -147,8 +149,10 @@ async def init_projects_db():
                 for table, col, col_type in [
                     ("aether_projects", "tenant_id", "VARCHAR(36)"),
                     ("aether_projects", "created_by_user_id", "VARCHAR(36)"),
+                    ("aether_projects", "account_id", "VARCHAR(36)"),
                     ("aether_environments", "tenant_id", "VARCHAR(36)"),
                     ("aether_environments", "created_by_user_id", "VARCHAR(36)"),
+                    ("aether_environments", "account_id", "VARCHAR(36)"),
                 ]:
                     try:
                         await conn.execute(text(f'ALTER TABLE "project_manager".{table} ADD COLUMN IF NOT EXISTS {col} {col_type}'))

@@ -6,6 +6,7 @@ import AccountModal from '../components/layout/AccountModal';
 
 // Module views
 import DashboardOverview from '../modules/dashboard/DashboardOverview';
+import ProjectEnvironmentView from '../modules/projects/ProjectEnvironmentView';
 import ProjectsView from '../modules/projects/ProjectsView';
 import EnvironmentsView from '../modules/environments/EnvironmentsView';
 import SourceCloudView from '../modules/source_cloud/SourceCloudView';
@@ -32,26 +33,36 @@ const PATH_VIEW_MAP = {
   '/': 'dashboard',
   '/app': 'dashboard',
   '/dashboard': 'dashboard',
-  '/projects': 'projects',
-  '/environments': 'environments',
+  '/project-environment': 'project_environment',
+  '/project_environment': 'project_environment',
+  '/projects': 'project_environment',
+  '/environments': 'project_environment',
   '/source-connection': 'source_cloud',
+  '/source_connection': 'source_cloud',
   '/source-analysis': 'repo_analyzer',
+  '/source_analysis': 'repo_analyzer',
   '/requirements': 'repo_analyzer',
   '/architecture': 'architecture_studio',
   '/architecture/designer': 'architecture_designer',
   '/architecture-designer': 'architecture_designer',
   '/architecture-studio': 'architecture_studio',
+  '/architecture_studio': 'architecture_studio',
   '/risk-analysis': 'risk_analysis',
+  '/risk_analysis': 'risk_analysis',
   '/architecture/validation': 'architecture_validation',
-  '/security': 'security',
+  '/architecture-validation': 'architecture_validation',
+  '/security': 'architecture_validation',
   '/terraform': 'iac',
+  '/iac': 'iac',
   '/execution': 'execution',
   '/deployment': 'deployments',
+  '/deployments': 'deployments',
   '/cicd': 'cicd',
   '/monitoring': 'monitoring',
   '/optimization': 'optimization',
   '/audit': 'audit',
   '/documentation': 'docs',
+  '/docs': 'docs',
   '/account': 'settings',
   '/settings': 'settings',
   '/admin': 'admin',
@@ -59,24 +70,41 @@ const PATH_VIEW_MAP = {
 
 const VIEW_PATH_MAP = {
   dashboard: '/',
-  projects: '/projects',
-  environments: '/environments',
+  app: '/',
+  project_environment: '/project-environment',
+  'project-environment': '/project-environment',
+  projects: '/project-environment',
+  environments: '/project-environment',
   source_cloud: '/source-connection',
+  'source-connection': '/source-connection',
+  'source_connection': '/source-connection',
   repo_analyzer: '/source-analysis',
+  'source-analysis': '/source-analysis',
+  'source_analysis': '/source-analysis',
+  requirements: '/source-analysis',
   architecture_studio: '/architecture-studio',
+  'architecture-studio': '/architecture-studio',
   architecture: '/architecture-studio',
   architecture_designer: '/architecture-designer',
+  'architecture-designer': '/architecture-designer',
+  'architecture/designer': '/architecture-designer',
   risk_analysis: '/risk-analysis',
+  'risk-analysis': '/risk-analysis',
   architecture_validation: '/architecture/validation',
+  'architecture/validation': '/architecture/validation',
+  'architecture-validation': '/architecture/validation',
   security: '/security',
   iac: '/terraform',
+  terraform: '/terraform',
   execution: '/execution',
   deployments: '/deployment',
+  deployment: '/deployment',
   cicd: '/cicd',
   monitoring: '/monitoring',
   optimization: '/optimization',
   audit: '/audit',
   docs: '/documentation',
+  documentation: '/documentation',
   account: '/account',
   settings: '/settings',
   admin: '/admin',
@@ -168,59 +196,99 @@ export default function DashboardPage() {
 
   const [navState, setNavState] = useState(null);
 
-  const handleNavigate = (viewKey, targetPathOrState, extraState) => {
-    if (viewKey === 'admin' && !isAdmin) {
-      alert('Access Restricted: The Admin Console is only accessible by platform administrators.');
-      return;
+  const resolveViewKey = (keyOrPath) => {
+    if (!keyOrPath || typeof keyOrPath !== 'string') return 'projects';
+    const trimmed = keyOrPath.trim();
+    if (trimmed.startsWith('/')) {
+      return PATH_VIEW_MAP[trimmed] || trimmed.replace(/^\//, '');
     }
-    let path = VIEW_PATH_MAP[viewKey] || `/${viewKey}`;
+    if (PATH_VIEW_MAP[`/${trimmed}`]) {
+      return PATH_VIEW_MAP[`/${trimmed}`];
+    }
+    return trimmed;
+  };
+
+  const handleOpenCreateProject = () => {
+    setIsCreateProjectModalOpen(true);
+    handleNavigate('projects', '/projects');
+  };
+
+  const handleNavigate = (viewKey, targetPathOrState, extraState) => {
+    let resolvedKey = resolveViewKey(viewKey);
+    let path = VIEW_PATH_MAP[resolvedKey] || VIEW_PATH_MAP[viewKey] || `/${viewKey}`;
+
     if (typeof targetPathOrState === 'string' && targetPathOrState.startsWith('/')) {
       path = targetPathOrState;
+      if (PATH_VIEW_MAP[targetPathOrState]) {
+        resolvedKey = PATH_VIEW_MAP[targetPathOrState];
+      }
       if (extraState) {
         setNavState(extraState);
       }
     } else if (typeof targetPathOrState === 'object' && targetPathOrState !== null) {
       setNavState(targetPathOrState);
     }
+
+    if (resolvedKey === 'admin' && !isAdmin) {
+      alert('Access Restricted: The Admin Console is only accessible by platform administrators.');
+      return;
+    }
+
     try {
       window.history.pushState(null, '', path);
     } catch (e) {
-      window.location.hash = `#${viewKey}`;
+      window.location.hash = `#${resolvedKey}`;
     }
-    setActiveView(viewKey);
+    setActiveView(resolvedKey);
   };
 
   const renderActiveModule = () => {
     switch (activeView) {
       case 'dashboard':
+      case 'app':
+      case '/':
         return (
           <DashboardOverview
             onNavigate={handleNavigate}
-            onOpenCreateProject={() => setIsCreateProjectModalOpen(true)}
+            onOpenCreateProject={handleOpenCreateProject}
+            onSelectProject={selectProject}
           />
         );
+      case 'project_environment':
+      case 'project-environment':
       case 'projects':
         return (
-          <ProjectsView
+          <ProjectEnvironmentView
             onNavigate={handleNavigate}
             isCreateModalOpen={isCreateProjectModalOpen}
             onCloseCreateModal={() => setIsCreateProjectModalOpen(false)}
-            onOpenCreateProject={() => setIsCreateProjectModalOpen(true)}
+            onOpenCreateProject={handleOpenCreateProject}
             activeProject={activeProject}
+            activeEnvironment={activeEnvironment}
             onSelectProject={selectProject}
+            onSelectEnvironment={selectEnvironment}
+            navState={navState}
+            initialTab={navState?.tab || 'projects'}
           />
         );
       case 'environments':
         return (
-          <EnvironmentsView
+          <ProjectEnvironmentView
             onNavigate={handleNavigate}
+            isCreateModalOpen={isCreateProjectModalOpen}
+            onCloseCreateModal={() => setIsCreateProjectModalOpen(false)}
+            onOpenCreateProject={handleOpenCreateProject}
             activeProject={activeProject}
             activeEnvironment={activeEnvironment}
+            onSelectProject={selectProject}
             onSelectEnvironment={selectEnvironment}
             navState={navState}
+            initialTab="environments"
           />
         );
       case 'source_cloud':
+      case 'source-connection':
+      case 'source_connection':
         return (
           <SourceCloudView
             onNavigate={handleNavigate}
@@ -231,6 +299,8 @@ export default function DashboardPage() {
         );
       case 'repo_analyzer':
       case 'requirements':
+      case 'source-analysis':
+      case 'source_analysis':
         return (
           <RepoAnalyzerView
             onNavigate={handleNavigate}
@@ -241,6 +311,7 @@ export default function DashboardPage() {
         );
       case 'architecture_studio':
       case 'architecture':
+      case 'architecture-studio':
         return (
           <ArchitectureView
             onNavigate={handleNavigate}
@@ -251,6 +322,9 @@ export default function DashboardPage() {
           />
         );
       case 'architecture_designer':
+      case 'architecture-designer':
+      case 'architecture/designer':
+      case 'designer':
         return (
           <ArchitectureDesigner
             onNavigate={handleNavigate}
@@ -261,6 +335,8 @@ export default function DashboardPage() {
           />
         );
       case 'risk_analysis':
+      case 'risk-analysis':
+      case 'risk':
         return (
           <RiskEngineView
             onNavigate={handleNavigate}
@@ -270,7 +346,10 @@ export default function DashboardPage() {
           />
         );
       case 'architecture_validation':
+      case 'architecture/validation':
+      case 'architecture-validation':
       case 'security':
+      case 'validation':
         return (
           <ArchitectureValidationView
             onNavigate={handleNavigate}
@@ -280,6 +359,7 @@ export default function DashboardPage() {
           />
         );
       case 'iac':
+      case 'terraform':
         return (
           <IacView
             onNavigate={handleNavigate}
@@ -289,6 +369,7 @@ export default function DashboardPage() {
           />
         );
       case 'execution':
+      case 'approval':
         return (
           <ApprovalExecutionView
             onNavigate={handleNavigate}
@@ -298,6 +379,7 @@ export default function DashboardPage() {
           />
         );
       case 'deployments':
+      case 'deployment':
         return (
           <DeploymentsView
             onNavigate={handleNavigate}
@@ -307,24 +389,32 @@ export default function DashboardPage() {
           />
         );
       case 'cicd':
+      case 'cicd-pipeline':
         return <CicdView onNavigate={handleNavigate} />;
       case 'monitoring':
+      case 'observability':
         return <MonitoringView onNavigate={handleNavigate} />;
       case 'optimization':
+      case 'finops':
         return <OptimizationView onNavigate={handleNavigate} />;
       case 'audit':
+      case 'history':
         return <AuditHistoryView onNavigate={handleNavigate} />;
       case 'admin':
+      case 'admin_console':
         return isAdmin ? <AdminConsoleView onNavigate={handleNavigate} /> : <ProjectsView onNavigate={handleNavigate} />;
       case 'settings':
+      case 'account':
         return <SettingsView onNavigate={handleNavigate} />;
       case 'docs':
+      case 'documentation':
         return <DocsView onNavigate={handleNavigate} />;
       default:
         return (
           <DashboardOverview
             onNavigate={handleNavigate}
-            onOpenCreateProject={() => setIsCreateProjectModalOpen(true)}
+            onOpenCreateProject={handleOpenCreateProject}
+            onSelectProject={selectProject}
           />
         );
     }
@@ -346,12 +436,21 @@ export default function DashboardPage() {
 
       {/* Main Orchestrator Workspace */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Unified Top Navbar */}
-        <Navbar activeView={activeView} />
+        {/* Unified Top Navbar with Mobile Drawer Toggle and Context */}
+        <Navbar
+          activeView={activeView}
+          onToggleMobileSidebar={() => setMobileSidebarOpen((prev) => !prev)}
+          user={user}
+          activeProject={activeProject}
+          onOpenAccountModal={() => setIsAccountModalOpen(true)}
+          onNavigate={handleNavigate}
+        />
 
-        {/* Dynamic Workspace Container */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
-          <div className="max-w-7xl mx-auto">{renderActiveModule()}</div>
+        {/* Dynamic Responsive Workspace Container */}
+        <main className="flex-1 overflow-y-auto p-3.5 sm:p-5 md:p-6 lg:p-8">
+          <div className="w-full max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto">
+            {renderActiveModule()}
+          </div>
         </main>
       </div>
 

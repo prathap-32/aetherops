@@ -1,12 +1,22 @@
 // frontend/src/components/layout/Navbar.jsx
 import React from 'react';
+import { Menu, FolderKanban } from 'lucide-react';
+import { formatAccountId } from '../../services/api';
 
-export default function Navbar({ activeView }) {
+export default function Navbar({
+  activeView,
+  onToggleMobileSidebar,
+  user,
+  activeProject,
+  onOpenAccountModal,
+  onNavigate,
+}) {
   const VIEW_TITLES = {
     dashboard: 'Platform Dashboard',
-    projects: 'Projects & Workspaces',
-    environments: 'Target Environments Fleet',
-    source_cloud: 'Source & Cloud Connection',
+    project_environment: '1. Project and Environment',
+    projects: '1. Project and Environment',
+    environments: '1. Project and Environment',
+    source_cloud: '2. Connect AWS & Git',
     repo_analyzer: 'Source Code Analyzer',
     architecture: 'Cloud Architecture Studio',
     architecture_studio: 'Cloud Architecture Studio',
@@ -28,11 +38,100 @@ export default function Navbar({ activeView }) {
 
   const currentTitle = VIEW_TITLES[activeView] || 'Console';
 
+  const initials = (user?.username || 'AO').slice(0, 2).toUpperCase();
+
   return (
-    <header className="sticky top-0 z-20 h-14 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 flex items-center min-w-0">
-      <span className="font-bold text-slate-900 tracking-tight text-sm sm:text-base truncate">
-        {currentTitle}
-      </span>
+    <header className="sticky top-0 z-20 h-14 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3.5 sm:px-6 flex items-center justify-between min-w-0 transition-colors">
+      {/* Left: Hamburger (Mobile) + Brand/Page Title */}
+      <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+        {/* Mobile Hamburger Toggle Button */}
+        <button
+          type="button"
+          onClick={onToggleMobileSidebar}
+          className="lg:hidden p-2 -ml-1 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition cursor-pointer flex items-center justify-center shrink-0"
+          aria-label="Open Navigation Menu"
+          title="Toggle Navigation Menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        {/* Mobile Brand Icon (Anti-download protected) */}
+        <div
+          className="lg:hidden flex items-center shrink-0 select-none pointer-events-none"
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <img
+            src="/static/logo/aetherops_light_icon.png"
+            alt="AetherOps"
+            className="w-6 h-6 object-contain select-none pointer-events-none"
+            draggable={false}
+            onContextMenu={(e) => e.preventDefault()}
+            style={{
+              WebkitUserDrag: 'none',
+              userSelect: 'none',
+              WebkitTouchCallout: 'none',
+              pointerEvents: 'none',
+            }}
+            width="24"
+            height="24"
+          />
+        </div>
+
+        {/* View Title */}
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-bold text-slate-900 tracking-tight text-sm sm:text-base truncate">
+            {currentTitle}
+          </span>
+
+          {/* Active Workspace / Project Indicator */}
+          {activeProject && (
+            <div
+              onClick={() => onNavigate && onNavigate('projects', '/projects')}
+              className={`hidden md:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-200/80 max-w-[200px] truncate ${
+                onNavigate ? 'cursor-pointer hover:bg-blue-100/80 transition' : ''
+              }`}
+              title={`Active Project: ${activeProject.name} (click to view all projects)`}
+            >
+              <FolderKanban className="w-3 h-3 shrink-0 text-blue-600" />
+              <span className="truncate">{activeProject.name}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Right: Quick Account Info & Actions */}
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {/* Account ID Badge */}
+        {user?.account_id && (
+          <div
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200/80 text-slate-600 text-[11px] font-mono shadow-2xs"
+            title={`Account: ${formatAccountId(user.account_id)}`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span className="font-semibold text-slate-700">
+              {formatAccountId(user.account_id)}
+            </span>
+          </div>
+        )}
+
+        {/* User Role Tag (Desktop/PC) */}
+        {user?.role && (
+          <span className="hidden lg:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
+            {user.role}
+          </span>
+        )}
+
+        {/* User Profile Avatar Button */}
+        <button
+          type="button"
+          onClick={onOpenAccountModal}
+          className="w-8 h-8 rounded-full bg-[#1e40af] hover:bg-[#1d4ed8] text-white flex items-center justify-center font-bold font-mono text-xs shadow-xs hover:scale-105 transition cursor-pointer shrink-0"
+          title={`Logged in as ${user?.username || 'User'} — click to edit profile`}
+          aria-label="User Account Profile"
+        >
+          {initials}
+        </button>
+      </div>
     </header>
   );
 }

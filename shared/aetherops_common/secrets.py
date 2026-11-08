@@ -139,11 +139,12 @@ def load_application_secrets(
     )
 
     if allow_local_fallback is None:
-        allow_local_fallback = os.getenv("AETHER_ALLOW_LOCAL_ENV_FALLBACK", "false").lower() in (
-            "true",
-            "1",
-            "yes",
-        )
+        env_val = os.getenv("AETHER_ALLOW_LOCAL_ENV_FALLBACK")
+        if env_val is not None:
+            allow_local_fallback = env_val.lower() in ("true", "1", "yes")
+        else:
+            root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            allow_local_fallback = os.path.exists(os.path.join(root_dir, ".env"))
 
     # Attempt retrieval from AWS Secrets Manager
     secret_string: Optional[str] = None

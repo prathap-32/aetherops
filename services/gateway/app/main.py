@@ -268,17 +268,20 @@ app.add_middleware(
 if os.path.exists(FRONTEND_ASSETS):
     app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS), name="react_assets")
 
+DIST_STATIC = os.path.join(FRONTEND_DIST, "static")
 ROOT_STATIC = os.path.join(ROOT_DIR, "static")
-if os.path.exists(ROOT_STATIC):
-    app.mount("/static", StaticFiles(directory=ROOT_STATIC), name="root_static")
+static_dir = DIST_STATIC if os.path.exists(DIST_STATIC) else ROOT_STATIC
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static_assets")
 
 
 @app.api_route("/favicon.ico", methods=["GET", "HEAD"])
 @app.api_route("/favicon.png", methods=["GET", "HEAD"])
 async def get_favicon():
-    fav_path = os.path.join(ROOT_DIR, "static", "logo", "logo.png")
-    if os.path.exists(fav_path):
-        return FileResponse(fav_path, media_type="image/png")
+    for base in (DIST_STATIC, ROOT_STATIC):
+        fav_path = os.path.join(base, "logo", "logo.png")
+        if os.path.exists(fav_path):
+            return FileResponse(fav_path, media_type="image/png")
     return Response(status_code=404)
 
 

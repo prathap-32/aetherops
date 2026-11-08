@@ -135,11 +135,19 @@ REGISTER_RES=$(curl -s -X POST "$BASE_URL/api/v1/auth/register" \
 USER_B_TOKEN=$(echo "$REGISTER_RES" | jq -r '.token // .access_token // empty')
 
 if [ -z "$USER_B_TOKEN" ]; then
-    # Try login in case user already existed
-    LOGIN_B=$(curl -s -X POST "$BASE_URL/api/v1/auth/login" \
-        -H "Content-Type: application/json" \
-        -d "{\"username\":\"$USER_B\",\"password\":\"password123\"}")
-    USER_B_TOKEN=$(echo "$LOGIN_B" | jq -r '.token // .access_token // empty')
+    VERIF_TOKEN=$(echo "$REGISTER_RES" | jq -r '.verification_url // empty' | grep -o 'verify_token=[^&]*' | cut -d= -f2)
+    if [ -n "$VERIF_TOKEN" ]; then
+        VERIF_RES=$(curl -s -X POST "$BASE_URL/api/v1/auth/verify-email" \
+            -H "Content-Type: application/json" \
+            -d "{\"token\":\"$VERIF_TOKEN\"}")
+        USER_B_TOKEN=$(echo "$VERIF_RES" | jq -r '.token // .access_token // empty')
+    fi
+    if [ -z "$USER_B_TOKEN" ]; then
+        LOGIN_B=$(curl -s -X POST "$BASE_URL/api/v1/auth/login" \
+            -H "Content-Type: application/json" \
+            -d "{\"username\":\"$USER_B\",\"password\":\"password123\"}")
+        USER_B_TOKEN=$(echo "$LOGIN_B" | jq -r '.token // .access_token // empty')
+    fi
 fi
 
 if [ -n "$USER_B_TOKEN" ]; then

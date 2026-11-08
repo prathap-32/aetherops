@@ -14,18 +14,23 @@ import {
   ExternalLink,
   ChevronRight,
   Shield,
-  Trash2
+  Trash2,
+  Copy,
 } from 'lucide-react';
-import { projectsApi } from '../../services/api';
+import { projectsApi, formatAccountId } from '../../services/api';
 import { AWS_REGIONS_39, TIER_TYPES_LIST } from '../../constants/awsRegions';
+import { useAuth } from '../../context/AuthContext';
 
 export default function EnvironmentsView({
+  user: propUser,
   onNavigate,
   activeProject,
   activeEnvironment,
   onSelectEnvironment,
   navState,
 }) {
+  const { user: authUser } = useAuth();
+  const user = propUser || authUser;
   const [projects, setProjects] = useState([]);
   const [environments, setEnvironments] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState('ALL');
@@ -41,8 +46,29 @@ export default function EnvironmentsView({
   const [envType, setEnvType] = useState('development');
   const [region, setRegion] = useState('us-east-1');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [createdSuccessEnv, setCreatedSuccessEnv] = useState(null);
 
+  const [cloningEnvId, setCloningEnvId] = useState(null);
+
+  const handleCloneEnv = async (env) => {
+    const defaultNewName = `${env.name || env.env_name}-copy`;
+    const newName = window.prompt(`Enter a new name to clone "${env.name || env.env_name}":`, defaultNewName);
+    if (!newName || !newName.trim()) return;
+
+    setCloningEnvId(env.id || env.env_id);
+    try {
+      await projectsApi.cloneEnvironment(env.projectId, env.id || env.env_id, {
+        new_name: newName.trim(),
+        aws_region: env.aws_region || env.region || 'us-east-1',
+        env_type: env.env_type || env.type || 'development',
+        account_id: user?.account_id || null,
+      });
+      await loadData();
+    } catch (err) {
+      alert('Failed to clone environment: ' + (err.message || err));
+    } finally {
+      setCloningEnvId(null);
+    }
+  };
   const targetProjectId = navState?.projectId || activeProject?.id || activeProject?.project_id || null;
 
   useEffect(() => {
@@ -97,8 +123,15 @@ export default function EnvironmentsView({
 
   useEffect(() => {
     loadData();
-  }, []);
 
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        loadData();
+      }
+    }, 6000);
+
+    return () => clearInterval(interval);
+  }, []);
   const handleCreateEnv = async (e) => {
     e.preventDefault();
     if (!modalProjectId || !envName.trim()) return;
@@ -111,6 +144,7 @@ export default function EnvironmentsView({
         type: envType.toLowerCase(),
         aws_region: region.toLowerCase(),
         region: region.toLowerCase(),
+        account_id: user?.account_id || null,
       });
       setIsModalOpen(false);
       setEnvName('');
@@ -125,7 +159,6 @@ export default function EnvironmentsView({
       if (onSelectEnvironment) {
         onSelectEnvironment(enrichedEnv);
       }
-      setCreatedSuccessEnv(enrichedEnv);
     } catch (err) {
       alert(`Failed to create environment: ${err.message}`);
     } finally {
@@ -255,47 +288,6 @@ export default function EnvironmentsView({
         </div>
       </div>
 
-      {/* New Environment Success Banner */}
-      {createdSuccessEnv && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-in fade-in">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm">
-              ✓
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-emerald-950">
-                Environment &quot;{createdSuccessEnv.name || createdSuccessEnv.env_name}&quot; Created!
-              </h4>
-              <p className="text-[11px] text-emerald-700">
-                Next Step: Link your GitHub repository and cloud credentials in Source &amp; Cloud Connection.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setCreatedSuccessEnv(null)}
-              className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 transition"
-            >
-              Dismiss
-            </button>
-            <button
-              onClick={() => {
-                if (onNavigate) {
-                  onNavigate('source_cloud', '/source-connection', {
-                    projectId: createdSuccessEnv.projectId,
-                    environmentId: createdSuccessEnv.id || createdSuccessEnv.env_id,
-                    environment: createdSuccessEnv,
-                  });
-                }
-              }}
-              className="px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>Proceed to Source &amp; Cloud</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Filter / Search Bar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-center gap-4 justify-between">
@@ -417,7 +409,7 @@ export default function EnvironmentsView({
                           Ready
                         </span>
                       </div>
-                      <div className="flex items-center gap-4 text-xs text-slate-500 mt-1">
+                      <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500 mt-1">
                         <span className="font-medium text-slate-700">Project: {env.projectName}</span>
                         <span>•</span>
                         <span className="flex items-center gap-1 text-slate-600">
@@ -425,12 +417,31 @@ export default function EnvironmentsView({
                           {reg}
                         </span>
                         <span>•</span>
-                        <span className="text-slate-400 font-mono text-[11px]">{envId}</span>
+                        <span className="font-mono text-slate-500 text-[11px]">
+                          act: {formatAccountId(env.account_id || user?.account_id || '109283746519')}
+                        </span>
+                        {env.tenant_id && (
+                          <>
+                            <span>•</span>
+                            <span className="font-mono text-slate-400 text-[11px]">tenant: {env.tenant_id.length > 10 ? env.tenant_id.slice(0, 8) + '…' : env.tenant_id}</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 self-end md:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => handleCloneEnv(env)}
+                      disabled={cloningEnvId === envId}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition cursor-pointer disabled:opacity-50"
+                      title="Clone environment configuration"
+                    >
+                      <Copy className={`w-3.5 h-3.5 text-slate-500 ${cloningEnvId === envId ? 'animate-spin' : ''}`} />
+                      <span className="hidden sm:inline">Clone</span>
+                    </button>
+
                     {onNavigate && (
                       <button
                         onClick={() => {
@@ -443,7 +454,7 @@ export default function EnvironmentsView({
                         }}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition cursor-pointer"
                       >
-                        Connect Git & AWS
+                        <span>Connect AWS &amp; Git</span>
                         <ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     )}
@@ -465,6 +476,13 @@ export default function EnvironmentsView({
             </p>
 
             <form onSubmit={handleCreateEnv} className="mt-5 space-y-4">
+              {/* User Identity, Tenant & Docker DB Preview */}
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] font-mono text-slate-600 flex flex-wrap items-center justify-between gap-2">
+                <span>Account: <strong className="text-slate-900">{formatAccountId(user?.account_id || '109283746519')}</strong></span>
+                <span>Tenant: <strong className="text-slate-900">{user?.tenant_id || 'personal'}</strong></span>
+                <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Docker Postgres DB</span>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                   Target Project

@@ -67,10 +67,12 @@ VALID_PROJECT_STATUSES = {"CREATED", "ACTIVE", "ARCHIVED"}
 # ── Input Schemas ─────────────────────────────────────────────────────────────
 
 class ProjectCreate(BaseModel):
-    name:         str
-    description:  Optional[str] = None
-    project_type: str
-
+    name:                         str
+    description:                  Optional[str] = None
+    project_type:                 str
+    account_id:                   Optional[str] = None
+    auto_provision_environments: Optional[bool] = False
+    environments_preset:         Optional[str] = None
     @field_validator("name")
     @classmethod
     def name_not_empty(cls, v: str) -> str:
@@ -107,6 +109,7 @@ class EnvironmentCreate(BaseModel):
     project_id:     Optional[str] = None
     target_project: Optional[str] = None
     name:           str
+    account_id:     Optional[str] = None
     env_type:       Optional[str] = None
     type:           Optional[str] = None
     aws_region:     Optional[str] = None
@@ -180,6 +183,77 @@ class EnvironmentStatusUpdate(BaseModel):
             raise ValueError(f"status must be one of: {sorted(VALID_ENV_STATUSES)}")
         return v
 
+
+class EnvironmentCloneRequest(BaseModel):
+    new_name:    str
+    aws_region:  Optional[str] = None
+    env_type:    Optional[str] = None
+    description: Optional[str] = None
+
+    @field_validator("new_name")
+    @classmethod
+    def name_not_empty(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("new_name cannot be empty.")
+        return v
+
+    @field_validator("aws_region")
+    @classmethod
+    def valid_aws_region(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            v = v.strip().lower()
+            if v not in AWS_REGIONS:
+                raise ValueError(f"aws_region '{v}' is not a supported AWS region.")
+        return v
+
+
+class BatchEnvironmentCreate(BaseModel):
+    environments: List[EnvironmentCreate]
+
+
+class ProjectSummaryOut(BaseModel):
+    project_id:                str
+    name:                      str
+    owner:                     str
+    tenant_id:                 Optional[str] = None
+    account_id:                Optional[str] = None
+    project_type:              str
+    status:                    str
+    environment_count:         int
+    active_environments_count: int
+    status_breakdown:          dict
+    type_breakdown:            dict
+    regions:                   List[str]
+    health_score:              float
+    deployment_ready:          bool
+    lifecycle_phase:           str
+    created_at:                Optional[str] = None
+    updated_at:                Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class EnvironmentHealthCheckItem(BaseModel):
+    check:  str
+    passed: bool
+    detail: str
+
+
+class EnvironmentHealthOut(BaseModel):
+    env_id:           str
+    project_id:       str
+    name:             str
+    account_id:       Optional[str] = None
+    status:           str
+    env_type:         str
+    aws_region:       str
+    region_supported: bool
+    health_status:    str
+    lifecycle_phase:  str
+    checks:           List[EnvironmentHealthCheckItem]
+    checked_at:       str
+    model_config = {"from_attributes": True}
 
 # ── Tenant & Membership Schemas ───────────────────────────────────────────────
 
@@ -267,6 +341,7 @@ class EnvironmentOut(BaseModel):
     project_id:         str
     tenant_id:          Optional[str] = None
     created_by_user_id: Optional[str] = None
+    account_id:         Optional[str] = None
     name:               str
     env_type:           str
     aws_region:         str
@@ -286,6 +361,7 @@ class ProjectOut(BaseModel):
     owner:              str
     tenant_id:          Optional[str] = None
     created_by_user_id: Optional[str] = None
+    account_id:         Optional[str] = None
     status:             str
     environment_count:  int
     environments:       List[EnvironmentOut] = []

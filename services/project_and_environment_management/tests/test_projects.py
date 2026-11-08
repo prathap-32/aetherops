@@ -348,3 +348,166 @@ async def test_project_with_all_env_types(client, api_key_headers):
     # Confirm count
     res = await client.get(f"/api/v1/projects/{proj['id']}", headers=api_key_headers)
     assert res.json()["environment_count"] == 3
+
+
+@pytest.mark.anyio
+async def test_create_project_auto_provision_environments(client, api_key_headers):
+    res = await client.post(
+        "/api/v1/projects",
+        json={
+            "name": "AutoFleetProj",
+            "project_type": "web_application",
+            "auto_provision_environments": True,
+        },
+        headers=api_key_headers,
+    )
+    assert res.status_code == 201
+    data = res.json()
+    assert data["environment_count"] == 3
+    assert len(data["environments"]) == 3
+    env_names = [e["name"] for e in data["environments"]]
+    assert "Development" in env_names
+    assert "Staging" in env_names
+    assert "Production" in env_names
+
+
+@pytest.mark.anyio
+async def test_create_project_with_presets(client, api_key_headers):
+    res = await client.post(
+        "/api/v1/projects",
+        json={
+            "name": "MultiRegionFleet",
+            "project_type": "microservices",
+            "environments_preset": "multi_region",
+        },
+        headers=api_key_headers,
+    )
+    assert res.status_code == 201
+    data = res.json()
+    assert data["environment_count"] == 3
+    regions = [e["aws_region"] for e in data["environments"]]
+    assert "us-east-1" in regions
+    assert "eu-west-1" in regions
+    assert "us-west-2" in regions
+
+
+@pytest.mark.anyio
+async def test_clone_environment(client, api_key_headers):
+    proj = await _create_project(client, api_key_headers, name="CloneBaseProj")
+    source_env = await _create_env(client, api_key_headers, proj["id"], name="Staging", etype="staging", region="eu-west-1")
+
+    res = await client.post(
+        f"/api/v1/projects/{proj['id']}/environments/{source_env['id']}/clone",
+        json={"new_name": "PreProd-Clone"},
+        headers=api_key_headers,
+    )
+    assert res.status_code == 201
+    cloned = res.json()
+    assert cloned["name"] == "PreProd-Clone"
+    assert cloned["env_type"] == "staging"
+    assert cloned["aws_region"] == "eu-west-1"
+
+    # Check duplicate clone rejected
+    dup_res = await client.post(
+        f"/api/v1/projects/{proj['id']}/environments/{source_env['id']}/clone",
+        json={"new_name": "PreProd-Clone"},
+        headers=api_key_headers,
+    )
+    assert dup_res.status_code == 409
+
+
+@pytest.mark.anyio
+async def test_batch_create_environments(client, api_key_headers):
+    proj = await _create_project(client, api_key_headers, name="BatchEnvProj")
+    res = await client.post(
+        f"/api/v1/projects/{proj['id']}/environments/batch",
+        json={
+            "environments": [
+                {"name": "BatchDev", "env_type": "development", "aws_region": "us-east-1"},
+                {"name": "BatchQA", "env_type": "qa", "aws_region": "ap-south-1"},
+                {"name": "BatchSandbox", "env_type": "sandbox", "aws_region": "eu-central-1"},
+            ]
+        },
+        headers=api_key_headers,
+    )
+    assert res.status_code == 201
+    data = res.json()
+    assert data["total"] == 3
+    assert len(data["environments"]) == 3
+
+
+@pytest.mark.anyio
+async def test_get_project_summary(client, api_key_headers):
+    proj = await _create_project(client, api_key_headers, name="SummaryProj")
+    await _create_env(client, api_key_headers, proj["id"], name="DevEnv", etype="development", region="us-east-1")
+    await _create_env(client, api_key_headers, proj["id"], name="ProdEnv", etype="production", region="us-west-2")
+
+    res = await client.get(f"/api/v1/projects/{proj['id']}/summary", headers=api_key_headers)
+    assert res.status_code == 200
+    summary = res.json()
+    assert summary["project_id"] == proj["id"]
+    assert summary["environment_count"] == 2
+    assert "us-east-1" in summary["regions"]
+    assert "us-west-2" in summary["regions"]
+    assert summary["health_score"] == 100.0
+    assert summary["deployment_ready"] is True
+
+
+@pytest.mark.anyio
+async def test_get_environment_health(client, api_key_headers):
+    proj = await _create_project(client, api_key_headers, name="HealthProj")
+    env = await _create_env(client, api_key_headers, proj["id"], name="HealthEnv", etype="production", region="ap-south-1")
+
+    res = await client.get(f"/api/v1/projects/{proj['id']}/environments/{env['id']}/health", headers=api_key_headers)
+    assert res.status_code == 200
+    health = res.json()
+    assert health["env_id"] == env["id"]
+    assert health["region_supported"] is True
+    assert health["health_status"] == "HEALTHY"
+    assert len(health["checks"]) == 4
+    assert all(c["passed"] for c in health["checks"])
+
+
+@pytest.mark.anyio
+async def test_project_and_environment_account_tenant_storage(client, api_key_headers):
+    custom_headers = {
+        **api_key_headers,
+        "X-Account-ID": "987654321098",
+        "X-Tenant-ID": "tenant-custom-corp",
+    }
+    proj_res = await client.post(
+        "/api/v1/projects",
+        json={
+            "name": "AuditStoredProj",
+            "project_type": "web_application",
+            "account_id": "987654321098",
+        },
+        headers=custom_headers,
+    )
+    assert proj_res.status_code == 201
+    proj = proj_res.json()
+    assert proj["account_id"] == "987654321098"
+    assert proj["owner"] is not None
+
+    env_res = await client.post(
+        f"/api/v1/projects/{proj['id']}/environments",
+        json={
+            "name": "AuditEnv",
+            "env_type": "production",
+            "aws_region": "eu-west-1",
+            "account_id": "987654321098",
+        },
+        headers=custom_headers,
+    )
+    assert env_res.status_code == 201
+    env = env_res.json()
+    assert env["account_id"] == "987654321098"
+    assert env["project_id"] == proj["id"]
+
+    # Fetch project details to verify persistence
+    fetch_res = await client.get(f"/api/v1/projects/{proj['id']}", headers=custom_headers)
+    assert fetch_res.status_code == 200
+    fetched = fetch_res.json()
+    assert fetched["account_id"] == "987654321098"
+    assert len(fetched["environments"]) >= 1
+    assert fetched["environments"][0]["account_id"] == "987654321098"

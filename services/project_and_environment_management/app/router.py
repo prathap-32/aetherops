@@ -19,6 +19,9 @@ from app.schemas import (
     ProjectOut, ProjectListOut, EnvironmentOut,
     TenantCreate, TenantUpdate, TenantOut, TenantListOut,
     TenantMemberAdd, TenantMemberRoleUpdate, TenantMemberOut,
+    EnvironmentCloneRequest, BatchEnvironmentCreate,
+    ProjectSummaryOut, EnvironmentHealthOut, EnvironmentHealthCheckItem,
+    AWS_REGIONS, VALID_ENV_STATUSES,
 )
 from app.tenant_context import (
     TenantContext, get_tenant_context, create_personal_workspace_for_user, slugify,
@@ -844,6 +847,13 @@ async def create_project(
     ctx.require_role("OWNER", "ADMIN", "MEMBER")
     owner = ctx.user["username"]
     user_uuid = ctx.user.get("uuid")
+    acc_id = (
+        payload.account_id
+        or ctx.user.get("account_id")
+        or request.headers.get("x-account-id")
+        or request.headers.get("X-Account-ID")
+        or "109283746519"
+    )
 
     project = AetherProject(
         id=str(uuid.uuid4()),
@@ -853,20 +863,60 @@ async def create_project(
         owner=owner,
         tenant_id=ctx.tenant.id,
         created_by_user_id=user_uuid,
+        account_id=acc_id,
         status="CREATED",
         environment_count=0,
         created_at=datetime.datetime.utcnow(),
         updated_at=datetime.datetime.utcnow(),
     )
     db.add(project)
+
+    PRESETS = {
+        "standard": [
+            {"name": "Development", "env_type": "development", "aws_region": "us-east-1", "description": "Development sandbox for rapid iteration"},
+            {"name": "Staging", "env_type": "staging", "aws_region": "us-east-1", "description": "Pre-production validation and integration cluster"},
+            {"name": "Production", "env_type": "production", "aws_region": "us-east-1", "description": "High-availability live customer workload"},
+        ],
+        "minimal": [
+            {"name": "Development", "env_type": "development", "aws_region": "us-east-1", "description": "Default primary development environment"},
+        ],
+        "multi_region": [
+            {"name": "Development-US", "env_type": "development", "aws_region": "us-east-1", "description": "Dev environment in US East (N. Virginia)"},
+            {"name": "Staging-EU", "env_type": "staging", "aws_region": "eu-west-1", "description": "Staging tier in Europe (Ireland)"},
+            {"name": "Production-Global", "env_type": "production", "aws_region": "us-west-2", "description": "Production tier in US West (Oregon)"},
+        ],
+    }
+
+    preset_name = payload.environments_preset or ("standard" if payload.auto_provision_environments else None)
+    created_envs = []
+    if preset_name and preset_name in PRESETS:
+        for spec in PRESETS[preset_name]:
+            env = AetherEnvironment(
+                id=str(uuid.uuid4()),
+                project_id=project.id,
+                tenant_id=ctx.tenant.id,
+                created_by_user_id=user_uuid,
+                account_id=acc_id,
+                name=spec["name"],
+                env_type=spec["env_type"],
+                aws_region=spec["aws_region"],
+                description=spec["description"],
+                status="CREATED",
+                created_at=datetime.datetime.utcnow(),
+                updated_at=datetime.datetime.utcnow(),
+            )
+            db.add(env)
+            created_envs.append(env)
+        project.environment_count = len(created_envs)
+
     await db.commit()
     await db.refresh(project)
 
     await cache_manager.invalidate_projects_list(f"{ctx.tenant.id}:{owner}")
     await cache_manager.invalidate_projects_list(owner)
-    logger.info(f"Created project '{project.name}' (id={project.id}) for owner='{owner}', tenant='{ctx.tenant.id}'")
+    logger.info(f"Created project '{project.name}' (id={project.id}) for owner='{owner}', tenant='{ctx.tenant.id}' with {len(created_envs)} envs")
 
-    return ProjectOut(**project.to_dict())
+    return ProjectOut(**project.to_dict(environments=created_envs))
 
 
 @router.get("/api/v1/projects/{project_id}", response_model=ProjectOut)
@@ -952,6 +1002,63 @@ async def delete_project(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.get("/api/v1/projects/{project_id}/summary", response_model=ProjectSummaryOut)
+async def get_project_summary(
+    project_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Provide operational telemetry, region footprint, and health metrics for a project."""
+    project = await _get_project_or_404(db, project_id, ctx)
+    env_res = await db.execute(
+        select(AetherEnvironment)
+        .where(AetherEnvironment.project_id == project_id)
+        .order_by(AetherEnvironment.created_at.asc())
+    )
+    envs = env_res.scalars().all()
+
+    status_counts: Dict[str, int] = {}
+    type_counts: Dict[str, int] = {}
+    regions = set()
+    active_count = 0
+    for e in envs:
+        status_counts[e.status] = status_counts.get(e.status, 0) + 1
+        type_counts[e.env_type] = type_counts.get(e.env_type, 0) + 1
+        if e.aws_region:
+            regions.add(e.aws_region)
+        if e.status in ("ACTIVE", "CONFIGURED", "READY_TO_DEPLOY"):
+            active_count += 1
+
+    total_env = len(envs)
+    failed_count = status_counts.get("FAILED", 0)
+    health_score = 100.0 if total_env > 0 and failed_count == 0 else (
+        max(0.0, 100.0 - (failed_count / max(total_env, 1) * 100.0))
+    )
+
+    lifecycle = "ACTIVE" if active_count > 0 else ("INITIALIZING" if total_env > 0 else "EMPTY")
+
+    return ProjectSummaryOut(
+        project_id=project.id,
+        name=project.name,
+        owner=project.owner,
+        tenant_id=project.tenant_id,
+        account_id=project.account_id or ctx.user.get("account_id"),
+        project_type=project.project_type,
+        status=project.status,
+        environment_count=total_env,
+        active_environments_count=active_count,
+        status_breakdown=status_counts,
+        type_breakdown=type_counts,
+        regions=sorted(list(regions)),
+        health_score=round(health_score, 1),
+        deployment_ready=total_env > 0,
+        lifecycle_phase=lifecycle,
+        created_at=project.created_at.isoformat() if project.created_at else None,
+        updated_at=project.updated_at.isoformat() if project.updated_at else None,
+    )
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # ENVIRONMENT ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1002,11 +1109,20 @@ async def create_environment(
             detail=f"Environment '{payload.name}' already exists in this project.",
         )
 
+    env_acc_id = (
+        payload.account_id
+        or project.account_id
+        or ctx.user.get("account_id")
+        or request.headers.get("x-account-id")
+        or "109283746519"
+    )
+
     env = AetherEnvironment(
         id=str(uuid.uuid4()),
         project_id=project_id,
         tenant_id=ctx.tenant.id,
         created_by_user_id=ctx.user.get("uuid"),
+        account_id=env_acc_id,
         name=payload.name,
         env_type=payload.env_type,
         aws_region=payload.aws_region,
@@ -1029,6 +1145,65 @@ async def create_environment(
     logger.info(f"Created environment '{env.name}' (id={env.id}) in project '{project_id}', tenant='{ctx.tenant.id}'")
 
     return EnvironmentOut(**env.to_dict())
+
+
+@router.post(
+    "/api/v1/projects/{project_id}/environments/batch",
+    status_code=status.HTTP_201_CREATED,
+)
+async def batch_create_environments(
+    project_id: str,
+    payload: BatchEnvironmentCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Atomic batch provisioning of multiple fleet environments under a project."""
+    ctx.require_role("OWNER", "ADMIN", "MEMBER")
+    project = await _get_project_or_404(db, project_id, ctx)
+    if not payload.environments:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No environments provided in batch payload.")
+
+    created_list = []
+    for item in payload.environments:
+        dup = await db.execute(
+            select(AetherEnvironment).where(
+                AetherEnvironment.project_id == project_id,
+                AetherEnvironment.name == item.name,
+            )
+        )
+        if dup.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Environment '{item.name}' already exists in this project.",
+            )
+        env = AetherEnvironment(
+            id=str(uuid.uuid4()),
+            project_id=project_id,
+            tenant_id=ctx.tenant.id,
+            created_by_user_id=ctx.user.get("uuid"),
+            account_id=item.account_id or project.account_id or ctx.user.get("account_id") or "109283746519",
+            name=item.name,
+            env_type=item.env_type or "development",
+            aws_region=item.aws_region or "us-east-1",
+            description=item.description,
+            status="CREATED",
+            created_at=datetime.datetime.utcnow(),
+            updated_at=datetime.datetime.utcnow(),
+        )
+        db.add(env)
+        created_list.append(env)
+
+    project.environment_count = (project.environment_count or 0) + len(created_list)
+    project.updated_at = datetime.datetime.utcnow()
+    await db.commit()
+
+    owner = ctx.user["username"]
+    await cache_manager.invalidate_all_for_owner(owner, project_id)
+    await cache_manager.invalidate_projects_list(f"{ctx.tenant.id}:{owner}")
+    logger.info(f"Batch provisioned {len(created_list)} environments for project '{project_id}'")
+
+    return {"environments": [e.to_dict() for e in created_list], "total": len(created_list)}
 
 
 @router.get("/api/v1/environments")
@@ -1180,6 +1355,124 @@ async def delete_environment(
     await cache_manager.invalidate_all_for_owner(owner, project_id)
     await cache_manager.invalidate_projects_list(f"{ctx.tenant.id}:{owner}")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/api/v1/projects/{project_id}/environments/{env_id}/clone",
+    response_model=EnvironmentOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def clone_environment(
+    project_id: str,
+    env_id: str,
+    payload: EnvironmentCloneRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Clone an existing environment tier into a new environment under the project."""
+    ctx.require_role("OWNER", "ADMIN", "MEMBER")
+    project = await _get_project_or_404(db, project_id, ctx)
+    source_env = await _get_env_or_404(db, env_id, project_id)
+
+    dup = await db.execute(
+        select(AetherEnvironment).where(
+            AetherEnvironment.project_id == project_id,
+            AetherEnvironment.name == payload.new_name,
+        )
+    )
+    if dup.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Environment '{payload.new_name}' already exists in this project.",
+        )
+
+    cloned = AetherEnvironment(
+        id=str(uuid.uuid4()),
+        project_id=project_id,
+        tenant_id=ctx.tenant.id,
+        created_by_user_id=ctx.user.get("uuid"),
+        account_id=source_env.account_id or project.account_id or ctx.user.get("account_id") or "109283746519",
+        name=payload.new_name,
+        env_type=payload.env_type or source_env.env_type,
+        aws_region=payload.aws_region or source_env.aws_region,
+        description=payload.description or f"Cloned from {source_env.name}",
+        status="CREATED",
+        created_at=datetime.datetime.utcnow(),
+        updated_at=datetime.datetime.utcnow(),
+    )
+    db.add(cloned)
+    project.environment_count = (project.environment_count or 0) + 1
+    project.updated_at = datetime.datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(cloned)
+
+    owner = ctx.user["username"]
+    await cache_manager.invalidate_all_for_owner(owner, project_id)
+    await cache_manager.invalidate_projects_list(f"{ctx.tenant.id}:{owner}")
+    logger.info(f"Cloned environment '{source_env.id}' into '{cloned.id}' ({cloned.name})")
+
+    return EnvironmentOut(**cloned.to_dict())
+
+
+@router.get(
+    "/api/v1/projects/{project_id}/environments/{env_id}/health",
+    response_model=EnvironmentHealthOut,
+)
+async def get_environment_health(
+    project_id: str,
+    env_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Evaluate deep configuration health, region support, and lifecycle status of an environment."""
+    project = await _get_project_or_404(db, project_id, ctx)
+    env = await _get_env_or_404(db, env_id, project_id)
+
+    region_valid = env.aws_region in AWS_REGIONS
+    checks = [
+        EnvironmentHealthCheckItem(
+            check="aws_region_validity",
+            passed=region_valid,
+            detail=f"AWS region '{env.aws_region}' is supported." if region_valid else f"AWS region '{env.aws_region}' unrecognized.",
+        ),
+        EnvironmentHealthCheckItem(
+            check="project_binding",
+            passed=True,
+            detail=f"Bound to parent workspace '{project.name}' ({project.id}).",
+        ),
+        EnvironmentHealthCheckItem(
+            check="tenant_isolation",
+            passed=bool(env.tenant_id == ctx.tenant.id),
+            detail=f"Isolated to tenant '{ctx.tenant.name}'.",
+        ),
+        EnvironmentHealthCheckItem(
+            check="lifecycle_integrity",
+            passed=env.status in VALID_ENV_STATUSES,
+            detail=f"Current lifecycle status is {env.status}.",
+        ),
+    ]
+
+    all_passed = all(c.passed for c in checks)
+    health_status = "HEALTHY" if (all_passed and env.status != "FAILED") else ("FAILED" if env.status == "FAILED" else "DEGRADED")
+    phase = "READY" if env.status in ("ACTIVE", "CONFIGURED", "READY_TO_DEPLOY") else ("FAILED" if env.status == "FAILED" else "INITIALIZING")
+
+    return EnvironmentHealthOut(
+        env_id=env.id,
+        project_id=project.id,
+        name=env.name,
+        account_id=env.account_id or project.account_id or ctx.user.get("account_id"),
+        status=env.status,
+        env_type=env.env_type,
+        aws_region=env.aws_region,
+        region_supported=region_valid,
+        health_status=health_status,
+        lifecycle_phase=phase,
+        checks=checks,
+        checked_at=datetime.datetime.utcnow().isoformat(),
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

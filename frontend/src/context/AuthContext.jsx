@@ -1,7 +1,7 @@
 // frontend/src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authApi, getStoredUser, setStoredSession, clearStoredSession, getActiveToken } from '../services/api';
-
+import { authApi, getStoredUser, setStoredSession, clearStoredSession, getActiveToken, formatAccountId } from '../services/api';
+export { formatAccountId };
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {

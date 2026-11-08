@@ -521,6 +521,7 @@ async def register(req: RegisterRequest):
     and dispatches confirmation email.
     """
     clean_username = req.username.strip().replace(" ", "_")
+    clean_email = req.email.strip().lower()
     conn = get_db_connection()
     try:
         c = conn.cursor()

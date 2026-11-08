@@ -1,6 +1,7 @@
 // frontend/src/modules/projects/ProjectsView.jsx
 import React, { useState, useEffect } from 'react';
-import { projectsApi } from '../../services/api';
+import { projectsApi, formatAccountId } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import {
   FolderKanban,
   Boxes,
@@ -22,6 +23,7 @@ import { PROJECT_TYPES_LIST as PROJECT_TYPES } from '../../constants/awsRegions'
 
 export default function ProjectsView({
   searchQuery,
+  user: propUser,
   onOpenCreateProject: propOnOpenCreateProject,
   isCreateModalOpen: propIsCreateModalOpen,
   onCloseCreateModal: propOnCloseCreateModal,
@@ -31,6 +33,8 @@ export default function ProjectsView({
   activeProject,
   onSelectProject,
 }) {
+  const { user: authUser } = useAuth();
+  const user = propUser || authUser;
   const [internalModalOpen, setInternalModalOpen] = useState(false);
   const isCreateModalOpen = propIsCreateModalOpen !== undefined ? propIsCreateModalOpen : internalModalOpen;
   const onOpenCreateProject = propOnOpenCreateProject || (() => setInternalModalOpen(true));
@@ -52,6 +56,7 @@ export default function ProjectsView({
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState('web_application');
   const [newDesc, setNewDesc] = useState('');
+  const [newPreset, setNewPreset] = useState('standard');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createError, setCreateError] = useState('');
 
@@ -70,6 +75,14 @@ export default function ProjectsView({
 
   useEffect(() => {
     fetchProjects();
+
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        fetchProjects();
+      }
+    }, 6000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleCreateProject = async (e) => {
@@ -84,13 +97,16 @@ export default function ProjectsView({
         name: newName.trim(),
         project_type: newType,
         description: newDesc.trim() || null,
+        environments_preset: newPreset !== 'none' ? newPreset : null,
+        account_id: user?.account_id || null,
       });
 
       setNewName('');
       setNewDesc('');
       setNewType('web_application');
+      setNewPreset('standard');
       onCloseCreateModal();
-      if (showToast) showToast(`Project "${newName.trim()}" created successfully! Opening environment setup...`);
+      if (showToast) showToast(`Project "${newName.trim()}" created successfully!`);
       await fetchProjects();
 
       // Ensure active project is selected and navigate to Environment Creation step
@@ -101,7 +117,7 @@ export default function ProjectsView({
         handleNavigate('environments', '/environments', {
           projectId: created.id || created.project_id,
           project: created,
-          autoOpenModal: true,
+          autoOpenModal: newPreset === 'none',
         });
       }
     } catch (err) {
@@ -233,7 +249,7 @@ export default function ProjectsView({
         </div>
 
         <div
-          onClick={() => handleNavigate && handleNavigate('environments')}
+          onClick={() => handleNavigate && handleNavigate('environments', '/environments')}
           className="bg-white border border-slate-200/90 hover:border-blue-300 rounded-2xl p-5 space-y-2 shadow-xs cursor-pointer transition"
         >
           <div className="flex items-center justify-between">
@@ -381,9 +397,17 @@ export default function ProjectsView({
                         <h3 className="text-sm font-bold text-slate-900 tracking-tight truncate group-hover:text-[#1e40af] transition">
                           {project.name}
                         </h3>
-                        <span className="text-[10px] font-mono text-slate-400 truncate block">
-                          owner: {project.owner}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-mono text-slate-400 mt-0.5">
+                          <span>user: <strong className="text-slate-600">{project.owner}</strong></span>
+                          <span>•</span>
+                          <span>act: <strong className="text-slate-600">{formatAccountId(project.account_id || user?.account_id || '109283746519')}</strong></span>
+                          {project.tenant_id && (
+                            <>
+                              <span>•</span>
+                              <span>tenant: <strong className="text-slate-600">{project.tenant_id.length > 10 ? project.tenant_id.slice(0, 8) + '…' : project.tenant_id}</strong></span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                     {getStatusBadge(project.status)}
@@ -464,7 +488,12 @@ export default function ProjectsView({
                   >
                     <td className="px-5 py-3.5">
                       <div className="font-semibold text-slate-900">{project.name}</div>
-                      <div className="text-[10px] font-mono text-slate-400">owner: {project.owner}</div>
+                      <div className="text-[10px] font-mono text-slate-400 flex items-center gap-1.5 flex-wrap">
+                        <span>user: {project.owner}</span>
+                        <span>•</span>
+                        <span>act: {formatAccountId(project.account_id || user?.account_id || '109283746519')}</span>
+                        {project.tenant_id && <span>• tenant: {project.tenant_id.length > 10 ? project.tenant_id.slice(0, 8) + '…' : project.tenant_id}</span>}
+                      </div>
                     </td>
                     <td className="px-4 py-3.5 font-mono text-slate-600">
                       {project.project_type?.replace('_', ' ')}
@@ -523,6 +552,13 @@ export default function ProjectsView({
             )}
 
             <form onSubmit={handleCreateProject} className="space-y-4">
+              {/* User Identity, Tenant & Docker DB Context Preview */}
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] font-mono text-slate-600 flex flex-wrap items-center justify-between gap-2">
+                <span>Account: <strong className="text-slate-900">{formatAccountId(user?.account_id || '109283746519')}</strong></span>
+                <span>Tenant: <strong className="text-slate-900">{user?.tenant_id || 'personal'}</strong></span>
+                <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Docker Postgres DB</span>
+              </div>
+
               <div className="space-y-1">
                 <label className="block text-xs font-semibold text-slate-700">
                   Project Name <span className="text-rose-500">*</span>
@@ -572,6 +608,23 @@ export default function ProjectsView({
                   onChange={(e) => setNewDesc(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:border-[#1e40af] focus:ring-1 focus:ring-[#1e40af]"
                 />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-slate-700">Environment Fleet Preset</label>
+                <select
+                  value={newPreset}
+                  onChange={(e) => setNewPreset(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-[#1e40af]"
+                >
+                  <option value="standard">Standard Fleet (Dev, Staging &amp; Prod in us-east-1)</option>
+                  <option value="minimal">Minimal (Single Dev tier in us-east-1)</option>
+                  <option value="multi_region">Multi-Region (Dev-US, Staging-EU, Prod-Global)</option>
+                  <option value="none">Manual (Configure environments manually)</option>
+                </select>
+                <p className="text-[11px] text-slate-400">
+                  Auto-provisions pre-configured deployment tiers.
+                </p>
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">

@@ -179,6 +179,44 @@ export const projectsApi = {
       method: 'POST',
       body: JSON.stringify(env),
     }),
+  update: (id, project) =>
+    apiRequest(`/api/v1/projects/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(project),
+    }),
+  getSummary: (projectId) => apiRequest(`/api/v1/projects/${projectId}/summary`),
+  getEnvironment: (projectId, envId) =>
+    apiRequest(`/api/v1/projects/${projectId}/environments/${envId}`),
+  updateEnvironment: (projectId, envId, env) =>
+    apiRequest(`/api/v1/projects/${projectId}/environments/${envId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(env),
+    }),
+  deleteEnvironment: (projectId, envId) =>
+    apiRequest(`/api/v1/projects/${projectId}/environments/${envId}`, {
+      method: 'DELETE',
+    }),
+  updateEnvironmentStatus: (projectId, envId, status) =>
+    apiRequest(`/api/v1/projects/${projectId}/environments/${envId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+  cloneEnvironment: (projectId, envId, payload) =>
+    apiRequest(`/api/v1/projects/${projectId}/environments/${envId}/clone`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  batchCreateEnvironments: (projectId, payload) =>
+    apiRequest(`/api/v1/projects/${projectId}/environments/batch`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getEnvironmentHealth: (projectId, envId) =>
+    apiRequest(`/api/v1/projects/${projectId}/environments/${envId}/health`),
+  listAllEnvironments: async () => {
+    const res = await apiRequest('/api/v1/environments');
+    return Array.isArray(res) ? res : (res.environments || []);
+  },
 };
 
 export const connectionsApi = {

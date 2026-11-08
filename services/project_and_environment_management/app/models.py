@@ -83,6 +83,7 @@ class AetherProject(Base):
     owner              = Column(String(100), nullable=False, index=True)             # username (backward compat)
     tenant_id          = Column(String(36),  nullable=True,  index=True)             # Tenant.id
     created_by_user_id = Column(String(36),  nullable=True,  index=True)             # AdminUser.uuid
+    account_id         = Column(String(36),  nullable=True,  index=True)             # 12-digit User or AWS Account ID
     status             = Column(String(30),  nullable=False, default="CREATED")      # CREATED | ACTIVE | ARCHIVED
     environment_count  = Column(Integer,     nullable=False, default=0)              # denormalised for fast dashboard render
     created_at         = Column(DateTime,    nullable=False, default=datetime.datetime.utcnow)
@@ -98,6 +99,7 @@ class AetherProject(Base):
             "owner":              self.owner,
             "tenant_id":          self.tenant_id,
             "created_by_user_id": self.created_by_user_id,
+            "account_id":         self.account_id,
             "status":             self.status,
             "environment_count":  self.environment_count,
             "environments":       [e.to_dict() for e in (environments or [])],
@@ -119,7 +121,8 @@ class AetherEnvironment(Base):
     id                 = Column(String(36),  primary_key=True, index=True)             # UUID v4
     project_id         = Column(String(36),  nullable=False, index=True)               # soft FK → AetherProject.id
     tenant_id          = Column(String(36),  nullable=True,  index=True)               # Tenant.id
-    created_by_user_id = Column(String(36),  nullable=True,  index=True)               # AdminUser.uuid
+    created_by_user_id = Column(String(36),  nullable=True,  index=True)             # AdminUser.uuid
+    account_id         = Column(String(36),  nullable=True,  index=True)             # 12-digit User or AWS Account ID
     name               = Column(String(100), nullable=False)                            # user-defined label
     env_type           = Column(String(30),  nullable=False)                            # development | staging | production
     aws_region         = Column(String(50),  nullable=False)                            # e.g. ap-south-1
@@ -144,6 +147,7 @@ class AetherEnvironment(Base):
             "tenant_id":          self.tenant_id,
             "created_by_user_id": self.created_by_user_id,
             "name":               self.name,
+            "account_id":         self.account_id,
             "env_type":           self.env_type,
             "aws_region":         self.aws_region,
             "description":        self.description,
