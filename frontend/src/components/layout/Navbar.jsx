@@ -30,7 +30,7 @@ export default function Navbar({
     cicd: 'CI/CD GitOps Pipeline',
     monitoring: 'Infrastructure Monitoring & APM',
     optimization: 'Continuous Risk & FinOps',
-    audit: 'Audit & Operations History',
+    audit: 'Security & Session Audit',
     docs: 'Platform Documentation',
     settings: 'Platform Settings',
     admin: 'Administration Console',

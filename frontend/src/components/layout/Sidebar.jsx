@@ -30,6 +30,7 @@ const NAV_GROUPS = [
       { id: 'architecture_studio', path: '/architecture-studio', label: 'AI AWS Architecture', icon: Network },
       { id: 'iac', path: '/terraform', label: 'Terraform HCL Synthesis', icon: Code2 },
       { id: 'deployments', path: '/deployment', label: 'AI Dry-Run & Approval Gate', icon: Rocket },
+      { id: 'audit', path: '/audit', label: 'Security & Session Audit', icon: ShieldCheck },
       { id: 'settings', path: '/settings', label: 'User & Credential Settings', icon: Settings },
     ],
   },

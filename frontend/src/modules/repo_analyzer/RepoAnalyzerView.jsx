@@ -598,22 +598,6 @@ export default function RepoAnalyzerView({
                       branch: {scanReport.repo_metadata?.default_branch || 'main'}
                     </span>
                   </div>
-                  {scanReport.repo_metadata?.description && (
-                    <p className="text-xs text-slate-300 mt-1 line-clamp-2">
-                      {scanReport.repo_metadata.description}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Accuracy Badge */}
-              <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
-                <div className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-semibold flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <div>
-                    <span className="font-bold">{scanReport.accuracy_score || 98}% Confidence</span>
-                    <span className="text-[10px] text-emerald-200 block font-normal">100% Deterministic · Zero AI Used</span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -669,18 +653,14 @@ export default function RepoAnalyzerView({
                     <span className="ml-2 text-slate-400 font-sans">({scanReport.repo_metadata.license})</span>
                   )}
                 </div>
-                <div className="text-[10px] text-slate-400 mt-0.5">
-                  Inspection: {scanReport.inspection_mode === 'IN_MEMORY_ZERO_CLONE' ? 'Zero-Clone Memory Stream' : 'Local Directory Walk'}
-                </div>
               </div>
             </div>
 
             {/* Language Breakdown Stacked Bar */}
             {scanReport.languages_breakdown && scanReport.languages_breakdown.length > 0 && (
               <div className="mt-4 pt-3 border-t border-slate-700/60">
-                <div className="flex items-center justify-between text-[11px] text-slate-300 mb-1.5 font-medium">
-                  <span>Language Composition (GitHub Blob Distribution)</span>
-                  <span className="text-[10px] text-slate-400">Exact Byte Percentages</span>
+                <div className="text-[11px] text-slate-300 mb-1.5 font-medium">
+                  Language Composition
                 </div>
                 <div className="w-full h-2.5 rounded-full bg-slate-700 overflow-hidden flex shadow-inner">
                   {scanReport.languages_breakdown.map((l) => (
@@ -711,7 +691,6 @@ export default function RepoAnalyzerView({
               <div key={item.key} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/50 transition">
                 <div className="sm:w-1/3">
                   <span className="text-xs font-semibold text-slate-800">{item.label}</span>
-                  <div className="text-[10px] text-slate-400 capitalize">{item.category} parameter</div>
                 </div>
 
                 <div className="sm:w-2/3 flex items-center gap-3">
@@ -901,9 +880,6 @@ export default function RepoAnalyzerView({
                   </select>
                 </div>
 
-                <div className="text-[11px] text-slate-500 pt-1">
-                  VPC CIDR: <strong>10.0.0.0/16</strong> | Subnets: <strong>{editedAlbEnabled ? 'Public + Private Subnets' : 'Public Subnet Direct'}</strong>
-                </div>
 
               </div>
             </div>

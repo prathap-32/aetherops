@@ -458,6 +458,7 @@ export default function DashboardPage() {
       <AccountModal
         isOpen={isAccountModalOpen}
         onClose={() => setIsAccountModalOpen(false)}
+        onNavigate={handleNavigate}
       />
     </div>
   );
