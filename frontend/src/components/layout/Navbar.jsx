@@ -15,7 +15,7 @@ export default function Navbar({
     dashboard: 'Platform Dashboard',
     project_environment: 'Project and Environment',
     projects: 'Projects & Workspaces',
-    environments: 'Target Environments',
+    environments: 'Environment',
     source_cloud: 'Connect AWS & Git',
     repo_analyzer: 'Source Code Analyzer',
     architecture: 'Cloud Architecture Studio',

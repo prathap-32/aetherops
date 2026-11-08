@@ -208,7 +208,7 @@ export default function EnvironmentsView({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Target Environments Fleet</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Environment</h1>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -233,12 +233,36 @@ export default function EnvironmentsView({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Total Envs</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Total</p>
             <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
               <Layers className="w-5 h-5" />
             </div>
           </div>
           <p className="text-2xl font-bold text-slate-900 mt-2">{environments.length}</p>
+        </div>
+
+        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Dev &amp; Testing</p>
+            <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600">
+              <Server className="w-5 h-5" />
+            </div>
+          </div>
+          <p className="text-2xl font-bold text-slate-900 mt-2">
+            {environments.filter(e => ['DEV', 'DEVELOPMENT', 'TEST', 'TESTING', 'QA', 'SANDBOX'].includes((e.type || e.env_type || '').toUpperCase())).length}
+          </p>
+        </div>
+
+        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Staging</p>
+            <div className="p-2 rounded-lg bg-amber-50 text-amber-600">
+              <Clock className="w-5 h-5" />
+            </div>
+          </div>
+          <p className="text-2xl font-bold text-slate-900 mt-2">
+            {environments.filter(e => ['STAGE', 'STAGING'].includes((e.type || e.env_type || '').toUpperCase())).length}
+          </p>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs">
@@ -251,28 +275,6 @@ export default function EnvironmentsView({
           <p className="text-2xl font-bold text-slate-900 mt-2">
             {environments.filter(e => ['PROD', 'PRODUCTION'].includes((e.type || e.env_type || '').toUpperCase())).length}
           </p>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Staging & Dev</p>
-            <div className="p-2 rounded-lg bg-amber-50 text-amber-600">
-              <Server className="w-5 h-5" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-slate-900 mt-2">
-            {environments.filter(e => !['PROD', 'PRODUCTION'].includes((e.type || e.env_type || '').toUpperCase())).length}
-          </p>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Primary Region</p>
-            <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600">
-              <Globe className="w-5 h-5" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-slate-900 mt-2">us-east-1</p>
         </div>
       </div>
 
