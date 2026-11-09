@@ -14,12 +14,10 @@ import {
   Activity
 } from 'lucide-react';
 import { deploymentsApi, architectureStudioApi } from '../../services/api';
-
 export default function RiskEngineView({ onNavigate, activeProject, activeEnvironment, navState }) {
+  const [loading, setLoading] = useState(false);
   const [planData, setPlanData] = useState(null);
   const [error, setError] = useState(null);
-
-  const projectName = activeProject?.name || activeProject?.id || 'aether-cloud';
   const envTier = activeEnvironment?.type || 'production';
   const region = activeEnvironment?.region || 'us-east-1';
 
