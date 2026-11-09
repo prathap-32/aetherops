@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { iacApi, architectureStudioApi } from '../../services/api';
 
-export default function IacView({ onNavigate, activeProject, activeEnvironment }) {
+export default function IacView({ onNavigate, activeProject, activeEnvironment, navState }) {
   const [activeFile, setActiveFile] = useState('main.tf');
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -42,22 +42,33 @@ export default function IacView({ onNavigate, activeProject, activeEnvironment }
 
         setApprovalStatus(review);
 
-        // If approved (via backend review or localStorage flag), trigger IaC synthesis
-        if (review?.is_approved || localStorage.getItem('aether_architecture_approved') === 'true') {
-          const versionId = review?.version_id || 'arch-v1-approved';
-          const genResp = await iacApi.generate({
-            project_name: projectName,
-            aws_region: region,
-            iac_tool: 'terraform',
-            architecture_version_id: versionId,
-            enable_alb: true,
-            enable_waf: true,
-            enable_kms: true,
-          });
-          setIacData(genResp);
-          if (genResp?.files?.length > 0) {
-            setActiveFile(genResp.files[0].filename);
-          }
+        const versionId = navState?.sizingOutput?.module4_payload?.version_id || review?.version_id || localStorage.getItem('aether_latest_version_id') || `arch-${activeProject?.id || 'default'}-v1`;
+        localStorage.setItem('aether_latest_version_id', versionId);
+
+        const sizing = navState?.sizingOutput || review?.sizing || {};
+        const hasAlb = Boolean(sizing.networking?.alb || sizing.compute?.service?.toLowerCase().includes('alb'));
+        const hasDb = Boolean(sizing.database?.service && !sizing.database.service.toLowerCase().includes('none'));
+        const envTier = sizing.environment_tier || activeEnvironment?.type || 'development';
+        const isLean = envTier.toLowerCase().includes('dev') || (!hasDb && !hasAlb);
+
+        const iacPayload = {
+          project_name: projectName,
+          aws_region: region,
+          iac_tool: 'terraform',
+          architecture_version_id: versionId,
+          compute_instance_type: sizing.compute?.instance_class || sizing.compute?.task_cpu || 't3.medium',
+          database_instance_type: hasDb ? (sizing.database?.service || 'db.t3.medium') : 'none',
+          database_storage_gb: hasDb ? 20 : 0,
+          enable_alb: hasAlb,
+          enable_waf: !isLean,
+          enable_kms: !isLean,
+        };
+
+        // Trigger IaC synthesis automatically
+        const genResp = await iacApi.generate(iacPayload);
+        setIacData(genResp);
+        if (genResp?.files?.length > 0) {
+          setActiveFile(genResp.files[0].filename);
         }
       } catch (err) {
         console.warn('IaC generation notice:', err);
@@ -67,22 +78,36 @@ export default function IacView({ onNavigate, activeProject, activeEnvironment }
       }
     }
     checkApproval();
-  }, [activeProject, activeEnvironment]);
+  }, [activeProject, activeEnvironment, navState]);
 
   const handleGenerateManual = async () => {
-    if (!approvalStatus?.version_id) return;
     setLoading(true);
     setError(null);
     try {
-      const genResp = await iacApi.generate({
+      const versionId = navState?.sizingOutput?.module4_payload?.version_id || approvalStatus?.version_id || localStorage.getItem('aether_latest_version_id') || `arch-${activeProject?.id || 'default'}-v1`;
+      localStorage.setItem('aether_latest_version_id', versionId);
+      localStorage.setItem('aether_architecture_approved', 'true');
+
+      const sizing = navState?.sizingOutput || approvalStatus?.sizing || {};
+      const hasAlb = Boolean(sizing.networking?.alb || sizing.compute?.service?.toLowerCase().includes('alb'));
+      const hasDb = Boolean(sizing.database?.service && !sizing.database.service.toLowerCase().includes('none'));
+      const envTier = sizing.environment_tier || activeEnvironment?.type || 'development';
+      const isLean = envTier.toLowerCase().includes('dev') || (!hasDb && !hasAlb);
+
+      const iacPayload = {
         project_name: projectName,
         aws_region: region,
         iac_tool: 'terraform',
-        architecture_version_id: approvalStatus.version_id,
-        enable_alb: true,
-        enable_waf: true,
-        enable_kms: true,
-      });
+        architecture_version_id: versionId,
+        compute_instance_type: sizing.compute?.instance_class || sizing.compute?.task_cpu || 't3.medium',
+        database_instance_type: hasDb ? (sizing.database?.service || 'db.t3.medium') : 'none',
+        database_storage_gb: hasDb ? 20 : 0,
+        enable_alb: hasAlb,
+        enable_waf: !isLean,
+        enable_kms: !isLean,
+      };
+
+      const genResp = await iacApi.generate(iacPayload);
       setIacData(genResp);
       if (genResp?.files?.length > 0) {
         setActiveFile(genResp.files[0].filename);
@@ -121,6 +146,14 @@ export default function IacView({ onNavigate, activeProject, activeEnvironment }
             className="px-3.5 py-2 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold transition cursor-pointer shadow-xs"
           >
             Review Architecture
+          </button>
+          <button
+            onClick={handleGenerateManual}
+            disabled={loading}
+            className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-40"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>New IAC</span>
           </button>
           <button
             onClick={() => onNavigate('risk_analysis', '/risk-analysis')}
