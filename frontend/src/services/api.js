@@ -367,6 +367,31 @@ export const iacApi = {
     apiRequest('/api/v1/iac/health'),
 };
 
+export const dryRunApi = {
+  analyze: (payload) =>
+    apiRequest('/api/v1/dry-run/analyze', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getReport: (planId) =>
+    apiRequest(`/api/v1/dry-run/${planId}`),
+};
+
+export const approvalApi = {
+  approve: (payload) =>
+    apiRequest('/api/v1/approvals/approve', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getStatus: (approvalId) =>
+    apiRequest(`/api/v1/approvals/${approvalId}`),
+};
+
+export const stateInventoryApi = {
+  getInventory: (projectId, environmentId) =>
+    apiRequest(`/api/v1/state-inventory${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''}${environmentId ? `&environment_id=${encodeURIComponent(environmentId)}` : ''}`),
+};
+
 export const deploymentsApi = {
   plan: (payload) =>
     apiRequest('/api/v1/deployments/plan', {

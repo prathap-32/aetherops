@@ -373,7 +373,7 @@ class UnifiedFinalizeRequest(BaseModel):
 
 class UnifiedFinalizeOut(BaseModel):
     git_connection:   GitConnectionOut
-    cloud_connection: CloudConnectionOut
+    cloud_connection: Optional[CloudConnectionOut] = None
     snapshot:         Optional[SourceSnapshotOut] = None
     status:           str
     message:          str

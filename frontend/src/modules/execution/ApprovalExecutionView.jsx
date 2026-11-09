@@ -14,7 +14,7 @@ import {
   AlertTriangle,
   Server
 } from 'lucide-react';
-import { deploymentsApi } from '../../services/api';
+import { approvalApi, dryRunApi, deploymentsApi } from '../../services/api';
 
 export default function ApprovalExecutionView({ onNavigate, activeProject, activeEnvironment, user }) {
   const [plan, setPlan] = useState(null);
@@ -41,13 +41,13 @@ export default function ApprovalExecutionView({ onNavigate, activeProject, activ
           const parsed = JSON.parse(stored);
           setPlan(parsed);
           // Check if already approved
-          const planStatus = await deploymentsApi.getPlan(parsed.plan_id);
+          const planStatus = await dryRunApi.getReport(parsed.plan_id);
           if (planStatus?.is_approved) {
             setApprovedReceipt(planStatus.approval_bundle);
           }
         } else {
           // Generate default baseline dry-run plan
-          const p = await deploymentsApi.plan({
+          const p = await dryRunApi.analyze({
             project_name: activeProject?.name || activeProject?.id || 'aether-cloud',
             environment_tier: activeEnvironment?.type || 'production',
             target_region: activeEnvironment?.region || 'us-east-1',
@@ -71,7 +71,7 @@ export default function ApprovalExecutionView({ onNavigate, activeProject, activ
     setApproving(true);
     setError(null);
     try {
-      const receipt = await deploymentsApi.approve({
+      const receipt = await approvalApi.approve({
         plan_id: plan.plan_id,
         plan_digest: plan.plan_digest,
         comments: comments || 'Approved for infrastructure execution',

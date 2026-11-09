@@ -17,7 +17,7 @@ logger = logging.getLogger("iac-generator-service")
 
 app = FastAPI(
     title="AetherOps AI - IaC Code Generator Service",
-    description="Module 3: Terraform & OpenTofu HCL Infrastructure Synthesizer",
+    description="Module 8: Terraform & OpenTofu HCL Infrastructure Synthesizer",
     version="2.0.0"
 )
 
@@ -85,11 +85,13 @@ def verify_architecture_approval(version_id: Optional[str]) -> Dict[str, Any]:
     
     return {"version_id": vid, "is_approved": True, "status": "APPROVED_AUTO"}
 
-def fetch_architecture_parameters(version_id: str, request: IaCGenerationRequest) -> IaCGenerationRequest:
+def fetch_architecture_parameters(version_id: str, request: IaCGenerationRequest) -> Optional[Dict[str, Any]]:
     """
     Fetches the reviewed architecture topology and inventory from the AI AWS Architecture Module (Port 8005)
-    to dynamically synthesize actual code matching the AI architecture plan.
+    to dynamically synthesize actual code matching the AI architecture plan, ensuring the approved
+    architecture serves as the immutable source of truth.
     """
+    arch_review = None
     try:
         vid = str(version_id).strip()
         with httpx.Client(timeout=4.0) as client:
@@ -97,6 +99,7 @@ def fetch_architecture_parameters(version_id: str, request: IaCGenerationRequest
             if resp.status_code == 200:
                 data = resp.json()
                 if isinstance(data, dict):
+                    arch_review = data
                     if data.get("target_region"):
                         request.aws_region = data.get("target_region")
                     nodes = data.get("nodes", [])
@@ -114,27 +117,18 @@ def fetch_architecture_parameters(version_id: str, request: IaCGenerationRequest
                         request.enable_kms = True
                     
                     env_tier = data.get("environment_tier", "").lower()
-                    if "enterprise" in env_tier:
-                        request.compute_instance_type = "c6i.xlarge"
-                        request.database_instance_type = "db.m6i.xlarge"
-                        request.database_storage_gb = 200
-                        request.database_multi_az = True
-                    elif "production" in env_tier:
-                        request.compute_instance_type = "t3.large"
-                        request.database_instance_type = "db.m3.large"
-                        request.database_storage_gb = 100
-                        request.database_multi_az = True
-                    
+                    logger.info(f"Enriched IaC request from AI architecture review version '{vid}': tier={env_tier}, region={request.aws_region}")
+
                     logger.info(f"Enriched IaC request from AI architecture review version '{vid}': tier={env_tier}, region={request.aws_region}")
     except Exception as e:
         logger.warning(f"Could not enrich IaC parameters from architecture review: {e}")
-    return request
+    return arch_review
 
 
 @app.get("/")
 async def root():
     return {
-        "service": "AetherOps AI - IaC Code Generator Service (Module 3)",
+        "service": "AetherOps AI - IaC Code Generator Service (Module 8)",
         "version": "2.0.0",
         "port": 8006,
         "endpoints": {
@@ -163,15 +157,15 @@ async def generate_iac(request: Request, body: IaCGenerationRequest):
     # Enforce mandatory architecture approval gate
     verify_architecture_approval(body.architecture_version_id)
     
-    # Enrich IaC generation parameters dynamically using AI AWS Architecture output
-    fetch_architecture_parameters(body.architecture_version_id, body)
+    # Enrich IaC generation parameters dynamically using AI AWS Architecture output snapshot
+    arch_review = fetch_architecture_parameters(body.architecture_version_id, body)
 
     tenant_id = request.headers.get("x-tenant-id") or "ten_default"
     user_id = request.headers.get("x-user-uuid") or request.headers.get("x-authenticated-user") or "usr_default"
 
     logger.info(f"Generating IaC files for project='{body.project_name}', region='{body.aws_region}' (tenant={tenant_id}, user={user_id})")
     try:
-        response = generate_terraform_hcl(body)
+        response = generate_terraform_hcl(body, arch_review=arch_review)
 
         # Persist generated IaC bundle in database with tenant and user ID
         try:

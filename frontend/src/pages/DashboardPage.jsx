@@ -18,9 +18,8 @@ import ArchitectureValidationView from '../modules/validation/ArchitectureValida
 import IacView from '../modules/iac/IacView';
 import ApprovalExecutionView from '../modules/execution/ApprovalExecutionView';
 import DeploymentsView from '../modules/deployments/DeploymentsView';
+import StateInventoryView from '../modules/state_inventory/StateInventoryView';
 import CicdView from '../modules/cicd/CicdView';
-import MonitoringView from '../modules/monitoring/MonitoringView';
-import OptimizationView from '../modules/optimization/OptimizationView';
 import AuditHistoryView from '../modules/audit/AuditHistoryView';
 import AdminConsoleView from '../modules/admin/AdminConsoleView';
 import SettingsView from '../modules/settings/SettingsView';
@@ -55,12 +54,9 @@ const PATH_VIEW_MAP = {
   '/terraform': 'iac',
   '/iac': 'iac',
   '/execution': 'execution',
+  '/approval-gate': 'approval_gate',
+  '/state-inventory': 'state_inventory',
   '/deployment': 'deployments',
-  '/deployments': 'deployments',
-  '/cicd': 'cicd',
-  '/monitoring': 'monitoring',
-  '/optimization': 'optimization',
-  '/audit': 'audit',
   '/documentation': 'docs',
   '/docs': 'docs',
   '/account': 'settings',
@@ -97,11 +93,11 @@ const VIEW_PATH_MAP = {
   iac: '/terraform',
   terraform: '/terraform',
   execution: '/execution',
+  approval_gate: '/approval-gate',
+  'approval-gate': '/approval-gate',
+  state_inventory: '/state-inventory',
+  'state-inventory': '/state-inventory',
   deployments: '/deployment',
-  deployment: '/deployment',
-  cicd: '/cicd',
-  monitoring: '/monitoring',
-  optimization: '/optimization',
   audit: '/audit',
   docs: '/documentation',
   documentation: '/documentation',
@@ -372,12 +368,23 @@ export default function DashboardPage() {
         );
       case 'execution':
       case 'approval':
+      case 'approval_gate':
+      case 'approval-gate':
         return (
           <ApprovalExecutionView
             onNavigate={handleNavigate}
             activeProject={activeProject}
             activeEnvironment={activeEnvironment}
             user={user}
+          />
+        );
+      case 'state_inventory':
+      case 'state-inventory':
+      case 'state':
+        return (
+          <StateInventoryView
+            activeProject={activeProject}
+            activeEnvironment={activeEnvironment}
           />
         );
       case 'deployments':

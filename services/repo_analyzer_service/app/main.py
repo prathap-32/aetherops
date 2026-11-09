@@ -296,10 +296,10 @@ async def repo_readiness_endpoint(payload: ReadinessRequest):
         )
         return ReadinessResponse(**res)
 
-    repo_path = validate_safe_repo_path(payload.repo_path, must_exist=False)
+    local_target = target_info.get("path") or payload.repo_path
+    repo_path = validate_safe_repo_path(local_target, must_exist=False)
     res = check_readiness(repo_path)
     return ReadinessResponse(**res)
-
 
 @app.post("/api/v1/repo/scan-report", response_model=ScanReportResponse, status_code=status.HTTP_200_OK)
 async def repo_scan_report_endpoint(payload: ScanReportRequest):
@@ -336,7 +336,8 @@ async def repo_scan_report_endpoint(payload: ScanReportRequest):
         )
         return ScanReportResponse(**report)
 
-    repo_path = validate_safe_repo_path(payload.repo_path, must_exist=True)
+    local_target = target_info.get("path") or payload.repo_path
+    repo_path = validate_safe_repo_path(local_target, must_exist=True)
     readiness = check_readiness(repo_path)
     if not readiness["is_analyzable"]:
         raise HTTPException(
@@ -350,7 +351,6 @@ async def repo_scan_report_endpoint(payload: ScanReportRequest):
         target_region=payload.target_region,
     )
     return ScanReportResponse(**report)
-
 
 @app.post("/api/v1/repo/accept-and-size", response_model=AwsSizingOutput, status_code=status.HTTP_200_OK)
 async def repo_accept_and_size_endpoint(payload: AcceptAndSizeRequest):

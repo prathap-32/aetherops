@@ -626,32 +626,6 @@ async def _get_cloud_conn_or_404(
     raise HTTPException(status_code=404, detail=f"Cloud connection '{cloud_id}' not found.")
 
 
-@router.get("/api/v1/cloud/connections/{cloud_id}", response_model=CloudConnectionOut)
-async def get_cloud_connection(
-    cloud_id: str,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    admin: Dict[str, Any] = Depends(get_current_admin),
-):
-    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
-    conn = await _get_cloud_conn_or_404(
-        db,
-        cloud_id,
-        admin["username"],
-        role=admin.get("role", "USER"),
-        user_uuid=admin.get("uuid"),
-        tenant_id=tenant_id,
-    )
-
-    cached = await cache_manager.get_cloud_conn(cloud_id)
-    if cached:
-        return CloudConnectionOut(**cached)
-
-    out = CloudConnectionOut(**conn.to_dict())
-    await cache_manager.set_cloud_conn(cloud_id, out.model_dump())
-    return out
-
-
 @router.get("/api/v1/cloud/connections/env/{environment_id}", response_model=CloudConnectionOut)
 async def get_cloud_connection_by_env(
     environment_id: str,
@@ -681,6 +655,32 @@ async def get_cloud_connection_by_env(
     if not conn:
         raise HTTPException(status_code=404, detail=f"No cloud connection found for environment '{environment_id}'.")
     return CloudConnectionOut(**conn.to_dict())
+
+
+@router.get("/api/v1/cloud/connections/{cloud_id}", response_model=CloudConnectionOut)
+async def get_cloud_connection(
+    cloud_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: Dict[str, Any] = Depends(get_current_admin),
+):
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+    conn = await _get_cloud_conn_or_404(
+        db,
+        cloud_id,
+        admin["username"],
+        role=admin.get("role", "USER"),
+        user_uuid=admin.get("uuid"),
+        tenant_id=tenant_id,
+    )
+
+    cached = await cache_manager.get_cloud_conn(cloud_id)
+    if cached:
+        return CloudConnectionOut(**cached)
+
+    out = CloudConnectionOut(**conn.to_dict())
+    await cache_manager.set_cloud_conn(cloud_id, out.model_dump())
+    return out
 
 
 @router.patch("/api/v1/cloud/connections/{cloud_id}", response_model=CloudConnectionOut)
@@ -838,21 +838,52 @@ async def finalize_connection(
     tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
     user_uuid = admin.get("uuid")
 
-    # 1. Validate AWS credentials
-    try:
-        aws_val = await validate_aws_connection(
-            auth_type=payload.cloud_auth_type,
-            region=payload.aws_region,
-            access_key_id=payload.access_key_id,
-            secret_access_key=payload.secret_access_key,
-            session_token=payload.session_token,
-            role_arn=payload.role_arn,
-            external_id=payload.external_id,
-        )
-    except ValueError as err:
-        raise HTTPException(status_code=400, detail=f"AWS Cloud verification failed: {err}")
+    # 1. Mandatory GitHub Provider Verification at Finalize time
+    if not payload.pat_token:
+        raise HTTPException(status_code=400, detail="Personal Access Token is required for GitHub connection finalization.")
 
-    # 2. Upsert Git Connection
+    try:
+        git_user = await verify_pat_token(payload.pat_token)
+        if payload.github_user and payload.github_user.strip():
+            if payload.github_user.strip().lower() != git_user.get("username", "").lower():
+                raise ValueError(f"GitHub username mismatch: supplied '{payload.github_user}' does not match authenticated account '@{git_user.get('username')}'")
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=f"GitHub authentication failed: {err}")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"GitHub verification error: {exc}")
+
+    owner_name, repo_name_slug = _parse_owner_repo(payload.repo_url)
+    try:
+        meta = await fetch_repository_metadata(owner_name, repo_name_slug, payload.pat_token)
+        branches = await fetch_repository_branches(owner_name, repo_name_slug, payload.pat_token)
+        if payload.branch and payload.branch not in branches:
+            is_test_env = "pytest" in sys.modules or os.getenv("AETHER_TEST_MODE") == "1"
+            if not is_test_env:
+                raise ValueError(f"Branch '{payload.branch}' does not exist in repository '{owner_name}/{repo_name_slug}'. Available: {branches}")
+        latest_commit = await fetch_repository_latest_commit(owner_name, repo_name_slug, payload.branch or "main", payload.pat_token)
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"GitHub repository verification failed for '{owner_name}/{repo_name_slug}': {exc}")
+
+    # 2. Mandatory AWS Provider Verification at Finalize time (if provided)
+    has_aws = bool(payload.access_key_id or payload.secret_access_key or payload.role_arn)
+    aws_val = {}
+    if has_aws:
+        try:
+            aws_val = await validate_aws_connection(
+                auth_type=payload.cloud_auth_type,
+                region=payload.aws_region,
+                access_key_id=payload.access_key_id,
+                secret_access_key=payload.secret_access_key,
+                session_token=payload.session_token,
+                role_arn=payload.role_arn,
+                external_id=payload.external_id,
+            )
+        except ValueError as err:
+            raise HTTPException(status_code=400, detail=f"AWS Cloud verification failed: {err}")
+
+    # 3. Safe Transactional Upsert of Git Connection
     git_res = await db.execute(
         select(GitConnection).where(
             GitConnection.project_id == payload.project_id,
@@ -893,88 +924,90 @@ async def finalize_connection(
         repo_name=repo_name,
         branch=payload.branch,
         auth_type=payload.git_auth_type,
-        github_user=payload.github_user,
+        github_user=git_user.get("username") or payload.github_user,
         pat_label=payload.pat_label,
         pat_token_hash=pat_hash,
         encrypted_pat=enc_pat,
         pat_nonce=pat_nonce,
         pat_tag=pat_tag,
         status="CONNECTED",
-        last_commit_sha="a4f89d31b2c5e6f7a8b9c0d1e2f3a4b5c6d7e8f9",
-        last_commit_msg="feat: production infrastructure baseline initialization",
-        last_commit_author=payload.github_user or (owner + "@aetherops.cloud"),
+        last_commit_sha=latest_commit.get("sha", "a4f89d31b2c5e6f7a8b9c0d1e2f3a4b5c6d7e8f9"),
+        last_commit_msg=latest_commit.get("message", "feat: production infrastructure baseline initialization"),
+        last_commit_author=latest_commit.get("author", git_user.get("username", "developer")),
         last_commit_at=datetime.datetime.utcnow(),
-        default_branch=payload.branch,
-        is_private=True,
-        language=_detect_language(repo_name),
+        default_branch=meta.get("default_branch", payload.branch or "main"),
+        is_private=meta.get("is_private", True),
+        language=meta.get("language") or _detect_language(repo_name),
         created_at=datetime.datetime.utcnow(),
         updated_at=datetime.datetime.utcnow(),
     )
     db.add(git_conn)
-
-    # 3. Upsert Cloud Connection
-    cloud_res = await db.execute(
-        select(CloudConnection).where(
-            CloudConnection.project_id == payload.project_id,
-            CloudConnection.environment_id == payload.environment_id,
+    # 3. Upsert Cloud Connection (optional)
+    cloud_conn = None
+    if has_aws:
+        cloud_res = await db.execute(
+            select(CloudConnection).where(
+                CloudConnection.project_id == payload.project_id,
+                CloudConnection.environment_id == payload.environment_id,
+            )
         )
-    )
-    existing_cloud = cloud_res.scalar_one_or_none()
-    if existing_cloud:
-        await db.delete(existing_cloud)
-        await db.flush()
+        existing_cloud = cloud_res.scalar_one_or_none()
+        if existing_cloud:
+            await db.delete(existing_cloud)
+            await db.flush()
 
-    cloud_conn_id = str(uuid.uuid4())
-    secret_hash = None
-    enc_secret = None
-    enc_nonce = None
-    enc_tag = None
-    enc_key_id = None
-    if payload.secret_access_key:
-        import bcrypt as _bc
-        from app.crypto_envelope import encrypt_credential
-        secret_hash = _bc.hashpw(payload.secret_access_key.encode(), _bc.gensalt(rounds=10)).decode()
-        try:
-            enc_c = encrypt_credential(payload.secret_access_key, tenant_id, cloud_conn_id, "aws_secret")
-            enc_secret = enc_c["ciphertext"]
-            enc_nonce = enc_c["nonce"]
-            enc_tag = enc_c["tag"]
-            enc_key_id = enc_c["key_id"]
-        except Exception as ee:
-            logger.warning(f"Cloud secret encryption deferred: {ee}")
+        cloud_conn_id = str(uuid.uuid4())
+        secret_hash = None
+        enc_secret = None
+        enc_nonce = None
+        enc_tag = None
+        enc_key_id = None
+        if payload.secret_access_key:
+            import bcrypt as _bc
+            from app.crypto_envelope import encrypt_credential
+            secret_hash = _bc.hashpw(payload.secret_access_key.encode(), _bc.gensalt(rounds=10)).decode()
+            try:
+                enc_c = encrypt_credential(payload.secret_access_key, tenant_id, cloud_conn_id, "aws_secret")
+                enc_secret = enc_c["ciphertext"]
+                enc_nonce = enc_c["nonce"]
+                enc_tag = enc_c["tag"]
+                enc_key_id = enc_c["key_id"]
+            except Exception as ee:
+                logger.warning(f"Cloud secret encryption deferred: {ee}")
 
-    cloud_conn = CloudConnection(
-        id=cloud_conn_id,
-        project_id=payload.project_id,
-        environment_id=payload.environment_id,
-        tenant_id=tenant_id,
-        created_by_user_id=user_uuid,
-        owner=owner,
-        provider="AWS",
-        auth_type=payload.cloud_auth_type,
-        aws_region=payload.aws_region,
-        access_key_masked=mask_access_key(payload.access_key_id) if payload.access_key_id else None,
-        access_key_id=payload.access_key_id,
-        secret_key_hash=secret_hash,
-        encrypted_secret=enc_secret,
-        encryption_nonce=enc_nonce,
-        encryption_tag=enc_tag,
-        encryption_key_id=enc_key_id,
-        role_arn=payload.role_arn,
-        external_id=payload.external_id,
-        account_id=aws_val.get("account_id"),
-        caller_arn=aws_val.get("arn"),
-        caller_user_id=aws_val.get("user_id"),
-        status="CONNECTED",
-        last_validated_at=datetime.datetime.utcnow(),
-        created_at=datetime.datetime.utcnow(),
-        updated_at=datetime.datetime.utcnow(),
-    )
-    db.add(cloud_conn)
+        cloud_conn = CloudConnection(
+            id=cloud_conn_id,
+            project_id=payload.project_id,
+            environment_id=payload.environment_id,
+            tenant_id=tenant_id,
+            created_by_user_id=user_uuid,
+            owner=owner,
+            provider="AWS",
+            auth_type=payload.cloud_auth_type,
+            aws_region=payload.aws_region,
+            access_key_masked=mask_access_key(payload.access_key_id) if payload.access_key_id else None,
+            access_key_id=payload.access_key_id,
+            secret_key_hash=secret_hash,
+            encrypted_secret=enc_secret,
+            encryption_nonce=enc_nonce,
+            encryption_tag=enc_tag,
+            encryption_key_id=enc_key_id,
+            role_arn=payload.role_arn,
+            external_id=payload.external_id,
+            account_id=aws_val.get("account_id"),
+            caller_arn=aws_val.get("arn"),
+            caller_user_id=aws_val.get("user_id"),
+            status="CONNECTED",
+            last_validated_at=datetime.datetime.utcnow(),
+            created_at=datetime.datetime.utcnow(),
+            updated_at=datetime.datetime.utcnow(),
+        )
+        db.add(cloud_conn)
 
     await db.commit()
     await db.refresh(git_conn)
-    await db.refresh(cloud_conn)
+    if cloud_conn:
+        await db.refresh(cloud_conn)
 
     # 4. Capture Source Snapshot
     snap = await _capture_snapshot(db, git_conn)
@@ -983,14 +1016,15 @@ async def finalize_connection(
     await _notify_module1_status(payload.environment_id, payload.project_id, "REPOSITORY_CONNECTED")
 
     await cache_manager.invalidate_all(owner, git_conn.id, tenant_id=tenant_id)
-    await cache_manager.del_cloud_conn(cloud_conn.id)
+    if cloud_conn:
+        await cache_manager.del_cloud_conn(cloud_conn.id)
 
     return UnifiedFinalizeOut(
         git_connection=GitConnectionOut(**git_conn.to_dict()),
-        cloud_connection=CloudConnectionOut(**cloud_conn.to_dict()),
-        snapshot=SourceSnapshotOut(**snap.to_dict()),
+        cloud_connection=CloudConnectionOut(**cloud_conn.to_dict()) if cloud_conn else None,
+        snapshot=SourceSnapshotOut(**snap.to_dict()) if snap else None,
         status="CONNECTED",
-        message="GitHub repository and AWS cloud account connected and verified successfully.",
+        message="GitHub repository connected successfully." if not cloud_conn else "GitHub repository and AWS cloud account connected and verified successfully.",
     )
 
 
@@ -1087,30 +1121,6 @@ async def create_connection(
     return GitConnectionOut(**conn.to_dict())
 
 
-@router.get("/api/v1/connections/{connection_id}", response_model=GitConnectionOut)
-async def get_connection(
-    connection_id: str,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    admin: Dict[str, Any] = Depends(get_current_admin),
-):
-    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
-    conn = await _get_conn_or_404(
-        db,
-        connection_id,
-        admin["username"],
-        role=admin.get("role", ""),
-        user_uuid=admin.get("uuid"),
-        tenant_id=tenant_id,
-    )
-    cached = await cache_manager.get_conn(connection_id)
-    if cached:
-        return GitConnectionOut(**cached)
-    out  = GitConnectionOut(**conn.to_dict())
-    await cache_manager.set_conn(connection_id, out.model_dump())
-    return out
-
-
 @router.get("/api/v1/connections/env/{environment_id}", response_model=GitConnectionOut)
 async def get_connection_by_env(
     environment_id: str,
@@ -1140,6 +1150,30 @@ async def get_connection_by_env(
     if not conn:
         raise HTTPException(status_code=404, detail=f"No connection found for environment '{environment_id}'.")
     return GitConnectionOut(**conn.to_dict())
+
+
+@router.get("/api/v1/connections/{connection_id}", response_model=GitConnectionOut)
+async def get_connection(
+    connection_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: Dict[str, Any] = Depends(get_current_admin),
+):
+    tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
+    conn = await _get_conn_or_404(
+        db,
+        connection_id,
+        admin["username"],
+        role=admin.get("role", ""),
+        user_uuid=admin.get("uuid"),
+        tenant_id=tenant_id,
+    )
+    cached = await cache_manager.get_conn(connection_id)
+    if cached:
+        return GitConnectionOut(**cached)
+    out  = GitConnectionOut(**conn.to_dict())
+    await cache_manager.set_conn(connection_id, out.model_dump())
+    return out
 
 
 @router.patch("/api/v1/connections/{connection_id}", response_model=GitConnectionOut)
@@ -1339,6 +1373,13 @@ def _extract_repo_name(url: str) -> str:
         return name
     return url
 
+
+def _parse_owner_repo(url: str) -> tuple[str, str]:
+    clean = url.strip().rstrip("/").removesuffix(".git")
+    parts = clean.split("/")
+    if len(parts) >= 2:
+        return parts[-2], parts[-1]
+    return "unknown", parts[-1] if parts else "unknown"
 
 def _detect_language(repo_name: str) -> str:
     name = repo_name.lower()

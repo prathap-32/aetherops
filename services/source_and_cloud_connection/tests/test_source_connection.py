@@ -332,7 +332,7 @@ async def test_github_verify_pat_empty_rejected(client, hdrs):
 
 @pytest.mark.anyio
 async def test_github_list_repos(client, hdrs):
-    res = await client.get("/api/v1/github/repos", headers=hdrs)
+    res = await client.get("/api/v1/github/repos", headers={**hdrs, "X-GitHub-Token": "ghp_mock_test_token_12345678901234567890"})
     assert res.status_code == 200
     data = res.json()
     assert "repos" in data
@@ -342,12 +342,11 @@ async def test_github_list_repos(client, hdrs):
 
 @pytest.mark.anyio
 async def test_github_list_branches(client, hdrs):
-    res = await client.get("/api/v1/github/repos/aetherops/aethershop/branches", headers=hdrs)
+    res = await client.get("/api/v1/github/repos/aetherops/aethershop/branches", headers={**hdrs, "X-GitHub-Token": "ghp_mock_test_token_12345678901234567890"})
     assert res.status_code == 200
     data = res.json()
     assert "branches" in data
     assert "main" in data["branches"]
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # AWS CLOUD CONNECTION TESTS
@@ -474,7 +473,7 @@ async def test_unified_finalize_connection(client, hdrs):
         "repo_url": "https://github.com/aetherops/aethershop",
         "branch": "main",
         "git_auth_type": "PAT",
-        "github_user": "aether-dev",
+        "github_user": "aether-developer",
         "pat_token": "ghp_mock_token_for_finalize_12345678",
         "pat_label": "prod-git-pat",
         "cloud_provider": "AWS",
@@ -643,7 +642,7 @@ async def test_unified_finalize_with_iam_user_arn(client, hdrs):
         "repo_url": "https://github.com/aetherops/aethershop",
         "branch": "main",
         "git_auth_type": "PAT",
-        "github_user": "aether-dev",
+        "github_user": "aether-developer",
         "pat_token": "ghp_mock_token_for_finalize_iam_user",
         "cloud_provider": "AWS",
         "cloud_auth_type": "IAM_ROLE_ARN",

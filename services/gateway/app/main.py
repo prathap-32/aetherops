@@ -96,7 +96,6 @@ else:
 JWT_ALGORITHM = "HS256"
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ROOT_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
 FRONTEND_DIST = os.path.join(ROOT_DIR, "frontend", "dist")
 FRONTEND_ASSETS = os.path.join(FRONTEND_DIST, "assets")
 INDEX_HTML = os.path.join(FRONTEND_DIST, "index.html")
@@ -170,10 +169,11 @@ UPSTREAM_MAP = {
     "drift-detection": os.getenv("DEPLOYER_SERVICE_URL", "http://127.0.0.1:8007"),
 
     # Port 8008: Observability Infrastructure
+    "security": os.getenv("SECURITY_SERVICE_URL", "http://127.0.0.1:8008"),
+    "finops": os.getenv("FINOPS_SERVICE_URL", "http://127.0.0.1:8007"),
+    # Port 8008: Observability Infrastructure
     "monitoring": os.getenv("OBS_SERVICE_URL", "http://127.0.0.1:8008"),
     "observability": os.getenv("OBS_SERVICE_URL", "http://127.0.0.1:8008"),
-
-    # Port 8009: User & Credential Settings (routed via auth / gateway)
     "settings": os.getenv("AUTH_SERVICE_URL", "http://127.0.0.1:7999"),
 
     # Port 8010: Admin Console (Admin Only)
@@ -577,7 +577,7 @@ async def proxy_microservice_api(module: str, request: Request, subpath: str = "
     elif module in ("monitoring", "observability"):
         upstream = UPSTREAM_MAP["monitoring"]
 
-    elif module in ("deployments", "cloud-deployer", "deploy", "drift-detection"):
+    elif module in ("deployments", "cloud-deployer", "deploy", "drift-detection", "dry-run", "dry_run", "approvals", "approval", "state-inventory", "state_inventory"):
         upstream = UPSTREAM_MAP["deployments"]
 
     elif module == "admin":

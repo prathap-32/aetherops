@@ -13,15 +13,17 @@ import {
   FileCode,
   Activity
 } from 'lucide-react';
-import { deploymentsApi, architectureStudioApi } from '../../services/api';
+import { dryRunApi, architectureStudioApi, approvalApi } from '../../services/api';
 export default function RiskEngineView({ onNavigate, activeProject, activeEnvironment, navState }) {
   const [loading, setLoading] = useState(false);
   const [planData, setPlanData] = useState(null);
   const [error, setError] = useState(null);
+  const [approving, setApproving] = useState(false);
+  const [approvedReceipt, setApprovedReceipt] = useState(null);
+  const [comments, setComments] = useState('');
   const projectName = activeProject?.name || activeProject?.id || 'aether-cloud';
   const envTier = activeEnvironment?.type || 'production';
   const region = activeEnvironment?.region || 'us-east-1';
-
   const runDryRunPlan = async () => {
     setLoading(true);
     setError(null);
@@ -38,7 +40,7 @@ export default function RiskEngineView({ onNavigate, activeProject, activeEnviro
         console.warn('Arch review query notice:', e);
       }
 
-      const planResp = await deploymentsApi.plan({
+      const planResp = await dryRunApi.analyze({
         project_name: projectName,
         environment_tier: envTier,
         target_region: region,
@@ -101,11 +103,11 @@ export default function RiskEngineView({ onNavigate, activeProject, activeEnviro
             <span>Re-plan</span>
           </button>
           <button
-            onClick={() => onNavigate('execution', '/execution')}
+            onClick={() => onNavigate('approval_gate', '/approval-gate')}
             disabled={!planData}
             className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <span>Proceed to Deployment Approval</span>
+            <span>Proceed to Approval Gate</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -226,6 +228,90 @@ export default function RiskEngineView({ onNavigate, activeProject, activeEnviro
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Unified Approval Gate & Execution Handoff Section */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <span>Unified Approval Gate &amp; Execution Authorization</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">Cryptographically bind plan digest, record approver identity, and authorize Cloud Deployment</p>
+          </div>
+          <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+            approvedReceipt ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+          }`}>
+            {approvedReceipt ? 'APPROVED & AUTHORIZED' : 'PENDING SIGN-OFF'}
+          </span>
+        </div>
+
+        {approvedReceipt ? (
+          <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-emerald-900 font-bold text-xs">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>Infrastructure Plan Successfully Approved</span>
+              </div>
+              <span className="font-mono text-[11px] text-emerald-700">ID: {approvedReceipt.approval_id}</span>
+            </div>
+            <p className="text-xs text-emerald-800">
+              Approved by <strong className="font-semibold">{approvedReceipt.approved_by}</strong> at {new Date(approvedReceipt.approved_at * 1000).toLocaleString()}. Valid execution authorization generated for Cloud Deployment.
+            </p>
+            <div className="flex items-center justify-end pt-2">
+              <button
+                onClick={() => onNavigate('deployments', '/deployment')}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <span>Proceed to Cloud Deployment</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <label className="block text-xs font-semibold text-slate-700">
+              Approval Sign-off Comments / Review Notes
+            </label>
+            <textarea
+              value={comments}
+              onChange={(e) => setComments(e.target.value)}
+              placeholder="Enter review findings, compliance sign-off notes, or release justifications..."
+              className="w-full p-3 rounded-lg border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={2}
+            />
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-[11px] text-slate-500">
+                Requires valid plan digest match and risk gate pass before authorization.
+              </span>
+              <button
+                onClick={async () => {
+                  if (!planData?.plan_id || !planData?.plan_digest) return;
+                  setApproving(true);
+                  setError(null);
+                  try {
+                    const receipt = await approvalApi.approve({
+                      plan_id: planData.plan_id,
+                      plan_digest: planData.plan_digest,
+                      comments: comments || 'Approved for infrastructure execution',
+                    });
+                    setApprovedReceipt(receipt);
+                  } catch (err) {
+                    setError(err.message || 'Approval sign-off rejected');
+                  } finally {
+                    setApproving(false);
+                  }
+                }}
+                disabled={approving || !planData || planData.risk_assessment?.status === 'BLOCKED'}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ShieldCheck className={`w-3.5 h-3.5 ${approving ? 'animate-spin' : ''}`} />
+                <span>{approving ? 'Signing & Gating...' : 'Approve Plan & Authorize Deployment'}</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

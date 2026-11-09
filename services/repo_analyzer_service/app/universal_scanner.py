@@ -188,6 +188,31 @@ async def resolve_repo_target(
     """
     raw = raw_target.strip()
 
+    # Check local paths first
+    local_candidate = Path(raw).expanduser()
+    if local_candidate.exists():
+        return {
+            "is_remote": False,
+            "path": str(local_candidate.resolve()),
+        }
+    root_candidate = Path(ROOT_DIR, raw).expanduser()
+    if root_candidate.exists():
+        return {
+            "is_remote": False,
+            "path": str(root_candidate.resolve()),
+        }
+    cwd_candidate = Path(os.getcwd(), raw).expanduser()
+    if cwd_candidate.exists():
+        return {
+            "is_remote": False,
+            "path": str(cwd_candidate.resolve()),
+        }
+    if raw.lower() in ("aetherops", "aether-cloud", ".", "workspace") or "aetherops" in raw.lower() or "aether-cloud" in raw.lower():
+        if os.path.exists(ROOT_DIR):
+            return {
+                "is_remote": False,
+                "path": ROOT_DIR,
+            }
     # 1. Direct URL
     if raw.startswith(("http://", "https://", "git@")):
         clean = raw.split(".git")[0].rstrip("/")
@@ -212,7 +237,6 @@ async def resolve_repo_target(
             "branch": "main",
             "url": f"https://github.com/{raw}",
         }
-
     # 3. Check Module 2 Git connections if not present as local directory
     if not os.path.exists(raw):
         # Check SQLite db for connection metadata
@@ -362,14 +386,7 @@ async def fetch_github_file_tree_in_memory(
     except Exception as e:
         logger.debug(f"Snapshot fallback error: {e}")
 
-    # Fallback synthetic tree based on repository name
-    return [
-        {"path": "Dockerfile", "type": "file", "size": 350},
-        {"path": "index.html", "type": "file", "size": 1200},
-        {"path": "script.js", "type": "file", "size": 2400},
-        {"path": "style.css", "type": "file", "size": 1800},
-        {"path": "README.md", "type": "file", "size": 500},
-    ]
+    raise ValueError(f"GitHub repository {owner}/{repo} not found or inaccessible. Provide a valid repository and token.")
 
 
 async def fetch_manifest_in_memory(

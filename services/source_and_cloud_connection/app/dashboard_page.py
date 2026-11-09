@@ -181,7 +181,7 @@ select.inp option{background:#fff;color:#0b1c30}
     </div>
 
     <!-- Stepper Navigation -->
-    <div class="flex border-b border-[#e5e5ea] pb-2 gap-2">
+    <div id="wizard-stepper" class="flex border-b border-[#e5e5ea] pb-2 gap-2">
       <button id="tab-btn-1" type="button" onclick="setStep(1)" class="tab-btn active flex items-center gap-1.5">
         <span class="w-4 h-4 rounded-full bg-white/20 text-xs flex items-center justify-center">1</span>
         GitHub Source
@@ -195,7 +195,6 @@ select.inp option{background:#fff;color:#0b1c30}
         Review &amp; Finalize
       </button>
     </div>
-
     <form id="unified-connect-form" onsubmit="submitUnifiedConnect(event)" class="space-y-4">
 
       <!-- ── STEP 1: GITHUB SOURCE ── -->
@@ -432,9 +431,14 @@ select.inp option{background:#fff;color:#0b1c30}
 
         <div class="flex justify-between pt-2">
           <button type="button" onclick="setStep(1)" class="btn-ghost px-4 py-2 text-xs">&larr; Back to Source</button>
-          <button type="button" onclick="setStep(3)" class="btn-primary px-5 py-2 text-xs flex items-center gap-1.5">
-            Next: Review &amp; Finalize &rarr;
-          </button>
+          <div class="flex gap-2">
+            <button type="button" onclick="skipAwsAndFinalize()" class="px-3 py-2 text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 text-[#1d1d1f] transition">
+              Skip AWS (Git Only) &rarr;
+            </button>
+            <button type="button" onclick="setStep(3)" class="btn-primary px-5 py-2 text-xs flex items-center gap-1.5">
+              Next: Review &amp; Finalize &rarr;
+            </button>
+          </div>
         </div>
       </div>
 
@@ -573,6 +577,56 @@ select.inp option{background:#fff;color:#0b1c30}
   </div>
 </div>
 
+<!-- ── LINK AWS CLOUD MODAL ── -->
+<div id="aws-link-modal" class="modal-overlay hidden">
+  <div class="bg-white rounded-2xl shadow-apple-lg w-full max-w-lg p-6 space-y-5 my-auto" style="border:1px solid rgba(0,0,0,.08)">
+    <div class="flex items-start justify-between border-b border-[#e5e5ea] pb-3">
+      <div>
+        <h3 class="text-lg font-bold text-[#1d1d1f]">Link AWS Cloud Account</h3>
+        <p class="text-xs text-[#6e6e73] mt-0.5">Provide AWS credentials for environment <code id="aws-link-proj-lbl" class="font-mono text-xs font-bold text-[#0071e3]"></code></p>
+      </div>
+      <button onclick="hideAwsModal()" class="text-[#aeaeb2] hover:text-[#1d1d1f] text-lg font-bold">&times;</button>
+    </div>
+
+    <form onsubmit="submitAwsLink(event)" class="space-y-4">
+      <input type="hidden" id="aws-link-proj-id">
+      <input type="hidden" id="aws-link-env-id">
+
+      <div class="space-y-1.5">
+        <label class="block text-xs font-semibold text-[#1d1d1f]">AWS Target Region <span class="text-[#0071e3]">*</span></label>
+        <select id="aws-link-region" class="inp w-full px-3 py-2 text-xs font-mono">
+          <option value="us-east-1">us-east-1 (N. Virginia)</option>
+          <option value="us-west-2">us-west-2 (Oregon)</option>
+          <option value="ap-south-1" selected>ap-south-1 (Mumbai)</option>
+          <option value="eu-west-1">eu-west-1 (Ireland)</option>
+          <option value="eu-central-1">eu-central-1 (Frankfurt)</option>
+          <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
+          <option value="ap-northeast-1">ap-northeast-1 (Tokyo)</option>
+        </select>
+      </div>
+
+      <div class="space-y-3 p-4 rounded-xl bg-[#f5f5f7] border border-[#e5e5ea]">
+        <div class="space-y-1">
+          <label class="block text-xs font-semibold text-[#1d1d1f]">AWS Access Key ID <span class="text-[#0071e3]">*</span></label>
+          <input id="aws-link-key-id" type="text" required placeholder="AKIAIOSFODNN7EXAMPLE" class="inp w-full px-3 py-2 font-mono text-xs"/>
+        </div>
+        <div class="space-y-1">
+          <label class="block text-xs font-semibold text-[#1d1d1f]">AWS Secret Access Key <span class="text-[#0071e3]">*</span></label>
+          <input id="aws-link-secret-key" type="password" required placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" class="inp w-full px-3 py-2 font-mono text-xs"/>
+        </div>
+      </div>
+
+      <div id="aws-link-err" class="hidden p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800"></div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-[#e5e5ea]">
+        <button type="button" onclick="hideAwsModal()" class="px-4 py-2 text-xs font-medium rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600">Cancel</button>
+        <button type="submit" id="btn-aws-link" class="btn-primary px-5 py-2 text-xs flex items-center gap-1.5">
+          <span>Save &amp; Link AWS Account</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
 <!-- ── TOAST ── -->
 <div id="toast" class="toast bg-white rounded-2xl shadow-apple-lg px-5 py-3 flex items-center gap-3 border border-[#e5e5ea] text-sm font-medium text-[#1d1d1f]">
   <span id="toast-icon" class="text-base">✅</span>
@@ -585,12 +639,6 @@ const adminKey = localStorage.getItem('X-Admin-Key') || 'aetherops-secret-admin-
 let currentGhMode = 'OAUTH';
 let currentAwsMode = 'ACCESS_KEYS';
 let loadedRepos = [];
-let currentGhToken = localStorage.getItem('X-GH-Token') || '';
-let currentGhUser = localStorage.getItem('X-GH-User') || '';
-let verifiedAwsIdentity = null;
-let isOAuthConfigured = false;
-let currentTargetMode = 'EXISTING';
-
 function hdrs(){
   const h = {'Content-Type':'application/json','X-Admin-Key':adminKey};
   if(currentGhToken) h['X-GitHub-Token'] = currentGhToken;
@@ -922,11 +970,17 @@ async function testAwsConnection(){
 
   let payload = {auth_type: currentAwsMode, aws_region: region};
   if(currentAwsMode==='ACCESS_KEYS'){
-    payload.access_key_id = keyInput || 'AKIAIOSFODNN7EXAMPLE';
-    payload.secret_access_key = document.getElementById('f-aws-secret-key').value.trim() || 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY';
+    if(!keyInput || !document.getElementById('f-aws-secret-key').value.trim()){
+      throw new Error("Please enter both AWS Access Key ID and Secret Access Key to test.");
+    }
+    payload.access_key_id = keyInput;
+    payload.secret_access_key = document.getElementById('f-aws-secret-key').value.trim();
     payload.session_token = document.getElementById('f-aws-session-token').value.trim() || null;
   } else {
-    payload.role_arn = arnInput || 'arn:aws:iam::123456789012:user/aether-developer';
+    if(!arnInput){
+      throw new Error("Please enter an IAM Role ARN to test.");
+    }
+    payload.role_arn = arnInput;
     payload.external_id = document.getElementById('f-aws-external-id').value.trim() || null;
   }
 
@@ -1118,6 +1172,126 @@ async function submitUnifiedConnect(e){
     return;
   }
 
+  let proj = '';
+  let env  = '';
+
+  if(currentTargetMode === 'EXISTING'){
+    proj = document.getElementById('f-final-project').value.trim();
+    env  = document.getElementById('f-final-env').value.trim();
+    if(!proj || !env){
+      errEl.textContent = 'Please choose a Target Project and Environment, or click "+ Quick Create New" to create one.';
+      errEl.classList.remove('hidden');
+      toast('Please assign a Target Project and Environment', false);
+      return;
+    }
+  } else {
+    const projName = document.getElementById('f-new-proj-name').value.trim();
+    const envName  = document.getElementById('f-new-env-name').value.trim() || 'production';
+    const projType = document.getElementById('f-new-proj-type').value || 'web_application';
+    const envType  = document.getElementById('f-new-env-type').value || 'production';
+
+    if(!projName){
+      errEl.textContent = 'Please enter a Project Name.';
+      errEl.classList.remove('hidden');
+      toast('Please enter a Project Name', false);
+      return;
+    }
+
+    try{
+      let createdProjId = '';
+      const pRes = await fetch(`${API}/api/v1/projects`, {
+        method: 'POST',
+        headers: hdrs(),
+        body: JSON.stringify({
+          name: projName,
+          description: `Created via Source Connection Wizard for ${repoUrl}`,
+          project_type: projType
+        })
+      });
+
+      if(pRes.ok){
+        const pData = await pRes.json();
+        createdProjId = pData.id;
+      } else {
+        createdProjId = 'proj-' + projName.toLowerCase().replace(/[^a-z0-9_-]/g, '-').slice(0, 30);
+      }
+
+      let createdEnvId = '';
+      const region = document.getElementById('f-aws-region').value;
+      const eRes = await fetch(`${API}/api/v1/projects/${createdProjId}/environments`, {
+        method: 'POST',
+        headers: hdrs(),
+        body: JSON.stringify({
+          name: envName,
+          env_type: envType,
+          aws_region: region,
+          description: `${envName} deployment environment`
+        })
+      });
+
+      if(eRes.ok){
+        const eData = await eRes.json();
+        createdEnvId = eData.id;
+      } else {
+        createdEnvId = 'env-' + envName.toLowerCase().replace(/[^a-z0-9_-]/g, '-').slice(0, 30);
+      }
+
+      proj = createdProjId;
+      env = createdEnvId;
+    }catch(err){
+      proj = 'proj-' + projName.toLowerCase().replace(/[^a-z0-9_-]/g, '-').slice(0, 30);
+      env = 'env-' + envName.toLowerCase().replace(/[^a-z0-9_-]/g, '-').slice(0, 30);
+    }
+  }
+
+  btn.disabled = true; spin.classList.remove('hidden');
+
+  // If Git Only mode, submit ONLY Git connection (zero AWS credentials, zero mock keys)
+  if(currentConnectionMode === 'GIT_ONLY'){
+    try{
+      const res = await fetch(`${API}/api/v1/connections`, {
+        method: 'POST',
+        headers: hdrs(),
+        body: JSON.stringify({
+          project_id: proj,
+          environment_id: env,
+          repo_url: repoUrl,
+          branch: branch,
+          auth_type: currentGhMode,
+          pat_token: patToken,
+          pat_label: patLabel,
+          github_user: currentGhUser || 'developer'
+        })
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      hideConnectModal();
+      toast(`Git repository connected successfully (${data.repo_name})!`, true);
+      await loadConnections();
+    }catch(err){
+      errEl.textContent = err.message;
+      errEl.classList.remove('hidden');
+    }finally{
+      btn.disabled = false; spin.classList.add('hidden');
+    }
+    return;
+  }
+    branch = document.getElementById('f-manual-branch').value.trim() || 'main';
+  } else {
+    repoUrl = document.getElementById('f-repo-select').value;
+    branch = document.getElementById('f-branch-select').value || 'main';
+    patLabel = document.getElementById('f-token-label').value.trim() || null;
+    patToken = currentGhToken || document.getElementById('f-pat-token').value.trim() || null;
+  }
+
+  if(!repoUrl){
+    errEl.textContent = 'Please select or enter a repository URL in Step 1.';
+    errEl.classList.remove('hidden');
+    setStep(1);
+    toast('Please select or enter a repository URL', false);
+    return;
+  }
+
   const region = document.getElementById('f-aws-region').value;
   let awsKeyId = null, awsSecret = null, sessionTok = null, roleArn = null, extId = null;
 
@@ -1267,10 +1441,77 @@ function showConnectModal(preselectedProj = '', preselectedEnv = ''){
   }
 }
 
+function skipAwsAndFinalize(){
+  document.getElementById('f-aws-key-id').value = '';
+  document.getElementById('f-aws-secret-key').value = '';
+  document.getElementById('f-aws-session-token').value = '';
+  document.getElementById('f-aws-role-arn').value = '';
+  document.getElementById('f-aws-external-id').value = '';
+  setStep(3);
+}
+
 function hideConnectModal(){
   document.getElementById('connect-modal').classList.add('hidden');
 }
 
+function openAwsModal(projId, envId, region){
+  document.getElementById('aws-link-proj-id').value = projId;
+  document.getElementById('aws-link-env-id').value = envId;
+  document.getElementById('aws-link-proj-lbl').textContent = envId;
+  if(region) document.getElementById('aws-link-region').value = region;
+  document.getElementById('aws-link-key-id').value = '';
+  document.getElementById('aws-link-secret-key').value = '';
+  document.getElementById('aws-link-err').classList.add('hidden');
+  document.getElementById('aws-link-modal').classList.remove('hidden');
+}
+
+function hideAwsModal(){
+  document.getElementById('aws-link-modal').classList.add('hidden');
+}
+
+async function submitAwsLink(e){
+  e.preventDefault();
+  const projId = document.getElementById('aws-link-proj-id').value;
+  const envId = document.getElementById('aws-link-env-id').value;
+  const region = document.getElementById('aws-link-region').value;
+  const keyId = document.getElementById('aws-link-key-id').value.trim();
+  const secret = document.getElementById('aws-link-secret-key').value.trim();
+  const errEl = document.getElementById('aws-link-err');
+  const btn = document.getElementById('btn-aws-link');
+  errEl.classList.add('hidden');
+
+  if(!keyId || !secret){
+    errEl.textContent = 'Please enter both Access Key ID and Secret Access Key.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API}/api/v1/cloud/connections`, {
+      method: 'POST',
+      headers: hdrs(),
+      body: JSON.stringify({
+        project_id: projId,
+        environment_id: envId,
+        auth_type: 'ACCESS_KEYS',
+        aws_region: region,
+        access_key_id: keyId,
+        secret_access_key: secret
+      })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.detail || JSON.stringify(data));
+    hideAwsModal();
+    toast(`AWS account linked successfully! (${data.account_id})`, true);
+    await loadConnections();
+  } catch(err){
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+  }
+}
 // ── DASHBOARD RENDERING ─────────────────────────────────────────────────────
 async function loadConnections(){
   try{
@@ -1356,9 +1597,12 @@ function renderDashboard(gitConns, cloudConns){
           <span class="px-1.5 py-0.5 rounded bg-[#ea580c] text-white text-[9px] font-bold">AWS</span>
           <span class="font-mono text-[#9a3412] font-semibold">${cloud ? cloud.account_id||'Configured' : 'No AWS account linked'}</span>
         </div>
-        <span class="text-[11px] text-[#c2410c] font-medium">${cloud ? cloud.aws_region : '—'}</span>
+        ${cloud ? `<span class="text-[11px] text-[#c2410c] font-medium">${cloud.aws_region}</span>` : `
+          <button onclick="event.stopPropagation(); openAwsModal('${c.project_id}', '${c.environment_id}', '${c.aws_region || 'us-east-1'}')" class="px-2.5 py-1 rounded-md bg-[#ea580c] hover:bg-[#d9480f] text-white text-[10px] font-bold transition flex items-center gap-1 shadow-xs">
+            <span>+ Connect AWS</span>
+          </button>
+        `}
       </div>
-
       <!-- Commit info -->
       ${sha && msg ? `
       <div class="bg-[#f5f5f7] rounded-xl p-3 space-y-1">

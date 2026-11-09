@@ -1,7 +1,7 @@
 # services/architecture_generator/app/main.py
 """
 AetherOps AI — Cloud Architecture Studio Microservice (Module 4)
-Port 8005
+Port 8004
 
 Provides:
 1. Visual ReactFlow DAG Generation from Module 3 AWS Right-Sized Specs.
@@ -171,7 +171,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "cloud-architecture-studio",
-        "port": 8005,
+        "port": 8004,
         "module": 4,
         "timestamp": time.time(),
     }

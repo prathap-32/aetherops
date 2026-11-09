@@ -342,9 +342,24 @@ export default function SourceCloudView({
       return;
     }
 
+    if (!selectedRepo || !selectedRepo.trim()) {
+      setStatusMessage({ type: 'error', text: 'Please select or enter a GitHub repository.' });
+      return;
+    }
+
+    if (newConnType === 'git' && authMethod === 'pat' && (!patToken || !patToken.trim())) {
+      setStatusMessage({ type: 'error', text: 'Please enter your GitHub Personal Access Token (PAT).' });
+      return;
+    }
+
+    if (newConnType === 'cloud' && (!awsAccessKey.trim() || !awsSecretKey.trim())) {
+      setStatusMessage({ type: 'error', text: 'Please enter both AWS Access Key ID and Secret Access Key.' });
+      return;
+    }
     setIsSubmitting(true);
     setStatusMessage(null);
     try {
+      const hasAws = Boolean(awsAccessKey.trim() && awsSecretKey.trim());
       const payload = {
         project_id: selectedProjectId,
         environment_id: selectedEnvId,
@@ -352,12 +367,15 @@ export default function SourceCloudView({
         branch: selectedBranch || 'main',
         pat_token: patToken.trim() || 'mock-token',
         access_token: patToken.trim() || 'mock-token',
-        access_key_id: awsAccessKey.trim() || 'AKIAIOSFODNN7EXAMPLE',
-        secret_access_key: awsSecretKey.trim() || 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
-        aws_access_key_id: awsAccessKey.trim() || 'AKIAIOSFODNN7EXAMPLE',
-        aws_secret_access_key: awsSecretKey.trim() || 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
         aws_region: awsRegion,
       };
+
+      if (hasAws) {
+        payload.access_key_id = awsAccessKey.trim();
+        payload.secret_access_key = awsSecretKey.trim();
+        payload.aws_access_key_id = awsAccessKey.trim();
+        payload.aws_secret_access_key = awsSecretKey.trim();
+      }
 
       const result = await connectionsApi.finalize(payload);
       const newId = result.git_connection_id || result.cloud_connection_id || result.id;
@@ -768,6 +786,26 @@ export default function SourceCloudView({
                         Snapshot
                       </button>
                     )}
+                    {isGit && (() => {
+                      const hasCloud = cloudConnections.some(cc => cc.environment_id === conn.environment_id || cc.project_id === conn.project_id);
+                      return !hasCloud ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedProjectId(conn.project_id);
+                            setSelectedEnvId(conn.environment_id);
+                            setNewConnType('cloud');
+                            setIsNewConnectionModalOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition cursor-pointer"
+                        >
+                          <Cloud className="w-3 h-3 text-orange-600" />
+                          <span>+ Connect AWS</span>
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">AWS Linked ✓</span>
+                      );
+                    })()}
                   </div>
 
                   <button
@@ -987,6 +1025,7 @@ export default function SourceCloudView({
                       <div className="flex gap-2">
                         <input
                           type="password"
+                          required={authMethod === 'pat'}
                           placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
                           value={patToken}
                           onChange={(e) => setPatToken(e.target.value)}
@@ -1036,6 +1075,7 @@ export default function SourceCloudView({
                     ) : (
                       <input
                         type="text"
+                        required
                         placeholder="e.g. organization/repository-name"
                         value={selectedRepo}
                         onChange={(e) => setSelectedRepo(e.target.value)}
@@ -1081,6 +1121,7 @@ export default function SourceCloudView({
                     <label className="block text-xs font-semibold text-slate-700">AWS Access Key ID</label>
                     <input
                       type="text"
+                      required={newConnType === 'cloud'}
                       placeholder="AKIAIOSFODNN7EXAMPLE"
                       value={awsAccessKey}
                       onChange={(e) => setAwsAccessKey(e.target.value)}
@@ -1093,6 +1134,7 @@ export default function SourceCloudView({
                     <div className="relative">
                       <input
                         type={showSecretKey ? 'text' : 'password'}
+                        required={newConnType === 'cloud'}
                         placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
                         value={awsSecretKey}
                         onChange={(e) => setAwsSecretKey(e.target.value)}

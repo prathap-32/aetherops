@@ -23,18 +23,18 @@ echo -e "${BLUE}  AetherOps Cloud Architecture Studio (Module 4) Flow     ${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
-# Test 1: Direct Health Check on Port 8005
-echo -e "${BLUE}Test 1: Direct Cloud Architecture Studio Health Check (Port 8005)${NC}"
-M4_HEALTH=$(curl -s http://localhost:8005/health)
+# Test 1: Direct Health Check on Port 8004
+echo -e "${BLUE}Test 1: Direct Cloud Architecture Studio Health Check (Port 8004)${NC}"
+M4_HEALTH=$(curl -s http://localhost:8004/health)
 echo "Response: $M4_HEALTH"
 STATUS=$(echo "$M4_HEALTH" | jq -r '.status')
 PORT=$(echo "$M4_HEALTH" | jq -r '.port')
 SERVICE=$(echo "$M4_HEALTH" | jq -r '.service')
 
-if [ "$STATUS" = "healthy" ] && [ "$PORT" = "8005" ]; then
-    echo -e "${GREEN}✓ Cloud Architecture Studio is healthy on Port 8005!${NC}"
+if [ "$STATUS" = "healthy" ] && [ "$PORT" = "8004" ]; then
+    echo -e "${GREEN}✓ Cloud Architecture Studio is healthy on Port 8004!${NC}"
 else
-    echo -e "${RED}✗ Health check failed on Port 8005${NC}"
+    echo -e "${RED}✗ Health check failed on Port 8004${NC}"
     exit 1
 fi
 echo ""
@@ -51,16 +51,16 @@ fi
 echo -e "${GREEN}✓ Acquired JWT token from Gateway${NC}"
 echo ""
 
-# Test 2: Gateway Reverse Proxy (Port 8000 -> 8005)
-echo -e "${BLUE}Test 2: Gateway Reverse Proxy to Architecture Studio (Port 8000 -> 8005)${NC}"
+# Test 2: Gateway Reverse Proxy (Port 8000 -> 8004)
+echo -e "${BLUE}Test 2: Gateway Reverse Proxy to Architecture Studio (Port 8000 -> 8004)${NC}"
 GW_HEALTH=$(curl -s http://localhost:8000/api/v1/architecture/health)
 echo "Response: $GW_HEALTH"
 GW_PORT=$(echo "$GW_HEALTH" | jq -r '.port')
 
-if [ "$GW_PORT" = "8005" ]; then
-    echo -e "${GREEN}✓ Gateway successfully routed /api/v1/architecture/health to Port 8005!${NC}"
+if [ "$GW_PORT" = "8004" ]; then
+    echo -e "${GREEN}✓ Gateway successfully routed /api/v1/architecture/health to Port 8004!${NC}"
 else
-    echo -e "${RED}✗ Gateway reverse proxy to Port 8005 failed${NC}"
+    echo -e "${RED}✗ Gateway reverse proxy to Port 8004 failed${NC}"
     exit 1
 fi
 echo ""
