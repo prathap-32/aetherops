@@ -69,22 +69,20 @@ echo ""
 echo -e "${GREEN}Verifying service health...${NC}"
 sleep 2
 
-PORTS=(7999 8000 8001 8002 8003 8004 8005 8006 8007 8008 8009 8010 8011 8012)
+PORTS=(7999 8000 8001 8002 8003 8004 8005 8006 8007 8008 8009 8010)
 NAMES=(
     "Auth Service"
     "Gateway & UI"
-    "Project Manager"
-    "Source Connection"
-    "Repo Analyzer"
-    "Requirements"
-    "Architecture Studio"
+    "Project & Env"
+    "Connect Cloud & Git"
+    "Source Code Analyzer"
+    "AI AWS Architecture"
     "IaC Generator"
-    "FinOps Optimizer"
-    "Security Scanner"
-    "CI/CD Pipeline"
-    "Observability APM"
+    "Dry-Run & Approval"
     "Cloud Deployer"
-    "Admin Console"
+    "Observability Infra"
+    "User & Credentials"
+    "Admin Console (Admin)"
 )
 
 ALL_HEALTHY=true

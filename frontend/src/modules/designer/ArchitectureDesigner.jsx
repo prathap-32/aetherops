@@ -1125,10 +1125,6 @@ export default function ArchitectureDesigner({ onNavigate, activeProject, active
   // 2. From user & project scoped storage
   // 3. PROD GRADE: Empty canvas [] by default! NEVER load pre-template clock app!
   const [nodes, setNodes] = useState(() => {
-    if (navState?.sizingOutput) {
-      const synthesized = convertStudioOutputToDiagram(navState.sizingOutput, activeProject, activeEnvironment);
-      if (synthesized.nodes.length > 0) return synthesized.nodes;
-    }
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
@@ -1140,10 +1136,6 @@ export default function ArchitectureDesigner({ onNavigate, activeProject, active
   });
 
   const [edges, setEdges] = useState(() => {
-    if (navState?.sizingOutput) {
-      const synthesized = convertStudioOutputToDiagram(navState.sizingOutput, activeProject, activeEnvironment);
-      if (synthesized.edges.length > 0) return synthesized.edges;
-    }
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
@@ -1154,21 +1146,9 @@ export default function ArchitectureDesigner({ onNavigate, activeProject, active
     return []; // Clean empty start for production
   });
 
-  // When navState changes (e.g. navigated with fresh Cloud Arch Studio output), update canvas
-  useEffect(() => {
-    if (navState?.sizingOutput) {
-      const synthesized = convertStudioOutputToDiagram(navState.sizingOutput, activeProject, activeEnvironment);
-      setNodes(synthesized.nodes);
-      setEdges(synthesized.edges);
-      setToastMessage({
-        type: 'success',
-        text: navState?.autoValidated
-          ? '✓ Architecture Validated (AWS Well-Architected Compliant) — Diagram loaded into Designer!'
-          : 'Architecture diagram synthesized from Cloud Architecture Studio output!',
-      });
-      setTimeout(() => setToastMessage(null), 5000);
-    }
-  }, [navState]);
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
+
 
   // Canvas Viewport Pan & Zoom
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -1804,6 +1784,33 @@ resource "aws_security_group_rule" "rule_${idx + 1}" {
           >
             Snap Grid: {snapGrid ? '20px ON' : 'OFF'}
           </button>
+
+          <div className="h-4 w-px bg-slate-200 mx-1"></div>
+
+          {/* Sidebar Toggles for Responsive Mobile / Tablet / PC */}
+          <button
+            onClick={() => setLeftSidebarOpen((prev) => !prev)}
+            className={`px-2 py-1 rounded transition text-[11px] cursor-pointer flex items-center gap-1 ${
+              leftSidebarOpen
+                ? 'bg-amber-50 text-amber-700 font-semibold border border-amber-200'
+                : 'text-slate-500 hover:text-slate-700 bg-slate-50 border border-slate-200'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Catalog {leftSidebarOpen ? '▾' : '▸'}</span>
+          </button>
+
+          <button
+            onClick={() => setRightSidebarOpen((prev) => !prev)}
+            className={`px-2 py-1 rounded transition text-[11px] cursor-pointer flex items-center gap-1 ${
+              rightSidebarOpen
+                ? 'bg-amber-50 text-amber-700 font-semibold border border-amber-200'
+                : 'text-slate-500 hover:text-slate-700 bg-slate-50 border border-slate-200'
+            }`}
+          >
+            <Shield className="w-3.5 h-3.5" />
+            <span>Inspector {rightSidebarOpen ? '▾' : '▸'}</span>
+          </button>
         </div>
 
         {/* Viewport Zoom & Actions */}
@@ -1815,7 +1822,6 @@ resource "aws_security_group_rule" "rule_${idx + 1}" {
           >
             <ZoomOut className="w-3.5 h-3.5" />
           </button>
-          <span className="font-mono text-slate-600 w-12 text-center text-[11px]">
             {Math.round(zoom * 100)}%
           </span>
           <button
@@ -1860,7 +1866,18 @@ resource "aws_security_group_rule" "rule_${idx + 1}" {
           ═══════════════════════════════════════════════════════════════════════ */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* ── 1. LEFT PALETTE: AWS Services Catalog (Light Theme) ───────── */}
-        <div className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 z-10">
+        {leftSidebarOpen && (
+        <div className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 z-20 absolute lg:relative h-full shadow-xl lg:shadow-none">
+          <div className="p-3 border-b border-slate-200 flex items-center justify-between">
+            <span className="font-bold text-slate-800 text-xs">AWS Services Catalog</span>
+            <button
+              onClick={() => setLeftSidebarOpen(false)}
+              className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+              title="Close Catalog"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
           <div className="p-3 border-b border-slate-200">
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
@@ -1922,7 +1939,7 @@ resource "aws_security_group_rule" "rule_${idx + 1}" {
             <span>Click any item to add, or drag anchor points to connect.</span>
           </div>
         </div>
-
+        )}
         {/* ── 2. CENTER CANVAS: Infinite Grid + Interactive Graph Engine ── */}
         <div
           ref={canvasRef}
@@ -2241,7 +2258,8 @@ resource "aws_security_group_rule" "rule_${idx + 1}" {
         </div>
 
         {/* ── 3. RIGHT INSPECTOR: Resource Config & Live FinOps (Light Theme) ── */}
-        <div className="w-72 bg-white border-l border-slate-200 flex flex-col shrink-0 z-10 overflow-y-auto text-xs">
+        {rightSidebarOpen && (
+        <div className="w-72 bg-white border-l border-slate-200 flex flex-col shrink-0 z-20 absolute right-0 lg:relative h-full shadow-xl lg:shadow-none overflow-y-auto text-xs">
           {/* Header */}
           <div className="p-3 border-b border-slate-200 flex items-center justify-between">
             <span className="font-bold text-slate-800">
@@ -2251,14 +2269,24 @@ resource "aws_security_group_rule" "rule_${idx + 1}" {
                 ? 'Connection Inspector'
                 : 'Architecture Overview'}
             </span>
-            {selectedEntity && (
+            <div className="flex items-center gap-1">
+              {selectedEntity && (
+                <button
+                  onClick={() => setSelectedEntity(null)}
+                  className="text-slate-400 hover:text-slate-600 cursor-pointer p-1"
+                  title="Deselect"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button
-                onClick={() => setSelectedEntity(null)}
-                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                onClick={() => setRightSidebarOpen(false)}
+                className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+                title="Close Inspector"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
-            )}
+            </div>
           </div>
 
           <div className="p-4 space-y-4">
@@ -2563,7 +2591,7 @@ resource "aws_security_group_rule" "rule_${idx + 1}" {
             )}
           </div>
         </div>
-      </div>
+        )}
 
       {/* ═══════════════════════════════════════════════════════════════════════
           Modal: No Cloud Arch Studio Output Found

@@ -1,6 +1,6 @@
 #!/bin/bash
-# AetherOps - Start All Services
-# This script starts all microservices individually
+# AetherOps - Start All Core Microservices (Ports 7999 to 8010)
+# This script starts the 12 core user-flow microservices
 
 set -e
 
@@ -14,7 +14,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  AetherOps Microservices Startup${NC}"
+echo -e "${BLUE}  AetherOps Core Microservices Startup  ${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
@@ -39,100 +39,86 @@ GATEWAY_HOST="${GATEWAY_HOST:-${HOST:-0.0.0.0}}"
 AUTH_HOST="${AUTH_HOST:-${HOST:-0.0.0.0}}"
 
 # 1. Auth Service - Port 7999
-echo -e "${GREEN}[1/14]${NC} Starting Auth Service (Port 7999)..."
+echo -e "${GREEN}[1/12]${NC} Starting Auth Service (Port 7999)..."
 cd services/auth_service
 nohup setsid $PYTHON -m uvicorn app.main:app --host "$AUTH_HOST" --port 7999 </dev/null > /tmp/aether-auth.log 2>&1 &
 cd ../..
 sleep 1
 
-# 2. Gateway - Port 8000
-echo -e "${GREEN}[2/14]${NC} Starting Gateway & Dashboard (Port 8000)..."
+# 2. API Gateway & Dashboard - Port 8000
+echo -e "${GREEN}[2/12]${NC} Starting API Gateway & Dashboard (Port 8000)..."
 cd services/gateway
 nohup setsid $PYTHON -m uvicorn app.main:app --host "$GATEWAY_HOST" --port 8000 </dev/null > /tmp/aether-gateway.log 2>&1 &
 cd ../..
 sleep 1
 
-# 3. Project & Environment Management - Port 8001
-echo -e "${GREEN}[3/14]${NC} Starting Project Management (Port 8001)..."
+# 3. Project and Environment Management - Port 8001
+echo -e "${GREEN}[3/12]${NC} Starting Project & Environment (Port 8001)..."
 cd services/project_and_environment_management
 nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8001 </dev/null > /tmp/aether-projects.log 2>&1 &
 cd ../..
 sleep 1
 
-# 4. Source & Cloud Connection - Port 8002
-echo -e "${GREEN}[4/14]${NC} Starting Source Connection (Port 8002)..."
+# 4. Connect Cloud and Git - Port 8002
+echo -e "${GREEN}[4/12]${NC} Starting Connect Cloud & Git (Port 8002)..."
 cd services/source_and_cloud_connection
 nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8002 </dev/null > /tmp/aether-source.log 2>&1 &
 cd ../..
 sleep 1
 
-# 5. Repo Analyzer - Port 8003
-echo -e "${GREEN}[5/14]${NC} Starting Repo Analyzer (Port 8003)..."
+# 5. Source Code Analyzer - Port 8003
+echo -e "${GREEN}[5/12]${NC} Starting Source Code Analyzer (Port 8003)..."
 cd services/repo_analyzer_service
 nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8003 </dev/null > /tmp/aether-analyzer.log 2>&1 &
 cd ../..
 sleep 1
 
-# 6. Requirement Analysis - Port 8004 (Module 1)
-echo -e "${GREEN}[6/14]${NC} Starting Requirement Analysis (Port 8004)..."
-cd services/requirement_analysis
-nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8004 </dev/null > /tmp/aether-requirements.log 2>&1 &
-cd ../..
-sleep 1
-
-# 7. Cloud Architecture Studio - Port 8005 (Module 4)
-echo -e "${GREEN}[7/14]${NC} Starting Cloud Architecture Studio (Port 8005)..."
+# 6. AI AWS Architecture Planning - Port 8004
+echo -e "${GREEN}[6/12]${NC} Starting AI AWS Architecture (Port 8004)..."
 cd services/architecture_generator
-nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8005 </dev/null > /tmp/aether-architecture.log 2>&1 &
+nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8004 </dev/null > /tmp/aether-architecture.log 2>&1 &
 cd ../..
 sleep 1
 
-# 8. IaC Generator - Port 8006
-echo -e "${GREEN}[8/14]${NC} Starting IaC Generator (Port 8006)..."
+# 7. IaC Generator - Port 8005
+echo -e "${GREEN}[7/12]${NC} Starting IaC Generator (Port 8005)..."
 cd services/iac_generator
-nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8006 </dev/null > /tmp/aether-iac.log 2>&1 &
+nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8005 </dev/null > /tmp/aether-iac.log 2>&1 &
 cd ../..
 sleep 1
 
-# 9. FinOps Optimizer - Port 8007
-echo -e "${GREEN}[9/14]${NC} Starting FinOps Optimizer (Port 8007)..."
-cd services/finops_optimizer
-nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8007 </dev/null > /tmp/aether-finops.log 2>&1 &
-cd ../..
-sleep 1
-
-# 10. Security Scanner - Port 8008
-echo -e "${GREEN}[10/14]${NC} Starting Security Scanner (Port 8008)..."
-cd services/security_scanner
-nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8008 </dev/null > /tmp/aether-security.log 2>&1 &
-cd ../..
-sleep 1
-
-# 11. CI/CD Pipeline - Port 8009
-echo -e "${GREEN}[11/14]${NC} Starting CI/CD Pipeline (Port 8009)..."
-cd services/cicd_pipeline
-nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8009 </dev/null > /tmp/aether-cicd.log 2>&1 &
-cd ../..
-sleep 1
-
-# 12. Observability Setup - Port 8010
-echo -e "${GREEN}[12/14]${NC} Starting Observability Setup (Port 8010)..."
-cd services/observability_setup
-nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8010 </dev/null > /tmp/aether-observability.log 2>&1 &
-cd ../..
-sleep 1
-
-# 13. Cloud Deployer - Port 8011
-echo -e "${GREEN}[13/14]${NC} Starting Cloud Deployer (Port 8011)..."
+# 8. Dry-Run & Approval Gate - Port 8006
+echo -e "${GREEN}[8/12]${NC} Starting Dry-Run & Approval Gate (Port 8006)..."
 cd services/cloud_deployer
-nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8011 </dev/null > /tmp/aether-deployer.log 2>&1 &
+nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8006 </dev/null > /tmp/aether-approval.log 2>&1 &
 cd ../..
 sleep 1
 
-# 14. Admin Console - Port 8012
-echo -e "${GREEN}[14/14]${NC} Starting Admin Console (Port 8012)..."
+# 9. Cloud Deployer - Port 8007
+echo -e "${GREEN}[9/12]${NC} Starting Cloud Deployer (Port 8007)..."
+cd services/cloud_deployer
+nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8007 </dev/null > /tmp/aether-deployer.log 2>&1 &
+cd ../..
+sleep 1
+
+# 10. Observability the Infrastructure - Port 8008
+echo -e "${GREEN}[10/12]${NC} Starting Observability (Port 8008)..."
+cd services/observability_setup
+nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8008 </dev/null > /tmp/aether-observability.log 2>&1 &
+cd ../..
+sleep 1
+
+# 11. User & Credential Settings - Port 8009
+echo -e "${GREEN}[11/12]${NC} Starting User & Credential Settings (Port 8009)..."
+cd services/cicd_pipeline
+nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8009 </dev/null > /tmp/aether-settings.log 2>&1 &
+cd ../..
+sleep 1
+
+# 12. Admin Console (Restricted) - Port 8010
+echo -e "${GREEN}[12/12]${NC} Starting Admin Console (Port 8010)..."
 cd services/admin_console
-nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8012 </dev/null > /tmp/aether-admin.log 2>&1 &
+nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8010 </dev/null > /tmp/aether-admin.log 2>&1 &
 cd ../..
 sleep 1
 
@@ -140,28 +126,26 @@ disown -a 2>/dev/null || true
 
 echo ""
 echo -e "${BLUE}========================================${NC}"
-echo -e "${GREEN}✓ All services started!${NC}"
+echo -e "${GREEN}✓ All 12 Core Services Started!${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
-echo "Service URLs:"
-echo "  Auth:          http://localhost:7999"
-echo "  Dashboard:     http://localhost:8000"
-echo "  Projects:      http://localhost:8001"
-echo "  Source:        http://localhost:8002"
-echo "  Analyzer:      http://localhost:8003"
-echo "  Requirements:  http://localhost:8004"
-echo "  Architecture:  http://localhost:8005"
-echo "  IaC:           http://localhost:8006"
-echo "  FinOps:        http://localhost:8007"
-echo "  Security:      http://localhost:8008"
-echo "  CI/CD:         http://localhost:8009"
-echo "  Observability: http://localhost:8010"
-echo "  Deployer:      http://localhost:8011"
-echo "  Admin:         http://localhost:8012"
+echo "Service URLs (Ports 7999–8010):"
+echo "  Auth Service:         http://localhost:7999"
+echo "  API Gateway / UI:     http://localhost:8000"
+echo "  Project & Env:        http://localhost:8001"
+echo "  Connect Cloud & Git:  http://localhost:8002"
+echo "  Source Code Analyzer: http://localhost:8003"
+echo "  AI AWS Architecture:  http://localhost:8004"
+echo "  IaC Generator:        http://localhost:8005"
+echo "  Dry-Run & Approval:   http://localhost:8006"
+echo "  Cloud Deployer:       http://localhost:8007"
+echo "  Observability:        http://localhost:8008"
+echo "  User & Credentials:   http://localhost:8009"
+echo "  Admin Console:        http://localhost:8010 (Admin Only)"
 echo ""
 echo "Logs are in /tmp/aether-*.log"
 echo ""
-echo -e "${YELLOW}To stop all services, run: ./stop-all-services.sh or pkill -f 'uvicorn.*app.main:app'${NC}"
+echo -e "${YELLOW}To stop all services, run: ./stop-all-services.sh${NC}"
 
 if [ "$1" == "--daemon" ] || [ "$1" == "-d" ] || [ "$DAEMON" == "1" ]; then
     echo -e "${GREEN}✓ All services running in background.${NC}"
@@ -169,4 +153,3 @@ if [ "$1" == "--daemon" ] || [ "$1" == "-d" ] || [ "$DAEMON" == "1" ]; then
 fi
 
 wait
-

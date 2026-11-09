@@ -131,9 +131,8 @@ for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access", "fastapi"):
 
 logger = logging.getLogger("aether-gateway")
 
-# Microservices Upstream Routing Map
 UPSTREAM_MAP = {
-    # Port 7999: Dedicated Auth Service (API Only, Google/GitHub OAuth, Tenant & Account Authority)
+    # Port 7999: Auth Service
     "auth": os.getenv("AUTH_SERVICE_URL", "http://127.0.0.1:7999"),
     "auth_google": os.getenv("AUTH_SERVICE_URL", "http://127.0.0.1:7999"),
     "auth_github": os.getenv("AUTH_SERVICE_URL", "http://127.0.0.1:7999"),
@@ -142,7 +141,7 @@ UPSTREAM_MAP = {
     "projects": os.getenv("PM_SERVICE_URL", "http://127.0.0.1:8001"),
     "auth_pm": os.getenv("PM_SERVICE_URL", "http://127.0.0.1:8001"),
 
-    # Port 8002: Source & Cloud Connection
+    # Port 8002: Connect Cloud and Git
     "connections": os.getenv("SC_SERVICE_URL", "http://127.0.0.1:8002"),
     "cloud": os.getenv("SC_SERVICE_URL", "http://127.0.0.1:8002"),
     "github": os.getenv("SC_SERVICE_URL", "http://127.0.0.1:8002"),
@@ -152,36 +151,33 @@ UPSTREAM_MAP = {
     "analyzer": os.getenv("REPO_ANALYZER_SERVICE_URL", "http://127.0.0.1:8003"),
     "repo": os.getenv("REPO_ANALYZER_SERVICE_URL", "http://127.0.0.1:8003"),
 
-    # Port 8004: Requirement Analysis Engine
-    "requirements": os.getenv("REQUIREMENTS_SERVICE_URL", "http://127.0.0.1:8004"),
+    # Port 8004: AI AWS Architecture Planning
+    "architecture": os.getenv("ARCH_SERVICE_URL", "http://127.0.0.1:8004"),
+    "studio": os.getenv("ARCH_SERVICE_URL", "http://127.0.0.1:8004"),
+    "requirements": os.getenv("ARCH_SERVICE_URL", "http://127.0.0.1:8004"),
 
-    # Port 8005: Cloud Architecture Studio (Module 4)
-    "architecture": os.getenv("ARCH_SERVICE_URL", "http://127.0.0.1:8005"),
-    "studio": os.getenv("ARCH_SERVICE_URL", "http://127.0.0.1:8005"),
+    # Port 8005: IaC Generator
+    "iac": os.getenv("IAC_SERVICE_URL", "http://127.0.0.1:8005"),
+    "terraform": os.getenv("IAC_SERVICE_URL", "http://127.0.0.1:8005"),
 
-    # Port 8006: IaC / Terraform Generator
-    "iac": os.getenv("IAC_SERVICE_URL", "http://127.0.0.1:8006"),
-    "terraform": os.getenv("IAC_SERVICE_URL", "http://127.0.0.1:8006"),
+    # Port 8006: Dry-Run & Approval Gate
+    "approval": os.getenv("APPROVAL_SERVICE_URL", "http://127.0.0.1:8006"),
+    "execution": os.getenv("APPROVAL_SERVICE_URL", "http://127.0.0.1:8006"),
 
-    # Port 8007: FinOps Cost Optimizer
-    "finops": os.getenv("FINOPS_SERVICE_URL", "http://127.0.0.1:8007"),
+    # Port 8007: Cloud Deployer
+    "deployments": os.getenv("DEPLOYER_SERVICE_URL", "http://127.0.0.1:8007"),
+    "cloud-deployer": os.getenv("DEPLOYER_SERVICE_URL", "http://127.0.0.1:8007"),
+    "drift-detection": os.getenv("DEPLOYER_SERVICE_URL", "http://127.0.0.1:8007"),
 
-    # Port 8008: Security & Compliance Engine
-    "security": os.getenv("SEC_SERVICE_URL", "http://127.0.0.1:8008"),
+    # Port 8008: Observability Infrastructure
+    "monitoring": os.getenv("OBS_SERVICE_URL", "http://127.0.0.1:8008"),
+    "observability": os.getenv("OBS_SERVICE_URL", "http://127.0.0.1:8008"),
 
-    # Port 8009: CI/CD Pipeline Generator
-    "cicd": os.getenv("CICD_SERVICE_URL", "http://127.0.0.1:8009"),
+    # Port 8009: User & Credential Settings (routed via auth / gateway)
+    "settings": os.getenv("AUTH_SERVICE_URL", "http://127.0.0.1:7999"),
 
-    # Port 8010: Observability & Monitoring
-    "monitoring": os.getenv("OBS_SERVICE_URL", "http://127.0.0.1:8010"),
-    "observability": os.getenv("OBS_SERVICE_URL", "http://127.0.0.1:8010"),
-
-    # Port 8011: Cloud Deployer & Drift Engine
-    "deployments": os.getenv("DEPLOYER_SERVICE_URL", "http://127.0.0.1:8011"),
-    "cloud-deployer": os.getenv("DEPLOYER_SERVICE_URL", "http://127.0.0.1:8011"),
-
-    # Port 8012: Admin Console & Control Plane
-    "admin": os.getenv("ADMIN_SERVICE_URL", "http://127.0.0.1:8012"),
+    # Port 8010: Admin Console (Admin Only)
+    "admin": os.getenv("ADMIN_SERVICE_URL", "http://127.0.0.1:8010"),
 }
 
 EXCLUDE_HEADERS = {
