@@ -1,6 +1,6 @@
 #!/bin/bash
 # AetherOps - Start All Core Microservices (Ports 7999 to 8010)
-# This script starts the 12 core user-flow microservices
+# This script starts the core user-flow microservices
 
 set -e
 
@@ -108,9 +108,9 @@ nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8008 </dev/
 cd ../..
 sleep 1
 
-# 11. User & Credential Settings - Port 8009
+# 11. User & Credential Settings - Port 8009 (Auth Service Backend)
 echo -e "${GREEN}[11/12]${NC} Starting User & Credential Settings (Port 8009)..."
-cd services/cicd_pipeline
+cd services/auth_service
 nohup setsid $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8009 </dev/null > /tmp/aether-settings.log 2>&1 &
 cd ../..
 sleep 1

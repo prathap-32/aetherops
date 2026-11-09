@@ -81,6 +81,51 @@ def verify_architecture_approval(version_id: Optional[str]) -> Dict[str, Any]:
         detail="Approval Gate Verification Failed: Unexpected state during architecture approval check."
     )
 
+def fetch_architecture_parameters(version_id: str, request: IaCGenerationRequest) -> IaCGenerationRequest:
+    """
+    Fetches the reviewed architecture topology and inventory from the AI AWS Architecture Module (Port 8005)
+    to dynamically synthesize actual code matching the AI architecture plan.
+    """
+    try:
+        vid = str(version_id).strip()
+        with httpx.Client(timeout=4.0) as client:
+            resp = client.get(f"{ARCH_SERVICE_URL}/api/v1/architecture/review/{vid}")
+            if resp.status_code == 200:
+                data = resp.json()
+                if isinstance(data, dict):
+                    if data.get("target_region"):
+                        request.aws_region = data.get("target_region")
+                    nodes = data.get("nodes", [])
+                    inventory = data.get("resource_inventory", [])
+                    
+                    has_alb = any("alb" in str(n).lower() or "load" in str(n).lower() or "balancer" in str(n).lower() for n in nodes + inventory)
+                    has_waf = any("waf" in str(n).lower() for n in nodes + inventory)
+                    has_kms = any("kms" in str(n).lower() or "encryption" in str(n).lower() for n in nodes + inventory)
+                    
+                    if has_alb:
+                        request.enable_alb = True
+                    if has_waf:
+                        request.enable_waf = True
+                    if has_kms:
+                        request.enable_kms = True
+                    
+                    env_tier = data.get("environment_tier", "").lower()
+                    if "enterprise" in env_tier:
+                        request.compute_instance_type = "c6i.xlarge"
+                        request.database_instance_type = "db.m6i.xlarge"
+                        request.database_storage_gb = 200
+                        request.database_multi_az = True
+                    elif "production" in env_tier:
+                        request.compute_instance_type = "t3.large"
+                        request.database_instance_type = "db.m3.large"
+                        request.database_storage_gb = 100
+                        request.database_multi_az = True
+                    
+                    logger.info(f"Enriched IaC request from AI architecture review version '{vid}': tier={env_tier}, region={request.aws_region}")
+    except Exception as e:
+        logger.warning(f"Could not enrich IaC parameters from architecture review: {e}")
+    return request
+
 
 @app.get("/")
 async def root():
@@ -113,6 +158,9 @@ async def generate_iac(request: IaCGenerationRequest):
     logger.info(f"Checking architecture approval for version='{request.architecture_version_id}'")
     # Enforce mandatory architecture approval gate
     verify_architecture_approval(request.architecture_version_id)
+    
+    # Enrich IaC generation parameters dynamically using AI AWS Architecture output
+    fetch_architecture_parameters(request.architecture_version_id, request)
 
     logger.info(f"Generating IaC files for project='{request.project_name}', region='{request.aws_region}'")
     try:
