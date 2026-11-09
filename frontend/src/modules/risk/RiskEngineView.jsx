@@ -15,8 +15,7 @@ import {
 } from 'lucide-react';
 import { deploymentsApi, architectureStudioApi } from '../../services/api';
 
-export default function RiskEngineView({ onNavigate, activeProject, activeEnvironment }) {
-  const [loading, setLoading] = useState(false);
+export default function RiskEngineView({ onNavigate, activeProject, activeEnvironment, navState }) {
   const [planData, setPlanData] = useState(null);
   const [error, setError] = useState(null);
 
@@ -45,6 +44,8 @@ export default function RiskEngineView({ onNavigate, activeProject, activeEnviro
         environment_tier: envTier,
         target_region: region,
         architecture_version_id: archVersionId,
+        iac_files: navState?.iacData?.files || null,
+        terraform_version_id: navState?.iacData?.terraform_version_id || null,
       });
 
       setPlanData(planResp);
@@ -88,9 +89,7 @@ export default function RiskEngineView({ onNavigate, activeProject, activeEnviro
               {status}
             </span>
           </div>
-          <p className="text-sm text-slate-500 mt-1">
-            Section 7 Pre-Deployment Dry Run: Saved plan digest generation and 6-pillar infrastructure risk assessment.
-          </p>
+        {/* Description removed */}
         </div>
 
         <div className="flex items-center gap-2">

@@ -156,7 +156,7 @@ export default function IacView({ onNavigate, activeProject, activeEnvironment, 
             <span>New IAC</span>
           </button>
           <button
-            onClick={() => onNavigate('risk_analysis', '/risk-analysis')}
+            onClick={() => onNavigate('risk_analysis', '/risk-analysis', { iacData, activeProject, activeEnvironment })}
             disabled={!iacData}
             className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
           >

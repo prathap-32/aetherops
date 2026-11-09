@@ -342,6 +342,7 @@ export default function DashboardPage() {
             onNavigate={handleNavigate}
             activeProject={activeProject}
             activeEnvironment={activeEnvironment}
+            navState={navState}
             user={user}
           />
         );
@@ -365,6 +366,7 @@ export default function DashboardPage() {
             onNavigate={handleNavigate}
             activeProject={activeProject}
             activeEnvironment={activeEnvironment}
+            navState={navState}
             user={user}
           />
         );
