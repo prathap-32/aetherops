@@ -10,7 +10,7 @@ class IaCGenerationRequest(BaseModel):
     compute_instance_type: str = Field(default="t3.medium", description="EC2 instance type")
     compute_count: int = Field(default=2, ge=1)
     database_instance_type: str = Field(default="db.t3.medium", description="RDS instance type")
-    database_storage_gb: int = Field(default=50, ge=10)
+    database_storage_gb: int = Field(default=20, ge=0)
     database_multi_az: bool = Field(default=True)
     enable_alb: bool = Field(default=True)
     enable_waf: bool = Field(default=True)
