@@ -100,29 +100,29 @@ def generate_deterministic_aws_sizing(
     # 1. Compute Sizing
     if is_prod:
         compute = {
-            "service": "AWS ECS Fargate",
-            "task_cpu": "1024 (1 vCPU)",
-            "task_memory": "2048 (2 GB)",
+            "service": "Amazon EC2 (Auto-Scaling Fleet)",
+            "task_cpu": "t4g.small (2 vCPU, 2 GB RAM)",
+            "task_memory": "2048 MB",
             "min_capacity": 2,
-            "max_capacity": 8,
+            "max_capacity": 6,
             "multi_az": True,
             "container_port": primary_port,
             "autoscaling_metric": "TargetTracking CPUUtilization (70%)",
-            "rationale": f"PROD TIER HAS HIGHEST PRIORITY: High-availability auto-scaling ECS Fargate task fleet distributed across 3 Availability Zones for zero-downtime {workload_type}.",
-            "monthly_cost": 86.40,
+            "rationale": f"PROD TIER HIGH AVAILABILITY: Multi-AZ Amazon EC2 Auto Scaling fleet (t4g.small) with Docker runtime behind Application Load Balancer with Amazon S3 and RDS for resilient {workload_type}.",
+            "monthly_cost": 48.60,
         }
     elif is_staging:
         compute = {
-            "service": "AWS ECS Fargate",
-            "task_cpu": "512 (0.5 vCPU)",
-            "task_memory": "1024 (1 GB)",
+            "service": "Amazon EC2 (Dual-AZ Fleet)",
+            "task_cpu": "t4g.micro (2 vCPU, 1 GB RAM)",
+            "task_memory": "1024 MB",
             "min_capacity": 2,
             "max_capacity": 4,
             "multi_az": True,
             "container_port": primary_port,
             "autoscaling_metric": "TargetTracking CPUUtilization (80%)",
-            "rationale": "Dual-AZ ECS Fargate tasks mirroring production topology with moderate capacity for staging verification.",
-            "monthly_cost": 34.20,
+            "rationale": "STAGING TIER PARITY: Dual-AZ Amazon EC2 t4g.micro fleet with Docker Engine mirroring production architecture for testing.",
+            "monthly_cost": 12.24,
         }
     else:  # Development Tier: Extreme Frugality & Cost Minimization
         if has_docker:
@@ -544,14 +544,13 @@ class GeminiSizer:
         system_instruction = (
             "You are AetherOps AI Infrastructure Architect. You receive ONLY sanitized abstract tech primitives. "
             "Output strictly valid JSON with right-sized AWS architecture. Do not include markdown fences, comments, or pleasantries.\n"
-            "ENVIRONMENT PRIORITY & COST RULES:\n"
-            "1. PROD ENVIRONMENT HAS HIGHEST PRIORITY: Reliability, High Availability, and Auto-scaling are paramount. "
-            "For containerized workloads, ALWAYS use AWS ECS Fargate auto-scaling tasks across 3 AZs with Multi-AZ ALB, Multi-AZ Aurora/RDS, and WAF.\n"
-            "2. STAGING ENVIRONMENT: Focus on testing parity and staging isolation. Use dual-task ECS Fargate with shared ALB.\n"
-            "3. DEV ENVIRONMENT: Prioritize EXTREME COST EFFICIENCY and developer frugality. For single Docker containers or simple web workloads, "
-            "recommend a small Amazon EC2 instance (t4g.nano or t4g.micro with Docker Engine) with direct Elastic IP. "
-            "NEVER recommend an Application Load Balancer ($16.50/mo) in DEV because it is unnecessary overhead for developer testing. "
-            "DEV monthly compute + networking cost MUST be under $7/month."
+            "FOUNDATIONAL AWS SERVICE RULES:\n"
+            "1. ALWAYS prioritize core foundational AWS services: Amazon EC2 (with Docker runtime), AWS VPC (multi-AZ subnets), Amazon S3 (static assets & storage), and Amazon RDS. "
+            "Do NOT recommend AWS ECS, EKS, or Lambda unless explicitly forced by user specification.\n"
+            "2. PROD ENVIRONMENT: Multi-AZ Amazon EC2 Auto Scaling fleet (t4g.small) across Availability Zones with Multi-AZ ALB, Amazon S3, and Multi-AZ Aurora/RDS with KMS.\n"
+            "3. STAGING ENVIRONMENT: Dual-AZ Amazon EC2 fleet (t4g.micro) with shared ALB, S3, and RDS.\n"
+            "4. DEV ENVIRONMENT: Prioritize EXTREME COST EFFICIENCY (<$7/mo). Single t4g.micro Amazon EC2 instance with Docker Engine and direct Elastic IP (NO ALB).\n"
+            "5. OUTPUT FORMAT: strictly valid JSON without markdown fences."
         )
 
         req_body = {

@@ -1720,9 +1720,11 @@ resource "aws_security_group_rule" "rule_${idx + 1}" {
                 await handleSaveToBackend();
                 onNavigate('architecture_validation', '/architecture/validation');
               }}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
+              title="Save edited topology and trigger Final AI Architecture Validation"
             >
-              <span>Review &amp; Approve</span>
+              <Sparkles className="w-3.5 h-3.5 text-emerald-200" />
+              <span>Confirm Design &amp; Run Final AI Validation</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}
