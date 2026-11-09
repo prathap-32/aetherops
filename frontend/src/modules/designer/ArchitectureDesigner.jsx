@@ -1822,6 +1822,7 @@ resource "aws_security_group_rule" "rule_${idx + 1}" {
           >
             <ZoomOut className="w-3.5 h-3.5" />
           </button>
+          <span className="font-mono text-slate-600 w-12 text-center text-[11px]">
             {Math.round(zoom * 100)}%
           </span>
           <button
@@ -2685,6 +2686,7 @@ resource "aws_security_group_rule" "rule_${idx + 1}" {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

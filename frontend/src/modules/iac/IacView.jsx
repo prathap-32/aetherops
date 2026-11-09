@@ -111,14 +111,8 @@ export default function IacView({ onNavigate, activeProject, activeEnvironment }
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Terraform HCL Code Synthesizer</h1>
-            <span className="px-2.5 py-0.5 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-              Module 8: Infrastructure as Code
-            </span>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Infrastructure as Code Syntherizer</h1>
           </div>
-          <p className="text-sm text-slate-500 mt-1">
-            Production-grade HCL modules synthesized strictly from reviewed and approved architecture specifications.
-          </p>
         </div>
 
         <div className="flex items-center gap-2">

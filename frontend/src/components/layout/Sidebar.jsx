@@ -28,7 +28,7 @@ const NAV_GROUPS = [
       { id: 'source_cloud', path: '/source-connection', label: 'Connect Cloud and Git', icon: GitBranch },
       { id: 'repo_analyzer', path: '/source-analysis', label: 'Source Code Analyzer', icon: FileCode2 },
       { id: 'architecture_studio', path: '/architecture-studio', label: 'AI AWS Architecture', icon: Network },
-      { id: 'iac', path: '/terraform', label: 'Terraform HCL Synthesis', icon: Code2 },
+      { id: 'iac', path: '/terraform', label: 'Infrastructure as Code Syntherizer', icon: Code2 },
       { id: 'deployments', path: '/deployment', label: 'AI Dry-Run & Approval Gate', icon: Rocket },
       { id: 'audit', path: '/audit', label: 'Security & Session Audit', icon: ShieldCheck },
       { id: 'settings', path: '/settings', label: 'User & Credential Settings', icon: Settings },
