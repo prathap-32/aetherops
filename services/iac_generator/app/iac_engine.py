@@ -41,7 +41,6 @@ def validate_and_format_terraform(files: List[GeneratedFile]) -> Tuple[List[Gene
         logger.warning(f"Could not retrieve terraform version: {e}")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Write files
         file_map = {}
         for f in files:
             fp = os.path.join(tmpdir, f.filename)
@@ -54,7 +53,6 @@ def validate_and_format_terraform(files: List[GeneratedFile]) -> Tuple[List[Gene
             fmt_res = subprocess.run([tf_binary, "fmt", tmpdir], capture_output=True, text=True, timeout=10)
             if fmt_res.returncode == 0:
                 validation_report["fmt"] = "PASS"
-                # Read back formatted content
                 formatted_files = []
                 for f in files:
                     fp = file_map[f.filename]
@@ -98,9 +96,14 @@ def validate_and_format_terraform(files: List[GeneratedFile]) -> Tuple[List[Gene
 
 def generate_terraform_hcl(req: IaCGenerationRequest) -> IaCGenerationResponse:
     """
-    Generates production-grade, syntax-valid Terraform HCL modules matching workload specs.
+    Generates dynamic, production-grade, syntax-valid Terraform HCL modules
+    strictly matching the actual workload requirements (lean dev vs multi-tier prod).
     """
     files: List[GeneratedFile] = []
+
+    has_db = bool(req.database_instance_type and req.database_instance_type.lower() != "none" and req.database_storage_gb > 0)
+    has_alb = bool(req.enable_alb)
+    is_lean_dev = not has_db and not has_alb and req.compute_count <= 1
 
     # 1. provider.tf
     provider_content = f"""terraform {{
@@ -145,13 +148,9 @@ variable "instance_type" {{
   default     = "{req.compute_instance_type}"
   description = "EC2 instance sizing"
 }}
-
-variable "instance_count" {{
-  type        = number
-  default     = {req.compute_count}
-  description = "Number of compute nodes in Auto Scaling Group"
-}}
-
+"""
+    if has_db:
+        variables_content += f"""
 variable "db_instance_class" {{
   type        = string
   default     = "{req.database_instance_type}"
@@ -160,47 +159,36 @@ variable "db_instance_class" {{
 """
     files.append(GeneratedFile(filename="variables.tf", content=variables_content, language="hcl"))
 
-    # 3. main.tf
-    kms_block = """
-# AWS KMS Customer Managed Key for Envelope Encryption
-resource "aws_kms_key" "primary" {
-  description             = "AetherOps encryption key for ${var.project_name}"
+    # 3. main.tf (Dynamic based on workload requirements)
+    kms_block = f"""
+resource "aws_kms_key" "primary" {{
+  description             = "AetherOps encryption key for ${{var.project_name}}"
   deletion_window_in_days = 30
   enable_key_rotation     = true
-}
+}}
 """ if req.enable_kms else ""
 
-    waf_block = """
-# AWS WAFv2 Web ACL
-resource "aws_wafv2_web_acl" "main" {
-  name        = "${var.project_name}-waf"
+    waf_block = f"""
+resource "aws_wafv2_web_acl" "main" {{
+  name        = "${{var.project_name}}-waf"
   description = "OWASP Core RuleSet protection"
   scope       = "REGIONAL"
 
-  default_action {
-    allow {}
-  }
+  default_action {{
+    allow {{}}
+  }}
 
-  visibility_config {
+  visibility_config {{
     cloudwatch_metrics_enabled = true
-    metric_name                = "${var.project_name}-waf-metric"
+    metric_name                = "${{var.project_name}}-waf-metric"
     sampled_requests_enabled   = true
-  }
-}
+  }}
+}}
 """ if req.enable_waf else ""
 
-    alb_block = """
-# Application Load Balancer
-resource "aws_lb" "app" {
-  name               = "${var.project_name}-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = [aws_subnet.public_a.id, aws_subnet.public_b.id]
-}
-""" if req.enable_alb else ""
-
-    main_content = f"""# VPC & Networking
+    if is_lean_dev:
+        # Lean Single-Tier (e.g. Docker frontend / static app without RDS/ALB)
+        main_content = f"""# VPC & Networking (Lean Single-Tier)
 resource "aws_vpc" "main" {{
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
@@ -212,19 +200,144 @@ resource "aws_vpc" "main" {{
 }}
 
 resource "aws_subnet" "public_a" {{
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.1.0/24"
-  availability_zone = "${{var.aws_region}}a"
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "${{var.aws_region}}a"
   map_public_ip_on_launch = true
+
+  tags = {{
+    Name = "${{var.project_name}}-public-subnet"
+  }}
 }}
 
-resource "aws_subnet" "public_b" {{
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.2.0/24"
-  availability_zone = "${{var.aws_region}}b"
-  map_public_ip_on_launch = true
+resource "aws_internet_gateway" "igw" {{
+  vpc_id = aws_vpc.main.id
+
+  tags = {{
+    Name = "${{var.project_name}}-igw"
+  }}
 }}
 
+resource "aws_route_table" "public" {{
+  vpc_id = aws_vpc.main.id
+
+  route {{
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }}
+
+  tags = {{
+    Name = "${{var.project_name}}-public-rt"
+  }}
+}}
+
+resource "aws_route_table_association" "public_a" {{
+  subnet_id      = aws_subnet.public_a.id
+  route_table_id = aws_route_table.public.id
+}}
+
+resource "aws_security_group" "app_sg" {{
+  name        = "${{var.project_name}}-app-sg"
+  description = "Allow HTTP/HTTPS inbound traffic"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {{
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }}
+
+  ingress {{
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }}
+
+  ingress {{
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }}
+
+  egress {{
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }}
+}}
+
+resource "aws_eip" "app_eip" {{
+  domain = "vpc"
+
+  tags = {{
+    Name = "${{var.project_name}}-eip"
+  }}
+}}
+
+resource "aws_instance" "app" {{
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = var.instance_type
+  subnet_id              = aws_subnet.public_a.id
+  vpc_security_group_ids = [aws_security_group.app_sg.id]
+
+  tags = {{
+    Name = "${{var.project_name}}-instance"
+  }}
+}}
+
+data "aws_ami" "ubuntu" {{
+  most_recent = true
+  filter {{
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }}
+  filter {{
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }}
+  owners = ["099720109477"]
+}}
+{kms_block}
+"""
+    else:
+        # Multi-Tier Production Workload (VPC, Public/Private Subnets, ALB, RDS)
+        alb_resource = f"""
+resource "aws_lb" "app" {{
+  name               = "${{var.project_name}}-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb_sg.id]
+  subnets            = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+}}
+""" if has_alb else ""
+
+        db_resource = f"""
+resource "aws_db_subnet_group" "rds" {{
+  name       = "${{var.project_name}}-db-subnet-group"
+  subnet_ids = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+}}
+
+resource "aws_db_instance" "main" {{
+  identifier             = "${{var.project_name}}-db"
+  allocated_storage      = {req.database_storage_gb}
+  max_allocated_storage  = {req.database_storage_gb * 2}
+  storage_type           = "gp3"
+  engine                 = "postgres"
+  engine_version         = "15.4"
+  instance_class         = var.db_instance_class
+  multi_az               = {str(req.database_multi_az).lower()}
+  db_subnet_group_name   = aws_db_subnet_group.rds.name
+  skip_final_snapshot    = true
+  storage_encrypted      = true
+  kms_key_id             = {"aws_kms_key.primary.arn" if req.enable_kms else "null"}
+}}
+""" if has_db else ""
+
+        private_subnets_block = f"""
 resource "aws_subnet" "private_a" {{
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.10.0/24"
@@ -236,7 +349,33 @@ resource "aws_subnet" "private_b" {{
   cidr_block        = "10.0.20.0/24"
   availability_zone = "${{var.aws_region}}b"
 }}
+""" if has_db else ""
 
+        main_content = f"""# VPC & Networking (Multi-Tier Production)
+resource "aws_vpc" "main" {{
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = {{
+    Name = "${{var.project_name}}-vpc"
+  }}
+}}
+
+resource "aws_subnet" "public_a" {{
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "${{var.aws_region}}a"
+  map_public_ip_on_launch = true
+}}
+
+resource "aws_subnet" "public_b" {{
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "${{var.aws_region}}b"
+  map_public_ip_on_launch = true
+}}
+{private_subnets_block}
 # Security Groups
 resource "aws_security_group" "alb_sg" {{
   name        = "${{var.project_name}}-alb-sg"
@@ -264,28 +403,9 @@ resource "aws_security_group" "alb_sg" {{
     cidr_blocks = ["0.0.0.0/0"]
   }}
 }}
-{alb_block}{waf_block}{kms_block}
-# Amazon RDS PostgreSQL Database
-resource "aws_db_subnet_group" "rds" {{
-  name       = "${{var.project_name}}-db-subnet-group"
-  subnet_ids = [aws_subnet.private_a.id, aws_subnet.private_b.id]
-}}
-
-resource "aws_db_instance" "main" {{
-  identifier             = "${{var.project_name}}-db"
-  allocated_storage      = {req.database_storage_gb}
-  max_allocated_storage  = {req.database_storage_gb * 2}
-  storage_type           = "gp3"
-  engine                 = "postgres"
-  engine_version         = "15.4"
-  instance_class         = var.db_instance_class
-  multi_az               = {str(req.database_multi_az).lower()}
-  db_subnet_group_name   = aws_db_subnet_group.rds.name
-  skip_final_snapshot    = true
-  storage_encrypted      = true
-  kms_key_id             = {"aws_kms_key.primary.arn" if req.enable_kms else "null"}
-}}
+{alb_resource}{waf_block}{kms_block}{db_resource}
 """
+
     files.append(GeneratedFile(filename="main.tf", content=main_content, language="hcl"))
 
     # 4. outputs.tf
@@ -293,29 +413,46 @@ resource "aws_db_instance" "main" {{
   description = "Created VPC Identifier"
   value       = aws_vpc.main.id
 }}
-
-output "rds_endpoint" {{
+"""
+    if is_lean_dev:
+        outputs_content += f"""output "instance_ip" {{
+  description = "Public IP of the application instance"
+  value       = aws_instance.app.public_ip
+}}
+"""
+    else:
+        if has_db:
+            outputs_content += f"""output "rds_endpoint" {{
   description = "Primary RDS Connection Endpoint"
   value       = aws_db_instance.main.endpoint
 }}
 """
-    if req.enable_alb:
-        outputs_content += """
-output "alb_dns_name" {
+        if has_alb:
+            outputs_content += f"""output "alb_dns_name" {{
   description = "Public Load Balancer FQDN"
   value       = aws_lb.app.dns_name
-}
+}}
 """
     files.append(GeneratedFile(filename="outputs.tf", content=outputs_content, language="hcl"))
 
-    # Format and validate synthesized Terraform files in isolated temp workspace
     formatted_files, validation_report = validate_and_format_terraform(files)
 
-    # Compute SHA256 checksum over all files
     content_stream = "".join(f"{f.filename}:{f.content}\n" for f in formatted_files).encode("utf-8")
     checksum = hashlib.sha256(content_stream).hexdigest()
     tf_version_id = f"tf-{uuid.uuid4().hex[:12]}"
     arch_link = f"/api/v1/architecture/review/{req.architecture_version_id}" if req.architecture_version_id else ""
+
+    resources_defined = ["aws_vpc", "aws_subnet"]
+    if is_lean_dev:
+        resources_defined.extend(["aws_instance", "aws_eip", "aws_security_group"])
+    else:
+        resources_defined.append("aws_security_group")
+        if has_alb:
+            resources_defined.append("aws_lb")
+        if has_db:
+            resources_defined.extend(["aws_db_instance", "aws_db_subnet_group"])
+        if req.enable_kms:
+            resources_defined.append("aws_kms_key")
 
     return IaCGenerationResponse(
         status="SUCCESS",
@@ -329,7 +466,7 @@ output "alb_dns_name" {
         files=formatted_files,
         summary={
             "total_files": len(formatted_files),
-            "resources_defined": ["aws_vpc", "aws_subnets", "aws_db_instance", "aws_security_group"] + (["aws_lb"] if req.enable_alb else []) + (["aws_kms_key"] if req.enable_kms else []),
+            "resources_defined": resources_defined,
             "target_region": req.aws_region,
             "terraform_version_id": tf_version_id,
             "validation_status": validation_report.get("validate", "UNKNOWN")
