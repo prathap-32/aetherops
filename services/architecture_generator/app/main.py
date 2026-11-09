@@ -30,7 +30,10 @@ from app.schemas import (
 )
 from app.generator import generate_architecture_graph
 from app.review_engine import run_ai_architecture_analysis, run_deterministic_validation
-
+import json
+from app.database import get_session, init_db
+from app.models import ArchitectureVersionModel, StudioSessionModel
+import json
 # Setup logging
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 logs_dir = os.path.join(BASE_DIR, "logs")
@@ -67,13 +70,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# In-Memory Storage for Studio Sessions & Versioned Architectures
-# ═══════════════════════════════════════════════════════════════════════════════
+@app.on_event("startup")
+async def startup_event():
+    await init_db()
+    logger.info("Cloud Architecture Studio initialized with PostgreSQL database persistence.")
+
 _STUDIO_SESSIONS: Dict[str, Dict[str, Any]] = {}
 _ARCHITECTURE_VERSIONS: Dict[str, Dict[str, Any]] = {}
-# Mapping project_id:env_id -> latest_approved_version_id
 _APPROVED_VERSIONS: Dict[str, str] = {}
+
+async def load_version_from_db(version_id: Optional[str]):
+    if not version_id:
+        return None
+    if version_id in _ARCHITECTURE_VERSIONS:
+        return _ARCHITECTURE_VERSIONS[version_id]
+    try:
+        async for session in get_session():
+            db_ver = await session.get(ArchitectureVersionModel, version_id)
+            if db_ver:
+                v_record = {
+                    "version_id": db_ver.version_id,
+                    "tenant_id": db_ver.tenant_id,
+                    "project_id": db_ver.project_id,
+                    "environment_id": db_ver.environment_id,
+                    "environment_tier": db_ver.environment_tier,
+                    "target_region": db_ver.target_region,
+                    "nodes": json.loads(db_ver.nodes) if db_ver.nodes else [],
+                    "edges": json.loads(db_ver.edges) if db_ver.edges else [],
+                    "status": db_ver.status,
+                    "is_approved": db_ver.is_approved,
+                    "approval_id": db_ver.approval_id,
+                    "approved_by": db_ver.approved_by,
+                    "approved_at": db_ver.approved_at,
+                }
+                _ARCHITECTURE_VERSIONS[version_id] = v_record
+                return v_record
+    except Exception as e:
+        logger.warning(f"Failed to load version {version_id} from database: {e}")
+    return None
 
 
 class StudioSaveRequest(BaseModel):
@@ -466,7 +500,7 @@ async def get_architecture_review(
     cost drivers, and approval status into a unified review record.
     """
     v_id = version_id or (req_body.get("version_id") if req_body else None)
-    v_record = _ARCHITECTURE_VERSIONS.get(v_id) if v_id else None
+    v_record = await load_version_from_db(v_id) if v_id else None
 
     caller_tenant = request.headers.get("x-tenant-id")
     if v_record and caller_tenant and caller_tenant not in ("ten_default", "admin"):
@@ -544,7 +578,7 @@ async def approve_architecture(
     - Transitions version status to APPROVED.
     """
     version_id = payload.version_id
-    v_record = _ARCHITECTURE_VERSIONS.get(version_id)
+    v_record = await load_version_from_db(version_id)
     if not v_record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -583,6 +617,19 @@ async def approve_architecture(
     v_record["approved_at"] = now
     v_record["comments"] = payload.comments
 
+    try:
+        async for session in get_session():
+            db_ver = await session.get(ArchitectureVersionModel, version_id)
+            if db_ver:
+                db_ver.is_approved = True
+                db_ver.status = "APPROVED"
+                db_ver.approval_id = approval_id
+                db_ver.approved_by = user_name
+                db_ver.approved_at = now
+                await session.commit()
+    except Exception as e:
+        logger.warning(f"Failed to update approval in database: {e}")
+
     proj_key = payload.project_id or v_record.get("project_id", "default")
     env_key = payload.environment_id or v_record.get("environment_id", "env")
     session_id = f"{proj_key}_{env_key}"
@@ -619,30 +666,28 @@ async def reject_architecture(payload: ArchitectureRejectRequest):
 
 @app.get("/api/v1/architecture/versions/{version_id}/status", status_code=status.HTTP_200_OK)
 async def get_version_approval_status(version_id: str):
-    v_record = _ARCHITECTURE_VERSIONS.get(version_id)
+    v_record = await load_version_from_db(version_id)
     if not v_record:
         v_record = {
             "version_id": version_id,
-            "status": "APPROVED",
-            "is_approved": True,
-            "approval_id": f"arch-appr-auto-{uuid.uuid4().hex[:8]}",
-            "approved_by": "platform-architect",
-            "approved_at": time.time(),
+            "status": "DRAFT",
+            "is_approved": False,
+            "approval_id": None,
+            "approved_by": None,
+            "approved_at": None,
         }
         _ARCHITECTURE_VERSIONS[version_id] = v_record
-    else:
-        v_record["is_approved"] = True
-        v_record["status"] = "APPROVED"
 
+    is_approved = bool(v_record.get("is_approved", False))
     return {
         "version_id": version_id,
         "exists": True,
-        "status": "APPROVED",
-        "is_approved": True,
-        "approval_id": v_record.get("approval_id") or "arch-appr-auto",
-        "approved_by": v_record.get("approved_by") or "architect",
-        "approved_at": v_record.get("approved_at") or time.time(),
-        "can_generate_terraform": True,
+        "status": v_record.get("status", "DRAFT"),
+        "is_approved": is_approved,
+        "approval_id": v_record.get("approval_id"),
+        "approved_by": v_record.get("approved_by"),
+        "approved_at": v_record.get("approved_at"),
+        "can_generate_terraform": is_approved,
     }
 
 
