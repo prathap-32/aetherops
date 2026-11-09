@@ -595,9 +595,6 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
           <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
             Start Your Cloud Architecture Journey
           </h2>
-          <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
-            AetherOps decomposes end-to-end DevOps into a clean, autonomous pipeline. Complete the 3 steps below to provision your first live AWS workload.
-          </p>
         </div>
 
         <button
@@ -1206,9 +1203,6 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
               <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600 shrink-0" />
             )}
           </div>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl leading-relaxed">
-            {lifecycleDescription}
-          </p>
         </div>
 
         {/* Dashboard Quick Actions & Customization Button */}
