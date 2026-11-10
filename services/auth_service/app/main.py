@@ -652,9 +652,23 @@ async def login(req: LoginRequest, request: Request):
         conn.close()
 
 
-def _send_verification_email(recipient_email: str, username: str, token: str) -> str:
-    verification_url = f"http://localhost:8000/?verify_token={token}"
-    smtp_host = os.getenv("SMTP_HOST")
+def _get_base_url(request: Optional[Request] = None) -> str:
+    env_url = os.getenv("AETHER_PUBLIC_URL", os.getenv("PUBLIC_URL", ""))
+    if env_url:
+        return env_url.rstrip("/")
+    if request:
+        forwarded_host = request.headers.get("x-forwarded-host")
+        forwarded_proto = request.headers.get("x-forwarded-proto")
+        host = forwarded_host or request.headers.get("host")
+        proto = forwarded_proto or ("https" if request.url.scheme == "https" or (host and ("ts.net" in host or "443" in str(request.url.port))) else "http")
+        if host:
+            return f"{proto}://{host}"
+        return str(request.base_url).rstrip("/")
+    return "http://localhost:8000"
+
+def _send_verification_email(recipient_email: str, username: str, token: str, request: Optional[Request] = None) -> str:
+    base_url = _get_base_url(request)
+    verification_url = f"{base_url}/?verify_token={token}"
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
     smtp_user = os.getenv("SMTP_USER")
     smtp_pass = os.getenv("SMTP_PASSWORD")
@@ -738,13 +752,12 @@ async def check_email(email: str = ""):
 
 
 @app.post("/api/v1/auth/register")
-async def register(req: RegisterRequest):
+async def register(req: RegisterRequest, request: Request):
     """
     Registration endpoint:
     Creates a new user with unverified email, generates secure confirmation token,
     and dispatches confirmation email.
     """
-    clean_username = req.username.strip().replace(" ", "_")
     clean_email = req.email.strip().lower()
     conn = get_db_connection()
     try:
@@ -786,7 +799,7 @@ async def register(req: RegisterRequest):
 
         conn.commit()
 
-        verification_url = _send_verification_email(clean_email, clean_username, verif_token)
+        verification_url = _send_verification_email(clean_email, clean_username, verif_token, request=request)
 
         return {
             "status": "VERIFICATION_SENT",
@@ -801,7 +814,7 @@ async def register(req: RegisterRequest):
 
 
 @app.post("/api/v1/auth/verify-email")
-async def verify_email(req: VerifyEmailRequest):
+async def verify_email(req: VerifyEmailRequest, request: Request):
     """Validates confirmation token, marks user email verified, and issues active session."""
     token = req.token.strip()
     if not token:
@@ -817,7 +830,7 @@ async def verify_email(req: VerifyEmailRequest):
             return JSONResponse(status_code=400, content={"detail": "Invalid or expired confirmation link."})
 
         now_iso = datetime.datetime.utcnow().isoformat()
-        if verif["expires_at"] < now_iso:
+        if verif["expires_at"] < now_iso and not verif["verified_at"]:
             return JSONResponse(status_code=400, content={"detail": "Confirmation link has expired. Please request a new one."})
 
         c.execute("SELECT * FROM users WHERE uuid = ?", (verif["user_uuid"],))
@@ -825,10 +838,10 @@ async def verify_email(req: VerifyEmailRequest):
         if not user:
             return JSONResponse(status_code=400, content={"detail": "Associated user account was not found."})
 
-        c.execute("UPDATE email_verifications SET verified_at = ? WHERE id = ?", (now_iso, verif["id"]))
+        if not verif["verified_at"]:
+            c.execute("UPDATE email_verifications SET verified_at = ? WHERE id = ?", (now_iso, verif["id"]))
         c.execute("UPDATE users SET email_verified = 1 WHERE id = ?", (user["id"],))
         conn.commit()
-
         jwt_token = _create_jwt_token(
             username=user["username"],
             role=user["role"],
@@ -851,14 +864,14 @@ async def verify_email(req: VerifyEmailRequest):
             "message": "Email confirmed successfully! Welcome to AetherOps.",
             "token": jwt_token,
             "user": resp_user,
-            "redirect_url": "http://localhost:8000"
+            "redirect_url": _get_base_url(request)
         }
     finally:
         conn.close()
 
 
 @app.post("/api/v1/auth/resend-verification")
-async def resend_verification(req: ResendVerificationRequest):
+async def resend_verification(req: ResendVerificationRequest, request: Request):
     """Resends activation email for unverified account."""
     clean_email = req.email.strip().lower()
     if not clean_email:
@@ -884,7 +897,7 @@ async def resend_verification(req: ResendVerificationRequest):
         """, (clean_email, user["uuid"], verif_token, now_iso, expires_at))
         conn.commit()
 
-        verification_url = _send_verification_email(clean_email, user["username"], verif_token)
+        verification_url = _send_verification_email(clean_email, user["username"], verif_token, request=request)
         return {
             "status": "SENT",
             "message": f"Verification email sent to {clean_email}.",
