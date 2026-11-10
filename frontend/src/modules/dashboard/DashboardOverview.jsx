@@ -416,18 +416,25 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
     return 'stage_4_active_operations';
   }, [projectsState.status, projectsCount, environmentsCount, deploymentsCount]);
 
+  const effectiveLifecycleStage = useMemo(() => {
+    const override = preferences?.experience_level;
+    if (override === 'GUIDED') return 'stage_1_onboarding';
+    if (override === 'ADVANCED') return 'stage_4_active_operations';
+    return lifecycleStage;
+  }, [preferences?.experience_level, lifecycleStage]);
+
   // ── 4. Widget Eligibility Map ──
   const widgetEligibility = useMemo(() => ({
-    getting_started: lifecycleStage === 'stage_1_onboarding',
+    getting_started: effectiveLifecycleStage === 'stage_1_onboarding',
     overview_metrics: projectsCount > 0,
     recent_projects: projectsCount > 0,
     environments_summary: environmentsCount > 0,
-    deployments_overview: lifecycleStage === 'stage_4_active_operations' && deploymentsState.status === 'success' && deploymentsState.data.length > 0,
+    deployments_overview: effectiveLifecycleStage === 'stage_4_active_operations' && deploymentsState.status === 'success' && deploymentsState.data.length > 0,
     attention_required: true,
     system_health: true,
     recent_activity: true,
     recommendations: true,
-  }), [lifecycleStage, projectsCount, environmentsCount, deploymentsState]);
+  }), [effectiveLifecycleStage, projectsCount, environmentsCount, deploymentsState]);
 
   // Widget Metadata Registry
   const WIDGET_REGISTRY = useMemo(() => ({

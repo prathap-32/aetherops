@@ -103,12 +103,48 @@ export default function WidgetCustomizerModal({
           </button>
         </div>
 
-        {/* Modal Body: List of Widgets */}
-        <div className="p-5 overflow-y-auto space-y-3 divide-y divide-slate-100">
-          <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider pb-1">
-            Active Widget Hierarchy &amp; Visibility
+        {/* Modal Body */}
+        <div className="p-5 overflow-y-auto space-y-6 divide-y divide-slate-100">
+          {/* Experience Level Override */}
+          <div className="space-y-3 pb-4">
+            <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+              Dashboard Experience Override
+            </div>
+            <p className="text-xs text-slate-500">
+              Choose between automatic lifecycle classification or force a specific presentation experience.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[
+                { id: 'AUTO', label: 'Auto (Classifier)', desc: 'Dynamic state' },
+                { id: 'GUIDED', label: 'Guided (New)', desc: 'Onboarding wizard' },
+                { id: 'STANDARD', label: 'Standard', desc: 'Returning workflow' },
+                { id: 'ADVANCED', label: 'Advanced', desc: 'Operational control' },
+              ].map((lvl) => {
+                const currentLvl = preferences.experience_level || 'AUTO';
+                const isSelected = currentLvl === lvl.id;
+                return (
+                  <button
+                    key={lvl.id}
+                    onClick={() => onSavePreferences({ ...preferences, experience_level: lvl.id })}
+                    className={`p-3 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                      isSelected
+                        ? 'bg-blue-50/70 border-blue-300 text-blue-900 shadow-2xs ring-2 ring-cyan-500/20'
+                        : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="text-xs font-bold">{lvl.label}</span>
+                    <span className="text-[10px] text-slate-500 mt-1">{lvl.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
+          <div className="space-y-3 pt-4">
+            <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider pb-1">
+              Active Widget Hierarchy &amp; Visibility
+            </div>
+          </div>
           <div className="space-y-2 pt-2">
             {currentOrder.map((widgetId, idx) => {
               const widgetMeta = widgetRegistry[widgetId] || {
