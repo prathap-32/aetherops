@@ -629,6 +629,7 @@ PAGE_ROUTES = [
     "/terraform",
     "/execution",
     "/deployment",
+    "/state-inventory",
     "/cicd",
     "/monitoring",
     "/optimization",

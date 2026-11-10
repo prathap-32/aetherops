@@ -72,11 +72,13 @@ class ResourceChange(BaseModel):
 
 class RiskFinding(BaseModel):
     id: str
-    category: str  # SPOF, SECURITY, FINOPS, COMPLIANCE
+    category: str  # SPOF, SECURITY, FINOPS, PERFORMANCE, OPERATIONS, SUSTAINABILITY
     severity: str  # CRITICAL, HIGH, MEDIUM, LOW
     title: str
     explanation: str
-    is_blocking: bool
+    affected_resource: Optional[str] = None
+    recommendation: Optional[str] = None
+    is_blocking: bool = False
 
 class DeploymentPlanResponse(BaseModel):
     status: str = "PLANNED"
@@ -90,6 +92,8 @@ class DeploymentPlanResponse(BaseModel):
     resource_changes: List[ResourceChange]
     summary: Dict[str, int]
     risk_assessment: Dict[str, Any]
+    cost_summary: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    complexity_assessment: Optional[Dict[str, Any]] = Field(default_factory=dict)
     created_at: float
     can_approve: bool
 

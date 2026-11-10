@@ -883,10 +883,12 @@ async def get_me(request: Request):
 
     username = payload.get("sub", "")
     conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE lower(username) = lower(?)", (username,))
-    user = c.fetchone()
-    conn.close()
+    try:
+        c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE lower(username) = lower(?)", (username,))
+        user = c.fetchone()
+    finally:
+        conn.close()
 
     if user:
         return {
@@ -943,20 +945,34 @@ async def update_profile(req: ProfileUpdateRequest, request: Request):
 
     username = payload.get("sub", "")
     conn = get_db_connection()
-    c = conn.cursor()
+    try:
+        c = conn.cursor()
 
-    if req.username and req.username.strip() != username:
-        new_username = req.username.strip().replace(" ", "_")
-        c.execute("UPDATE users SET username = ? WHERE lower(username) = lower(?)", (new_username, username))
-        username = new_username
+        if req.username and req.username.strip() != username:
+            new_username = req.username.strip().replace(" ", "_")
+            c.execute("SELECT id FROM users WHERE lower(username) = lower(?)", (new_username,))
+            if c.fetchone():
+                return JSONResponse(status_code=400, content={"detail": f"Username '{new_username}' is already taken."})
+            
+            c.execute("UPDATE users SET username = ? WHERE lower(username) = lower(?)", (new_username, username))
+            username = new_username
 
-    if req.email and req.email.strip():
-        c.execute("UPDATE users SET email = ? WHERE lower(username) = lower(?)", (req.email.strip().lower(), username))
+        if req.email and req.email.strip():
+            c.execute("UPDATE users SET email = ? WHERE lower(username) = lower(?)", (req.email.strip().lower(), username))
 
-    conn.commit()
-    c.execute("SELECT * FROM users WHERE lower(username) = lower(?)", (username,))
-    user = c.fetchone()
-    conn.close()
+        conn.commit()
+        c.execute("SELECT * FROM users WHERE lower(username) = lower(?)", (username,))
+        user = c.fetchone()
+        if not user:
+            return JSONResponse(status_code=404, content={"detail": "User not found"})
+    except sqlite3.IntegrityError as ie:
+        conn.rollback()
+        return JSONResponse(status_code=400, content={"detail": f"Database integrity error: Username or email already exists ({ie})"})
+    except Exception as e:
+        conn.rollback()
+        return JSONResponse(status_code=500, content={"detail": f"Profile update failed: {str(e)}"})
+    finally:
+        conn.close()
 
     new_token = _create_jwt_token(
         username=user["username"],
@@ -1729,48 +1745,50 @@ async def github_callback(
         return resp
 
     conn = get_db_connection()
-    c = conn.cursor()
+    try:
+        c = conn.cursor()
 
-    c.execute("SELECT * FROM users WHERE lower(email) = lower(?)", (email,))
-    user = c.fetchone()
-
-    now_iso = datetime.datetime.utcnow().isoformat()
-    if not user:
-        c.execute("SELECT id FROM users WHERE lower(username) = lower(?)", (username,))
-        if c.fetchone():
-            username = f"{username}_{secrets.randbelow(1000)}"
-
-        user_uuid = str(uuid.uuid4())
-        account_id = generate_unique_account_id(c)
-        tenant_id = generate_unique_tenant_id()
-
-        c.execute("""
-        INSERT INTO tenants (id, name, account_id, tenant_type, created_at)
-        VALUES (?, ?, ?, ?, ?)
-        """, (tenant_id, f"{username}'s Workspace", account_id, "PERSONAL", now_iso))
-
-        c.execute("""
-        INSERT INTO users (uuid, username, email, password_hash, role, account_id, tenant_id, created_at, last_login_at, email_verified)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-        """, (user_uuid, username, email, "", "USER", account_id, tenant_id, now_iso, now_iso))
-        conn.commit()
-
-        c.execute("SELECT * FROM users WHERE uuid = ?", (user_uuid,))
+        c.execute("SELECT * FROM users WHERE lower(email) = lower(?)", (email,))
         user = c.fetchone()
-    else:
-        c.execute("UPDATE users SET last_login_at = ? WHERE id = ?", (now_iso, user["id"]))
-        conn.commit()
 
-    token = _create_jwt_token(
-        username=user["username"],
-        role=user["role"],
-        email=user["email"],
-        user_uuid=user["uuid"],
-        account_id=user["account_id"],
-        tenant_id=user["tenant_id"],
-    )
-    user_dict = dict(user)
-    conn.close()
+        now_iso = datetime.datetime.utcnow().isoformat()
+        if not user:
+            c.execute("SELECT id FROM users WHERE lower(username) = lower(?)", (username,))
+            if c.fetchone():
+                username = f"{username}_{secrets.randbelow(1000)}"
+
+            user_uuid = str(uuid.uuid4())
+            account_id = generate_unique_account_id(c)
+            tenant_id = generate_unique_tenant_id()
+
+            c.execute("""
+            INSERT INTO tenants (id, name, account_id, tenant_type, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """, (tenant_id, f"{username}'s Workspace", account_id, "PERSONAL", now_iso))
+
+            c.execute("""
+            INSERT INTO users (uuid, username, email, password_hash, role, account_id, tenant_id, created_at, last_login_at, email_verified)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            """, (user_uuid, username, email, "", "USER", account_id, tenant_id, now_iso, now_iso))
+            conn.commit()
+
+            c.execute("SELECT * FROM users WHERE uuid = ?", (user_uuid,))
+            user = c.fetchone()
+        else:
+            c.execute("UPDATE users SET last_login_at = ? WHERE id = ?", (now_iso, user["id"]))
+            conn.commit()
+
+        token = _create_jwt_token(
+            username=user["username"],
+            role=user["role"],
+            email=user["email"],
+            user_uuid=user["uuid"],
+            account_id=user["account_id"],
+            tenant_id=user["tenant_id"],
+        )
+        user_dict = dict(user)
+    finally:
+        conn.close()
 
     resp = HTMLResponse(_oauth_success_html("GitHub", token, user_dict))
     resp.delete_cookie("oauth_state_github", path="/")

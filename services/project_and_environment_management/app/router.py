@@ -264,14 +264,13 @@ async def google_oauth_callback(
       localStorage.setItem('X-Admin-Key', '{token}');
       localStorage.setItem('aether_user', JSON.stringify(payload.user));
     }} catch(e) {{}}
-
-    if(window.opener && !window.opener.closed) {{
+    if(window.opener && !window.opener.closed) {
       window.opener.postMessage(payload, '*');
       setTimeout(() => window.close(), 600);
-    }} else {{
-      const targetHost = (window.location.port !== '8000') ? 'http://' + window.location.hostname + ':8000' : '';
+    } else {
+      const targetHost = window.location.protocol + '//' + window.location.hostname + ':8000';
       window.location.href = targetHost + '/?token={token}&username={u_name}&email={u_email}&role={u_role}';
-    }}
+    }
   </script>
 </body>
 </html>"""
