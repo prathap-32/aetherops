@@ -5,5 +5,6 @@ echo "Stopping all AetherOps services..."
 pkill -f 'uvicorn.*app.main:app' 2>/dev/null || true
 pkill -f 'uvicorn.*main:app' 2>/dev/null || true
 pkill -f 'uvicorn app.main:app' 2>/dev/null || true
+pkill -f 'python.*uvicorn' 2>/dev/null || true
 sleep 1
 echo "✓ All services stopped"

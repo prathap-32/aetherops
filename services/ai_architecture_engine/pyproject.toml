@@ -1,0 +1,10 @@
+[project]
+name = "ai-architecture-engine"
+version = "2.0.0"
+description = "AetherOps AI Architecture Engine (Module 4) - Port 8004"
+dependencies = [
+    "fastapi>=0.141.1",
+    "pydantic>=2.13.4",
+    "uvicorn>=0.52.4",
+    "httpx>=0.28.1",
+]

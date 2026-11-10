@@ -152,7 +152,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "admin-console-service",
-        "port": 8012,
+        "port": 8013,
         "timestamp": time.time()
     }
 

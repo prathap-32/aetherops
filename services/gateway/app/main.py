@@ -138,9 +138,8 @@ UPSTREAM_MAP = {
 
     # Port 8001: Project & Environment Management
     "projects": os.getenv("PM_SERVICE_URL", "http://127.0.0.1:8001"),
-    "auth_pm": os.getenv("PM_SERVICE_URL", "http://127.0.0.1:8001"),
 
-    # Port 8002: Connect Cloud and Git
+    # Port 8002: Source, Cloud & Git Connection
     "connections": os.getenv("SC_SERVICE_URL", "http://127.0.0.1:8002"),
     "cloud": os.getenv("SC_SERVICE_URL", "http://127.0.0.1:8002"),
     "github": os.getenv("SC_SERVICE_URL", "http://127.0.0.1:8002"),
@@ -150,34 +149,45 @@ UPSTREAM_MAP = {
     "analyzer": os.getenv("REPO_ANALYZER_SERVICE_URL", "http://127.0.0.1:8003"),
     "repo": os.getenv("REPO_ANALYZER_SERVICE_URL", "http://127.0.0.1:8003"),
 
-    # Port 8004: AI AWS Architecture Planning
-    "architecture": os.getenv("ARCH_SERVICE_URL", "http://127.0.0.1:8004"),
-    "studio": os.getenv("ARCH_SERVICE_URL", "http://127.0.0.1:8004"),
-    "requirements": os.getenv("ARCH_SERVICE_URL", "http://127.0.0.1:8004"),
+    # Port 8004: AI Architecture Engine
+    "requirements": os.getenv("AI_ARCH_SERVICE_URL", "http://127.0.0.1:8004"),
+    "catalog": os.getenv("AI_ARCH_SERVICE_URL", "http://127.0.0.1:8004"),
 
-    # Port 8005: IaC Generator
-    "iac": os.getenv("IAC_SERVICE_URL", "http://127.0.0.1:8005"),
-    "terraform": os.getenv("IAC_SERVICE_URL", "http://127.0.0.1:8005"),
+    # Port 8005: Architecture Designer
+    "architecture": os.getenv("ARCH_DESIGNER_URL", "http://127.0.0.1:8005"),
+    "studio": os.getenv("ARCH_DESIGNER_URL", "http://127.0.0.1:8005"),
 
-    # Port 8006: Dry-Run & Approval Gate
-    "approval": os.getenv("APPROVAL_SERVICE_URL", "http://127.0.0.1:8006"),
-    "execution": os.getenv("APPROVAL_SERVICE_URL", "http://127.0.0.1:8006"),
+    # Port 8006: Architecture Validation
+    "validation": os.getenv("ARCH_VALIDATION_URL", "http://127.0.0.1:8006"),
 
-    # Port 8007: Cloud Deployer
-    "deployments": os.getenv("DEPLOYER_SERVICE_URL", "http://127.0.0.1:8007"),
-    "cloud-deployer": os.getenv("DEPLOYER_SERVICE_URL", "http://127.0.0.1:8007"),
-    "drift-detection": os.getenv("DEPLOYER_SERVICE_URL", "http://127.0.0.1:8007"),
+    # Port 8007: Pre-Deployment Risk Engine
+    "risk": os.getenv("RISK_ENGINE_URL", "http://127.0.0.1:8007"),
+    "dry-run": os.getenv("RISK_ENGINE_URL", "http://127.0.0.1:8007"),
+    "dry_run": os.getenv("RISK_ENGINE_URL", "http://127.0.0.1:8007"),
 
-    # Port 8008: Observability Infrastructure
-    "security": os.getenv("SECURITY_SERVICE_URL", "http://127.0.0.1:8008"),
-    "finops": os.getenv("FINOPS_SERVICE_URL", "http://127.0.0.1:8007"),
-    # Port 8008: Observability Infrastructure
-    "monitoring": os.getenv("OBS_SERVICE_URL", "http://127.0.0.1:8008"),
-    "observability": os.getenv("OBS_SERVICE_URL", "http://127.0.0.1:8008"),
+    # Port 8008: Terraform / IaC Generator
+    "iac": os.getenv("IAC_SERVICE_URL", "http://127.0.0.1:8008"),
+    "terraform": os.getenv("IAC_SERVICE_URL", "http://127.0.0.1:8008"),
+
+    # Port 8009: Approval & Execution
+    "approval": os.getenv("APPROVAL_SERVICE_URL", "http://127.0.0.1:8009"),
+    "approvals": os.getenv("APPROVAL_SERVICE_URL", "http://127.0.0.1:8009"),
+    "execution": os.getenv("APPROVAL_SERVICE_URL", "http://127.0.0.1:8009"),
+
+    # Port 8010: Application Deployment
+    "deployments": os.getenv("DEPLOYMENT_SERVICE_URL", "http://127.0.0.1:8010"),
+    "deploy": os.getenv("DEPLOYMENT_SERVICE_URL", "http://127.0.0.1:8010"),
+
+    # Port 8011: Monitoring
+    "monitoring": os.getenv("MONITORING_SERVICE_URL", "http://127.0.0.1:8011"),
+    "observability": os.getenv("MONITORING_SERVICE_URL", "http://127.0.0.1:8011"),
+
+    # Port 8012: Audit & History
+    "audit": os.getenv("AUDIT_SERVICE_URL", "http://127.0.0.1:8012"),
+
+    # Port 8013: Admin Console
+    "admin": os.getenv("ADMIN_SERVICE_URL", "http://127.0.0.1:8013"),
     "settings": os.getenv("AUTH_SERVICE_URL", "http://127.0.0.1:7999"),
-
-    # Port 8010: Admin Console (Admin Only)
-    "admin": os.getenv("ADMIN_SERVICE_URL", "http://127.0.0.1:8010"),
 }
 
 EXCLUDE_HEADERS = {
@@ -562,23 +572,26 @@ async def proxy_microservice_api(module: str, request: Request, subpath: str = "
     elif module in ("architecture", "generate-graph", "studio", "cloud-architecture-studio"):
         upstream = UPSTREAM_MAP["architecture"]
 
+    elif module in ("validation", "architecture-validation"):
+        upstream = UPSTREAM_MAP["validation"]
+
+    elif module in ("risk", "dry-run", "dry_run", "pre-deployment"):
+        upstream = UPSTREAM_MAP["risk"]
+
     elif module in ("iac", "terraform", "generate-iac"):
         upstream = UPSTREAM_MAP["iac"]
 
-    elif module == "finops":
-        upstream = UPSTREAM_MAP["finops"]
+    elif module in ("approval", "approvals", "execution"):
+        upstream = UPSTREAM_MAP["approval"]
 
-    elif module == "security":
-        upstream = UPSTREAM_MAP["security"]
-
-    elif module == "cicd":
-        upstream = UPSTREAM_MAP["cicd"]
+    elif module in ("deployments", "deploy", "release"):
+        upstream = UPSTREAM_MAP["deployments"]
 
     elif module in ("monitoring", "observability"):
         upstream = UPSTREAM_MAP["monitoring"]
 
-    elif module in ("deployments", "cloud-deployer", "deploy", "drift-detection", "dry-run", "dry_run", "approvals", "approval", "state-inventory", "state_inventory"):
-        upstream = UPSTREAM_MAP["deployments"]
+    elif module in ("audit", "history"):
+        upstream = UPSTREAM_MAP["audit"]
 
     elif module == "admin":
         upstream = UPSTREAM_MAP["admin"]

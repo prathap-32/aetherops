@@ -14,7 +14,7 @@ def get_login_page_html(redirect: str = "/admin") -> str:
             theme: {{
                 extend: {{
                     fontFamily: {{
-                        sans: ['Plus Jakarta Sans', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'sans-serif'],
+                        sans: ['Amazon Ember', 'Segoe UI', 'sans-serif'],
                         mono: ['JetBrains Mono', 'Consolas', 'monospace'],
                     }},
                     colors: {{

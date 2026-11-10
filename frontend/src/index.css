@@ -1,8 +1,21 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: "Amazon Ember", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", Menlo, Monaco, Consolas, monospace;
+
+  --font-size-body-mobile: 1rem;       /* 16px */
+  --font-size-body-desktop: 0.9375rem; /* 15px */
+  --font-size-secondary: 0.875rem;     /* 14px */
+  --font-size-caption: 0.8125rem;      /* 13px */
+  --font-size-heading-page: clamp(1.5rem, 2.5vw, 2rem);
+  --font-size-heading-section: clamp(1.25rem, 2vw, 1.5rem);
+  --font-size-heading-card: 1.125rem;  /* 18px */
+}
+
 @layer base {
   :root {
-    /* Pure Light Theme Only - Clean, Modern, Warm, Spacious */
+    /* Pure Light Theme Only - Clean, Modern, Warm, Spacious (AWS Console inspired) */
     --bg-page: #F8FAFC;
     --bg-surface: #FFFFFF;
     --bg-subtle: #F1F5F9;
@@ -45,21 +58,44 @@
     color-scheme: light;
   }
 
-  html, body {
+  html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
     background-color: var(--bg-page);
     color: var(--text-primary);
-    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    font-family: var(--font-sans);
+    font-size: var(--font-size-body-mobile);
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     margin: 0;
     padding: 0;
     color-scheme: light;
   }
+
+  @media (min-width: 768px) {
+    body {
+      font-size: var(--font-size-body-desktop);
+    }
+  }
+
+  button, input, textarea, select {
+    font-family: inherit;
+    font-size: inherit;
+  }
+
+  /* Interactive touch target minimums (44-48px) on mobile */
+  button, select, input[type="button"], input[type="submit"] {
+    min-height: 40px;
+  }
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;

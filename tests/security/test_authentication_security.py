@@ -41,7 +41,7 @@ async def gateway_client():
 
 @pytest_asyncio.fixture
 async def pm_client():
-    from services.project_and_environment_management.app.main import app as pm_app
+    from services.project_environment_service.app.main import app as pm_app
     async with AsyncClient(transport=ASGITransport(app=pm_app), base_url="http://test-pm") as ac:
         yield ac
 
@@ -221,8 +221,8 @@ async def test_gateway_blocks_unauthenticated_api_requests(gateway_client):
         "/api/v1/architecture/studio/state",
         "/api/v1/repo/readiness",
         "/api/v1/iac/generate",
-        "/api/v1/finops/optimize",
-        "/api/v1/security/scan",
+        "/api/v1/audit/events",
+        "/api/v1/validation/rules",
     ]
     for path in protected_paths:
         resp = await gateway_client.get(path)
@@ -342,7 +342,7 @@ def test_production_mode_accepts_strong_secret():
 @pytest.mark.anyio
 async def test_production_mode_fails_closed_without_postgres(monkeypatch):
     """In production mode, database connection failure must raise RuntimeError without SQLite fallback."""
-    from services.project_and_environment_management.app import database as pm_db
+    from services.project_environment_service.app import database as pm_db
     monkeypatch.setattr(pm_db, "ENVIRONMENT", "production")
     monkeypatch.setattr(pm_db, "IS_TESTING", False)
 

@@ -12,8 +12,7 @@ def test_admin_console_health():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
-    assert data["port"] in (8000, 8012)
-
+    assert data["port"] in (8000, 8013)
 def test_admin_console_unauthenticated_dashboard_redirects():
     """Unauthenticated access to /admin must redirect to /admin/login."""
     response = client.get("/admin", follow_redirects=False)

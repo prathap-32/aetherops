@@ -422,12 +422,12 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
     overview_metrics: projectsCount > 0,
     recent_projects: projectsCount > 0,
     environments_summary: environmentsCount > 0,
-    deployments_overview: true,
+    deployments_overview: lifecycleStage === 'stage_4_active_operations' && deploymentsState.status === 'success' && deploymentsState.data.length > 0,
     attention_required: true,
     system_health: true,
     recent_activity: true,
     recommendations: true,
-  }), [lifecycleStage, projectsCount, environmentsCount]);
+  }), [lifecycleStage, projectsCount, environmentsCount, deploymentsState]);
 
   // Widget Metadata Registry
   const WIDGET_REGISTRY = useMemo(() => ({

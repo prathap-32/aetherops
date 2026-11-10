@@ -23,7 +23,7 @@ def get_dashboard_page_html() -> str:
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Plus Jakarta Sans', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'sans-serif'],
+                        sans: ['Amazon Ember', 'Segoe UI', 'sans-serif'],
                         mono: ['JetBrains Mono', 'Consolas', 'monospace'],
                     },
                     colors: {

@@ -136,7 +136,7 @@ services:
 - **Primary Color**: Warm Amber `#D97706`
 - **Light Background**: Off-white `#F8FAFC`
 - **Dark Background**: Deep Charcoal `#0F172A`
-- **Fonts**: Plus Jakarta Sans (UI), JetBrains Mono (Code)
+- **Fonts**: Amazon Ember (UI), JetBrains Mono (Code)
 - **Inspired by**: Vercel, Linear, Stripe
 
 ## 📊 Service Ports

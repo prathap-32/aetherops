@@ -20,9 +20,9 @@ import pytest
 import httpx
 
 MAIN_APP_URL = "http://127.0.0.1:8000"
-GOOGLE_AUTH_URL = "http://127.0.0.1:8001"
+GOOGLE_AUTH_URL = "http://127.0.0.1:7999"
 GITHUB_AUTH_URL = "http://127.0.0.1:8002"
-ADMIN_URL = "http://127.0.0.1:8012"
+ADMIN_URL = "http://127.0.0.1:8013"
 ADMIN_KEY = "aetherops-secret-admin-key"
 
 CLEAN_PAGE_ROUTES = [
@@ -64,13 +64,13 @@ async def test_main_application_health():
 
 @pytest.mark.asyncio
 async def test_google_auth_service_health():
-    """Verify Google Auth Service on Port 8001 is healthy."""
+    """Verify Google Auth Service on Port 7999 is healthy."""
     async with httpx.AsyncClient() as client:
         resp = await client.get(f"{GOOGLE_AUTH_URL}/health")
         assert resp.status_code == 200
         data = resp.json()
         assert data.get("status") == "healthy"
-        assert data.get("port") == 8001
+        assert data.get("port") == 7999
 
 
 @pytest.mark.asyncio
@@ -85,19 +85,21 @@ async def test_github_connection_service_health():
 
 
 ALL_FLEET_SERVICES = [
+    ("auth_service", "http://127.0.0.1:7999/health", 7999),
     ("gateway", "http://127.0.0.1:8000/health", 8000),
-    ("project_management", "http://127.0.0.1:8001/health", 8001),
-    ("source_connection", "http://127.0.0.1:8002/health", 8002),
-    ("repo_analyzer", "http://127.0.0.1:8003/health", 8003),
-    ("requirement_analysis", "http://127.0.0.1:8004/health", 8004),
-    ("architecture_generator", "http://127.0.0.1:8005/health", 8005),
-    ("iac_generator", "http://127.0.0.1:8006/health", 8006),
-    ("finops_optimizer", "http://127.0.0.1:8007/health", 8007),
-    ("security_scanner", "http://127.0.0.1:8008/health", 8008),
-    ("cicd_pipeline", "http://127.0.0.1:8009/health", 8009),
-    ("observability_setup", "http://127.0.0.1:8010/health", 8010),
-    ("cloud_deployer", "http://127.0.0.1:8011/health", 8011),
-    ("admin_console", "http://127.0.0.1:8012/health", 8012),
+    ("project_environment_service", "http://127.0.0.1:8001/health", 8001),
+    ("source_cloud_git_service", "http://127.0.0.1:8002/health", 8002),
+    ("source_code_analyzer", "http://127.0.0.1:8003/health", 8003),
+    ("ai_architecture_engine", "http://127.0.0.1:8004/health", 8004),
+    ("architecture_designer", "http://127.0.0.1:8005/health", 8005),
+    ("architecture_validation", "http://127.0.0.1:8006/health", 8006),
+    ("pre_deployment_risk_engine", "http://127.0.0.1:8007/health", 8007),
+    ("terraform_iac_generator", "http://127.0.0.1:8008/health", 8008),
+    ("approval_execution_service", "http://127.0.0.1:8009/health", 8009),
+    ("application_deployment_service", "http://127.0.0.1:8010/health", 8010),
+    ("monitoring_service", "http://127.0.0.1:8011/health", 8011),
+    ("audit_history_service", "http://127.0.0.1:8012/health", 8012),
+    ("admin_console", "http://127.0.0.1:8013/health", 8013),
 ]
 
 

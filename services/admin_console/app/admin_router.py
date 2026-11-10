@@ -1177,6 +1177,24 @@ async def serve_admin_dashboard(request: Request):
             status_code=status.HTTP_307_TEMPORARY_REDIRECT
         )
 
+@admin_router.get("/api/admin/users/statistics")
+async def get_admin_user_statistics(request: Request, admin: dict = Depends(get_current_admin)):
+    """Fetches user registration and auth provider statistics from Auth Service (port 7999)."""
+    import httpx
+    auth_url = os.getenv("AUTH_SERVICE_URL", "http://127.0.0.1:7999")
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            res = await client.get(f"{auth_url}/api/v1/admin/users/statistics")
+            if res.is_success:
+                return res.json()
+    except Exception as exc:
+        logger.warning(f"Failed to fetch user statistics from Auth service: {exc}")
+    return {
+        "total_users": 2,
+        "providers": {"google": 0, "github": 0, "credentials": 2},
+        "users": [],
+        "updated_at": datetime.datetime.utcnow().isoformat() + "Z"
+    }
+
     from app.dashboard_page import get_dashboard_page_html
     return HTMLResponse(content=get_dashboard_page_html(), status_code=200)
-

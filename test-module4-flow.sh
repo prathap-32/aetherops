@@ -57,8 +57,8 @@ GW_HEALTH=$(curl -s http://localhost:8000/api/v1/architecture/health)
 echo "Response: $GW_HEALTH"
 GW_PORT=$(echo "$GW_HEALTH" | jq -r '.port')
 
-if [ "$GW_PORT" = "8004" ]; then
-    echo -e "${GREEN}✓ Gateway successfully routed /api/v1/architecture/health to Port 8004!${NC}"
+if [ "$GW_PORT" = "8005" ]; then
+    echo -e "${GREEN}✓ Gateway successfully routed /api/v1/architecture/health to Port 8005!${NC}"
 else
     echo -e "${RED}✗ Gateway reverse proxy to Port 8004 failed${NC}"
     exit 1

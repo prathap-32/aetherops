@@ -31,6 +31,9 @@ import httpx
 import smtplib
 from email.mime.multipart import MIMEMultipart
 def get_dynamic_callback_uri(request: Request, default_path: str = "/api/v1/auth/github/callback") -> str:
+    env_cb = os.getenv("GITHUB_OAUTH_REDIRECT_URI")
+    if env_cb and env_cb.strip():
+        return env_cb.strip()
     forwarded_host = request.headers.get("x-forwarded-host")
     forwarded_proto = request.headers.get("x-forwarded-proto")
     host = forwarded_host or request.headers.get("host")
@@ -155,11 +158,10 @@ def init_db():
         tenant_id TEXT NOT NULL,
         created_at TEXT NOT NULL,
         last_login_at TEXT,
-        email_verified INTEGER DEFAULT 0
+        email_verified INTEGER DEFAULT 0,
+        auth_provider TEXT DEFAULT 'credentials'
     )
     """)
-
-    # Ensure email_verified column exists if table already existed
     c.execute("PRAGMA table_info(users)")
     existing_cols = [row[1] for row in c.fetchall()]
     if "email_verified" not in existing_cols:
@@ -167,7 +169,11 @@ def init_db():
             c.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
         except Exception:
             pass
-
+    if "auth_provider" not in existing_cols:
+        try:
+            c.execute("ALTER TABLE users ADD COLUMN auth_provider TEXT DEFAULT 'credentials'")
+        except Exception:
+            pass
     # Create email_verifications table
     c.execute("""
     CREATE TABLE IF NOT EXISTS email_verifications (
@@ -524,6 +530,43 @@ class ResendVerificationRequest(BaseModel):
 async def health():
     return {"status": "healthy", "service": "auth", "port": 7999, "timestamp": time.time()}
 
+
+@app.get("/api/v1/admin/users/statistics")
+@app.get("/api/admin/users/statistics")
+async def get_admin_user_statistics(request: Request):
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) as total FROM users")
+        total_row = c.fetchone()
+        total_users = total_row["total"] if total_row else 0
+
+        c.execute("SELECT auth_provider, COUNT(*) as cnt FROM users GROUP BY auth_provider")
+        rows = c.fetchall()
+        providers = {"google": 0, "github": 0, "credentials": 0}
+        for r in rows:
+            prov = (r["auth_provider"] or "credentials").strip().lower()
+            if prov in providers:
+                providers[prov] = r["cnt"]
+            else:
+                providers["credentials"] += r["cnt"]
+
+        c.execute("SELECT uuid, username, email, role, account_id, created_at, last_login_at, email_verified, auth_provider FROM users ORDER BY created_at DESC LIMIT 100")
+        users_list = [dict(row) for row in c.fetchall()]
+        conn.close()
+
+        return {
+            "total_users": total_users,
+            "google_users": providers["google"],
+            "github_users": providers["github"],
+            "credentials_users": providers["credentials"],
+            "providers": providers,
+            "users": users_list,
+            "updated_at": datetime.datetime.utcnow().isoformat() + "Z"
+        }
+    except Exception as e:
+        logger.error(f"Error fetching user statistics: {e}")
+        return {"total_users": 0, "providers": {"google": 0, "github": 0, "credentials": 0}, "users": [], "updated_at": datetime.datetime.utcnow().isoformat() + "Z"}
 
 @app.post("/api/v1/auth/login")
 async def login(req: LoginRequest, request: Request):
@@ -1615,17 +1658,16 @@ async def google_callback(
         """, (tenant_id, f"{username}'s Workspace", account_id, "PERSONAL", now_iso))
 
         c.execute("""
-        INSERT INTO users (uuid, username, email, password_hash, role, account_id, tenant_id, created_at, last_login_at, email_verified)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        INSERT INTO users (uuid, username, email, password_hash, role, account_id, tenant_id, created_at, last_login_at, email_verified, auth_provider)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'google')
         """, (user_uuid, username, email, "", "USER", account_id, tenant_id, now_iso, now_iso))
         conn.commit()
 
         c.execute("SELECT * FROM users WHERE uuid = ?", (user_uuid,))
         user = c.fetchone()
     else:
-        c.execute("UPDATE users SET last_login_at = ? WHERE id = ?", (now_iso, user["id"]))
+        c.execute("UPDATE users SET last_login_at = ?, auth_provider = COALESCE(auth_provider, 'google') WHERE id = ?", (now_iso, user["id"]))
         conn.commit()
-
     token = _create_jwt_token(
         username=user["username"],
         role=user["role"],
@@ -1767,17 +1809,16 @@ async def github_callback(
             """, (tenant_id, f"{username}'s Workspace", account_id, "PERSONAL", now_iso))
 
             c.execute("""
-            INSERT INTO users (uuid, username, email, password_hash, role, account_id, tenant_id, created_at, last_login_at, email_verified)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            INSERT INTO users (uuid, username, email, password_hash, role, account_id, tenant_id, created_at, last_login_at, email_verified, auth_provider)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'github')
             """, (user_uuid, username, email, "", "USER", account_id, tenant_id, now_iso, now_iso))
             conn.commit()
 
             c.execute("SELECT * FROM users WHERE uuid = ?", (user_uuid,))
             user = c.fetchone()
         else:
-            c.execute("UPDATE users SET last_login_at = ? WHERE id = ?", (now_iso, user["id"]))
+            c.execute("UPDATE users SET last_login_at = ?, auth_provider = COALESCE(auth_provider, 'github') WHERE id = ?", (now_iso, user["id"]))
             conn.commit()
-
         token = _create_jwt_token(
             username=user["username"],
             role=user["role"],

@@ -463,9 +463,9 @@ export const adminApi = {
     apiRequest('/api/admin/modules'),
   getAuditLogs: () =>
     apiRequest('/api/admin/auth/audit'),
+  getUserStatistics: () =>
+    apiRequest('/api/admin/users/statistics'),
   clearCache: () =>
     apiRequest('/api/admin/clear-cache', { method: 'POST' }),
-  syncCatalog: () =>
-    apiRequest('/api/admin/sync', { method: 'POST' }),
 };
 

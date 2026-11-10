@@ -6,12 +6,17 @@ requires-python = ">=3.11"
 members = [
     "admin-console-service",
     "aether-cloud",
-    "architecture-generator-service",
+    "ai-architecture-engine",
+    "application-deployment-service",
+    "approval-execution-service",
+    "architecture-designer-service",
+    "architecture-validation-service",
+    "audit-history-service",
     "auth-service",
-    "cloud-deployer-service",
     "gateway-service",
     "iac-generator-service",
     "observability-setup-service",
+    "pre-deployment-risk-engine",
     "project-and-environment-management",
     "repo-analyzer-service",
     "source-and-cloud-connection",
@@ -88,6 +93,25 @@ requires-dist = [
 ]
 
 [[package]]
+name = "ai-architecture-engine"
+version = "2.0.0"
+source = { virtual = "services/ai_architecture_engine" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.141.1" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "uvicorn", specifier = ">=0.52.4" },
+]
+
+[[package]]
 name = "aiosqlite"
 version = "0.22.1"
 source = { registry = "https://pypi.org/simple" }
@@ -128,9 +152,51 @@ wheels = [
 ]
 
 [[package]]
-name = "architecture-generator-service"
-version = "1.0.0"
-source = { virtual = "services/architecture_generator" }
+name = "application-deployment-service"
+version = "2.0.0"
+source = { virtual = "services/application_deployment_service" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pytest" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.110.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "pydantic", specifier = ">=2.6.0" },
+    { name = "pytest", specifier = ">=8.0.0" },
+    { name = "uvicorn", specifier = ">=0.28.0" },
+]
+
+[[package]]
+name = "approval-execution-service"
+version = "2.0.0"
+source = { virtual = "services/approval_execution_service" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pytest" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.110.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "pydantic", specifier = ">=2.6.0" },
+    { name = "pytest", specifier = ">=8.0.0" },
+    { name = "uvicorn", specifier = ">=0.28.0" },
+]
+
+[[package]]
+name = "architecture-designer-service"
+version = "2.0.0"
+source = { virtual = "services/architecture_designer" }
 dependencies = [
     { name = "aiosqlite" },
     { name = "asyncpg" },
@@ -151,6 +217,27 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.6.0" },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
+    { name = "uvicorn", specifier = ">=0.28.0" },
+]
+
+[[package]]
+name = "architecture-validation-service"
+version = "2.0.0"
+source = { virtual = "services/architecture_validation" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pytest" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.110.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "pydantic", specifier = ">=2.6.0" },
+    { name = "pytest", specifier = ">=8.0.0" },
     { name = "uvicorn", specifier = ">=0.28.0" },
 ]
 
@@ -209,6 +296,27 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ba/7a/15e37d45e7f7c94facc1e9148c0e455e8f33c08f0b8a0b1deb2c5171771b/asyncpg-0.31.0-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:8df714dba348efcc162d2adf02d213e5fab1bd9f557e1305633e851a61814a7a", size = 3429426, upload-time = "2025-11-24T23:26:41.032Z" },
     { url = "https://files.pythonhosted.org/packages/13/d5/71437c5f6ae5f307828710efbe62163974e71237d5d46ebd2869ea052d10/asyncpg-0.31.0-cp314-cp314t-win32.whl", hash = "sha256:1b41f1afb1033f2b44f3234993b15096ddc9cd71b21a42dbd87fc6a57b43d65d", size = 614495, upload-time = "2025-11-24T23:26:42.659Z" },
     { url = "https://files.pythonhosted.org/packages/3c/d7/8fb3044eaef08a310acfe23dae9a8e2e07d305edc29a53497e52bc76eca7/asyncpg-0.31.0-cp314-cp314t-win_amd64.whl", hash = "sha256:bd4107bb7cdd0e9e65fae66a62afd3a249663b844fa34d479f6d5b3bef9c04c3", size = 706062, upload-time = "2025-11-24T23:26:44.086Z" },
+]
+
+[[package]]
+name = "audit-history-service"
+version = "2.0.0"
+source = { virtual = "services/audit_history_service" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pytest" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.110.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "pydantic", specifier = ">=2.6.0" },
+    { name = "pytest", specifier = ">=8.0.0" },
+    { name = "uvicorn", specifier = ">=0.28.0" },
 ]
 
 [[package]]
@@ -345,27 +453,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/76/d4/81420972a676e8ffea40450d8c8c92943e7218a78fe9b64359836cc9876b/click-8.4.2.tar.gz", hash = "sha256:9a6cea6e60b17ebe0a44c5cc636d94f09bd66142c1cd7d8b4cd731c4917a15f6", size = 338000, upload-time = "2026-06-24T17:45:15.148Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fb/e2/79c688af8b210d232694e31e59da9f6ec747bae31c3f5946e4e9b98860d5/click-8.4.2-py3-none-any.whl", hash = "sha256:e6f9f66136c816745b9d65817da91d61d957fb16e02e4dcd0552553c5a197b76", size = 119243, upload-time = "2026-06-24T17:45:13.73Z" },
-]
-
-[[package]]
-name = "cloud-deployer-service"
-version = "1.0.0"
-source = { virtual = "services/cloud_deployer" }
-dependencies = [
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "pydantic" },
-    { name = "pytest" },
-    { name = "uvicorn" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastapi", specifier = ">=0.110.0" },
-    { name = "httpx", specifier = ">=0.27.0" },
-    { name = "pydantic", specifier = ">=2.6.0" },
-    { name = "pytest", specifier = ">=8.0.0" },
-    { name = "uvicorn", specifier = ">=0.28.0" },
 ]
 
 [[package]]
@@ -517,7 +604,7 @@ wheels = [
 [[package]]
 name = "iac-generator-service"
 version = "1.0.0"
-source = { virtual = "services/iac_generator" }
+source = { virtual = "services/terraform_iac_generator" }
 dependencies = [
     { name = "aiosqlite" },
     { name = "asyncpg" },
@@ -724,7 +811,7 @@ wheels = [
 [[package]]
 name = "observability-setup-service"
 version = "1.0.0"
-source = { virtual = "services/observability_setup" }
+source = { virtual = "services/monitoring_service" }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
@@ -761,9 +848,30 @@ wheels = [
 ]
 
 [[package]]
+name = "pre-deployment-risk-engine"
+version = "2.0.0"
+source = { virtual = "services/pre_deployment_risk_engine" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pytest" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.110.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "pydantic", specifier = ">=2.6.0" },
+    { name = "pytest", specifier = ">=8.0.0" },
+    { name = "uvicorn", specifier = ">=0.28.0" },
+]
+
+[[package]]
 name = "project-and-environment-management"
 version = "1.0.0"
-source = { virtual = "services/project_and_environment_management" }
+source = { virtual = "services/project_environment_service" }
 dependencies = [
     { name = "aiosqlite" },
     { name = "asyncpg" },
@@ -1065,7 +1173,7 @@ wheels = [
 [[package]]
 name = "repo-analyzer-service"
 version = "1.0.0"
-source = { virtual = "services/repo_analyzer_service" }
+source = { virtual = "services/source_code_analyzer" }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
@@ -1122,7 +1230,7 @@ wheels = [
 [[package]]
 name = "source-and-cloud-connection"
 version = "1.0.0"
-source = { virtual = "services/source_and_cloud_connection" }
+source = { virtual = "services/source_cloud_git_service" }
 dependencies = [
     { name = "aiosqlite" },
     { name = "asyncpg" },
