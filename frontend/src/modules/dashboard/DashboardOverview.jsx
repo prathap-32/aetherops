@@ -1172,6 +1172,106 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
     );
   };
 
+  const renderExperienceHeroBanner = () => {
+    if (effectiveLifecycleStage === 'stage_1_onboarding') {
+      return (
+        <div className="bg-gradient-to-br from-blue-900 via-indigo-900 to-slate-900 text-white rounded-2xl p-6 sm:p-8 shadow-md relative overflow-hidden space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-800/80 border border-blue-700 text-cyan-300 text-xs font-semibold">
+            <Sparkles className="w-3.5 h-3.5" />
+            New User Guided Onboarding Experience
+          </div>
+          <div className="space-y-2 max-w-2xl">
+            <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">
+              Welcome to AetherOps, {username}!
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              Your cloud engineering workspace starts here. Build, validate and deploy AWS cloud infrastructure with an intelligent engineering workflow.
+            </p>
+          </div>
+          <div className="pt-2 flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleCreateProjectClick}
+              className="px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create Your First Project</span>
+            </button>
+            <button
+              onClick={() => onNavigate('docs', '/documentation')}
+              className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-xl transition cursor-pointer border border-white/20"
+            >
+              Explore Platform Guide
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (effectiveLifecycleStage === 'stage_2_project_created' || effectiveLifecycleStage === 'stage_3_infrastructure_workflow') {
+      const topProj = projectsState.data[0] || {};
+      return (
+        <div className="bg-gradient-to-r from-indigo-900 via-blue-900 to-slate-900 text-white rounded-2xl p-6 sm:p-7 shadow-md space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-800/80 border border-indigo-700 text-indigo-200 text-xs font-semibold">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />
+            Returning User Continuation Workflow
+          </div>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h2 className="text-xl font-bold tracking-tight">
+                Welcome back, {username}!
+              </h2>
+              <p className="text-xs text-slate-300">
+                Continue where you left off. Workspace: <strong className="text-white font-mono">{topProj.name || 'Default Project'}</strong> ({topProj.project_type || 'web_application'}).
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                if (topProj.id) {
+                  onSelectProject(topProj);
+                  onNavigate('projects', '/projects');
+                } else {
+                  handleCreateProjectClick();
+                }
+              }}
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer shrink-0"
+            >
+              <span>Continue Project Workspace</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white rounded-2xl p-6 sm:p-7 shadow-md space-y-3">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-emerald-400 text-xs font-semibold">
+          <ShieldCheck className="w-3.5 h-3.5" />
+          Experienced User • Cloud Operations Control Center
+        </div>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h2 className="text-xl font-bold tracking-tight">
+              Active Multi-Project Infrastructure Fleet
+            </h2>
+            <p className="text-xs text-slate-300">
+              Managing {projectsCount} isolated workspaces, {environmentsCount} target environments, and verified source/cloud credentials.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onNavigate('deployments', '/deployment')}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl transition cursor-pointer flex items-center gap-1.5"
+            >
+              <Rocket className="w-3.5 h-3.5" />
+              <span>Inspect Deployments</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // ── 8. Render Engine mapping widgets to ordered grid ──
   const widgetRendererMap = {
     getting_started: renderGettingStartedWidget,
@@ -1184,7 +1284,6 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
     recent_activity: renderRecentActivityWidget,
     recommendations: renderRecommendationsWidget,
   };
-
   // Reorder and group: pinned widgets always take precedence at top
   const activeOrder = preferences.widget_order || DEFAULT_PREFERENCES.widget_order;
   const visibility = preferences.widget_visibility || DEFAULT_PREFERENCES.widget_visibility;
@@ -1240,14 +1339,15 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
           </button>
         </div>
       </div>
+
+      {/* ── Dynamic Experience Hero Banner (New, Returning, Experienced) ── */}
+      {renderExperienceHeroBanner()}
+
       {/* ── 1. ACCOUNT PROFILE SECTION ── */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-[#1e40af] text-white flex items-center justify-center font-bold font-mono text-sm shadow-xs shrink-0">
-              {(user?.username || 'AO').slice(0, 2).toUpperCase()}
-            </div>
-            <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
                   <User className="w-4 h-4 text-blue-600" />
