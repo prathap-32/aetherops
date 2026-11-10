@@ -1340,10 +1340,128 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
         </div>
       </div>
 
-      {/* ── Dynamic Experience Hero Banner (New, Returning, Experienced) ── */}
-      {renderExperienceHeroBanner()}
-
       {/* ── 1. ACCOUNT PROFILE SECTION ── */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#1e40af] text-white flex items-center justify-center font-bold font-mono text-sm shadow-xs shrink-0">
+              {(user?.username || 'AO').slice(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                  <User className="w-4 h-4 text-blue-600" />
+                  <span>Account Profile &amp; Workspace Identity</span>
+                </h2>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200 font-mono">
+                  {user?.role || 'USER'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-mono mt-0.5">
+                Account ID: {formatAccountId(user?.account_id || '109283746519')}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={copyAccountId}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+              title="Copy 12-Digit Account ID"
+            >
+              {copiedAcc ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
+              <span>{copiedAcc ? 'Copied Account ID' : 'Copy ID'}</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          {/* Identity Info */}
+          <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-100 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-slate-400" />
+                Display Handle:
+              </span>
+              <span className="font-mono font-bold text-slate-900">{user?.username || 'Developer'}</span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-slate-400" />
+                Registered Email:
+              </span>
+              <span className="font-mono text-slate-700">{user?.email || `${user?.username || 'user'}@aetherops.internal`}</span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5 text-slate-400" />
+                Authorization Role:
+              </span>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isAdmin ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-700'}`}>
+                {isAdmin ? 'PLATFORM ADMIN' : 'WORKSPACE USER'}
+              </span>
+            </div>
+          </div>
+
+          {/* Tenant & Scope */}
+          <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-100 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 flex items-center gap-1.5">
+                <FolderKanban className="w-3.5 h-3.5 text-slate-400" />
+                Tenant Namespace:
+              </span>
+              <span className="font-mono font-bold text-slate-900">aetherops-default-tenant</span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5 text-slate-400" />
+                Session Auth:
+              </span>
+              <span className="font-mono text-emerald-700 font-semibold">JWT Bearer &amp; Secure Cookie</span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
+                RBAC Isolation:
+              </span>
+              <span className="font-mono text-slate-700">Strict Tenant Scoped</span>
+            </div>
+          </div>
+
+          {/* Quick Profile Actions */}
+          <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-100 flex flex-col justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-bold text-slate-800 mb-1">Update Display Name</div>
+              <form onSubmit={handleSaveProfile} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  placeholder="New display handle"
+                  className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-blue-600"
+                />
+                <button
+                  type="submit"
+                  disabled={isSavingProfile}
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xs transition cursor-pointer shrink-0 disabled:opacity-50"
+                >
+                  {isSavingProfile ? 'Saving...' : 'Save'}
+                </button>
+              </form>
+            </div>
+            {profileMsg && (
+              <div className={`text-[11px] px-2 py-1 rounded ${profileMsg.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                {profileMsg.text}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
