@@ -721,6 +721,13 @@ async def run_remote_universal_scan(
     """
     if connection_context:
         commit_sha = str(connection_context["commit_sha"])
+        commit_info = connection_context.get("commit_info") or {
+            "sha": commit_sha,
+            "short_sha": commit_sha[:7],
+            "message": "",
+            "author": owner,
+            "date": None,
+        }
         tree = connection_context["tree"]
         manifest_contents = connection_context["manifest_contents"]
     else:
