@@ -710,7 +710,12 @@ async def run_remote_universal_scan(
     into memory, extracts deployment primitives, and produces the human-understandable
     Key:Value report. Zero source code is written to disk.
     """
-    tree = await fetch_github_file_tree_in_memory(owner=owner, repo=repo, branch=branch, token=token)
+    commit_info = await fetch_github_latest_commit(owner=owner, repo=repo, branch=branch, token=token)
+    commit_sha = commit_info.get("sha")
+    if not commit_sha or commit_sha == "latest":
+        raise ValueError("Unable to resolve an immutable commit SHA; analysis was not started.")
+
+    tree = await fetch_github_file_tree_in_memory(owner=owner, repo=repo, branch=commit_sha, token=token)
 
     found_frameworks: Set[str] = set()
     found_databases: Set[str] = set()
@@ -742,9 +747,11 @@ async def run_remote_universal_scan(
     inspected_manifests: List[str] = []
 
     # Inspect manifests in-memory with deterministic parsers (Zero AI consumed)
-    for m_path in manifest_paths[:15]:
+    manifest_limit = max(1, int(os.getenv("AETHER_MAX_MANIFESTS", "100")))
+    truncated_manifests = len(manifest_paths) > manifest_limit
+    for m_path in manifest_paths[:manifest_limit]:
         name = Path(m_path).name
-        raw_content = await fetch_manifest_in_memory(owner, repo, m_path, branch=branch, token=token)
+        raw_content = await fetch_manifest_in_memory(owner, repo, m_path, branch=commit_sha, token=token)
         if not raw_content:
             continue
         inspected_manifests.append(name)
@@ -861,7 +868,7 @@ async def run_remote_universal_scan(
             p_path = item.get("path", "")
             p_name = Path(p_path).name
             if p_name in entrypoint_names:
-                ep_code = await fetch_manifest_in_memory(owner, repo, p_path, branch=branch, token=token)
+                ep_code = await fetch_manifest_in_memory(owner, repo, p_path, branch=commit_sha, token=token)
                 if ep_code:
                     # Search server listen pattern
                     m_listen = re.search(r"(?:listen|PORT|port)\s*\(?\s*(?:process\.env\.PORT\s*\|\|\s*)?(\d{2,5})", ep_code)
@@ -869,16 +876,17 @@ async def run_remote_universal_scan(
                         found_ports.add(int(m_listen.group(1)))
                         break
 
-    # 10. Concurrently fetch high-accuracy GitHub repository intelligence
-    meta_task = fetch_github_repo_metadata(owner=owner, repo=repo, token=token)
-    langs_task = fetch_github_languages_breakdown(owner=owner, repo=repo, token=token, tree=tree)
-    commit_task = fetch_github_latest_commit(owner=owner, repo=repo, branch=branch, token=token)
-    repo_meta, languages_breakdown, commit_info = await asyncio.gather(meta_task, langs_task, commit_task)
-
-    if commit_info.get("sha") and commit_info.get("sha") != "latest":
-        repo_meta["latest_commit"] = commit_info
-
-    # Detection coverage is not a calibrated accuracy measurement.
+    # Repository metadata is descriptive; all source reads use commit_sha.
+    repo_meta = await fetch_github_repo_metadata(owner=owner, repo=repo, token=token)
+    repo_meta["latest_commit"] = commit_info
+    language_bytes: Dict[str, int] = {}
+    for item in tree:
+        language = RECOGNIZED_CODE_EXTS.get(Path(item.get("path", "")).suffix.lower())
+        size = item.get("size", 0)
+        if language and isinstance(size, int) and size > 0:
+            language_bytes[language] = language_bytes.get(language, 0) + size
+    total_language_bytes = sum(language_bytes.values())
+    languages_breakdown = [{"name": language, "bytes": count, "percentage": round(count * 100 / total_language_bytes, 1), "color": LANGUAGE_COLORS.get(language, "#8b949e")} for language, count in sorted(language_bytes.items(), key=lambda item: item[1], reverse=True)] if total_language_bytes else []
     accuracy_score = None
 
     # If static HTML/JS/CSS without backend framework
@@ -1034,6 +1042,7 @@ async def run_remote_universal_scan(
     summary_dict = {
         "repo_name": repo,
         "repo_path": f"https://github.com/{owner}/{repo}",
+        "commit_sha": commit_sha,
         "environment_tier": environment_tier,
         "target_region": target_region,
         "workload_type": workload_type,
@@ -1068,6 +1077,9 @@ async def run_remote_universal_scan(
         "repo_metadata": repo_meta,
         "languages_breakdown": languages_breakdown,
         "inspected_manifests": inspected_manifests,
+        "manifest_count": len(manifest_paths),
+        "manifest_limit": manifest_limit,
+        "truncated_manifests": truncated_manifests,
         "accuracy_score": accuracy_score,
         "accuracy_method": "NOT_CALIBRATED",
     }
