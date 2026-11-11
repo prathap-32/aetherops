@@ -329,30 +329,6 @@ async def fetch_github_file_tree_in_memory(
     except Exception as exc:
         logger.warning(f"GitHub Git Trees API request error for {owner}/{repo}: {exc}")
 
-    # Fallback to Module 2 snapshot if captured
-    try:
-        db_candidates = [
-            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "source_and_cloud_connection", "source_connections.db"),
-            "./services/source_and_cloud_connection/source_connections.db",
-        ]
-        for db_path in db_candidates:
-            if os.path.exists(db_path):
-                con = sqlite3.connect(db_path)
-                cur = con.cursor()
-                cur.execute(
-                    "SELECT s.file_tree FROM sc_source_snapshots s JOIN sc_git_connections c ON s.connection_id = c.id WHERE c.repo_name LIKE ? OR c.repo_url LIKE ? LIMIT 1",
-                    (f"%{repo}%", f"%{repo}%"),
-                )
-                row = cur.fetchone()
-                con.close()
-                if row and row[0]:
-                    snapped = json.loads(row[0])
-                    if isinstance(snapped, list) and len(snapped) > 0:
-                        logger.info(f"Loaded {len(snapped)} file paths from Module 2 snapshot cache.")
-                        return snapped
-    except Exception as e:
-        logger.debug(f"Snapshot fallback error: {e}")
-
     raise ValueError(f"GitHub repository {owner}/{repo} not found or inaccessible. Provide a valid repository and token.")
 
 
