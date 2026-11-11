@@ -283,6 +283,7 @@ async def resolve_repo_target(
         "connection_id": connection.get("id"),
         "project_id": connection.get("project_id"),
         "environment_id": connection.get("environment_id"),
+        "tenant_id": connection.get("tenant_id"),
     }
 
 
