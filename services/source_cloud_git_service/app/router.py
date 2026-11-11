@@ -1302,7 +1302,7 @@ def _redact_analysis_manifest_content(path: str, content: str) -> str:
             pass
 
     line_pattern = re.compile(
-        r"(?i)(\b(?:password|passwd|secret(?:_key)?|token|api[_-]?key|private[_-]?key|client[_-]?secret|access[_-]?key|session[_-]?token)\b\s*[:=]\s*)(?:\"[^\"]*\"|'[^']*'|[^\s,;#]+)"
+        r"(?i)(\b(?:password|passwd|secret(?:_key)?|token|api[_-]?(?:key|token)|private[_-]?key|client[_-]?secret|access[_-]?key|session[_-]?token)\b\s*[:=]\s*)(?:\"[^\"]*\"|'[^']*'|[^\s,;#]+)"
     )
     redacted_lines = [
         line_pattern.sub(lambda match: match.group(1) + '"[REDACTED]"', line)
