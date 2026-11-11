@@ -1,0 +1,41 @@
+@app.get("/api/v1/auth/me")
+async def get_me(request: Request):
+    """Returns authenticated user profile showcasing AWS Account ID."""
+    payload = _get_request_auth_payload(request)
+    if not payload:
+        return JSONResponse(status_code=401, content={"detail": "Invalid or expired token"})
+
+    username = payload.get("sub", "")
+    conn = get_db_connection()
+    try:
+        c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE lower(username) = lower(?)", (username,))
+        user = c.fetchone()
+    finally:
+        conn.close()
+
+    if user:
+        has_welcome = 0
+        try:
+            has_welcome = user["has_seen_welcome"] if "has_seen_welcome" in user.keys() else 0
+        except Exception:
+            pass
+        return {
+            "username": user["username"],
+            "email": user["email"],
+            "role": user["role"],
+            "uuid": user["uuid"],
+            "account_id": user["account_id"],
+            "account_id_formatted": format_account_id(user["account_id"]),
+            "has_seen_welcome": has_welcome,
+        }
+
+    return {
+        "username": username,
+        "email": payload.get("email", f"{username}@aetherops.local"),
+        "role": payload.get("role", "USER"),
+        "uuid": payload.get("uuid", ""),
+        "account_id": payload.get("account_id", "109283746519"),
+        "account_id_formatted": format_account_id(payload.get("account_id", "109283746519")),
+        "has_seen_welcome": 0,
+    }
