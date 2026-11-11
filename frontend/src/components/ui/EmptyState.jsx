@@ -14,20 +14,20 @@ export default function EmptyState({
       className={`rounded-2xl border border-slate-200/90 bg-white p-8 sm:p-12 text-center max-w-xl mx-auto shadow-xs ${className}`}
     >
       {Icon && (
-        <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center mx-auto mb-4 shadow-2xs">
-          <Icon className="w-7 h-7" />
+        <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center mx-auto mb-5 shadow-2xs">
+          <Icon className="w-8 h-8" />
         </div>
       )}
-      <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+      <h3 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
         {title}
       </h3>
       {description && (
-        <p className="text-xs sm:text-sm text-slate-500 mt-2 leading-relaxed max-w-md mx-auto">
+        <p className="text-sm sm:text-base text-slate-600 mt-2.5 leading-relaxed max-w-md mx-auto">
           {description}
         </p>
       )}
       {(action || secondaryAction) && (
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3.5">
           {action}
           {secondaryAction}
         </div>
