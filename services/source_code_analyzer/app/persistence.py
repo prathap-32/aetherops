@@ -44,6 +44,8 @@ async def persist_analysis_report(
     repo_result = await session.execute(
         select(Repository).where(
             Repository.tenant_id == tenant_id,
+            Repository.project_id == project_id,
+            Repository.environment_id == environment_id,
             Repository.provider == provider,
             Repository.external_repo_id == external_id,
         )
@@ -58,8 +60,6 @@ async def persist_analysis_report(
         session.add(repository)
         await session.flush()
     else:
-        repository.project_id = project_id
-        repository.environment_id = environment_id
         repository.connection_id = connection_id
         repository.default_branch = branch
 
