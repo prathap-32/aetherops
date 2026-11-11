@@ -11,7 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import (
     AnalysisFinding, AnalysisRun, AnalysisSnapshot, Application,
     ApplicationProfile, EvidenceRecord, Repository, RepositoryRevision,
+    Dependency, SbomDocument,
 )
+from app.dependency_inventory import build_sbom_documents
 
 
 def _canonical_hash(value: Any) -> str:
@@ -160,11 +162,66 @@ async def persist_analysis_report(
         "summary": report.get("summary_dict") or {},
         "coverage": report.get("coverage") or {},
         "inspected_manifests": report.get("inspected_manifests") or [],
+        "dependency_count": len(report.get("dependencies_detected") or []),
+        "dependency_completeness": "DECLARED_DIRECT_DEPENDENCIES_ONLY",
     }
     session.add(ApplicationProfile(
         application_id=applications[0].id, run_id=run.id, snapshot_id=snapshot.id,
         profile_version=run.id, profile=profile,
     ))
+
+    # Persist deterministic direct dependency inventory for this revision.
+    dependencies = report.get("dependencies_detected") or []
+    unique_dependencies: dict[tuple[str, str, str | None, str], dict[str, Any]] = {}
+    for dependency in dependencies:
+        if not isinstance(dependency, dict):
+            continue
+        key = (
+            str(dependency.get("ecosystem") or "unknown"),
+            str(dependency.get("package_name") or ""),
+            dependency.get("version"),
+            str(dependency.get("source_path") or ""),
+        )
+        if key[1] and key[3]:
+            unique_dependencies[key] = dependency
+
+    existing_dependencies = await session.execute(
+        select(Dependency).where(Dependency.application_id == applications[0].id)
+    )
+    for existing in existing_dependencies.scalars().all():
+        await session.delete(existing)
+    await session.flush()
+
+    for dependency in unique_dependencies.values():
+        session.add(Dependency(
+            application_id=applications[0].id,
+            ecosystem=str(dependency.get("ecosystem") or "unknown"),
+            package_name=str(dependency["package_name"]),
+            version=dependency.get("version"),
+            purl=dependency.get("purl"),
+            is_direct=True,
+            source_path=str(dependency["source_path"]),
+            manifest_hash=dependency.get("manifest_hash"),
+        ))
+
+    sbom_documents = build_sbom_documents(
+        application_name=applications[0].name,
+        repository_url=str(report.get("repo_path") or f"{provider}:{owner}/{name}"),
+        commit_sha=commit_sha if revision_kind == "GIT_COMMIT" else None,
+        dependencies=list(unique_dependencies.values()),
+    )
+    sbom_checksums: dict[str, str] = {}
+    for sbom_format, document in sbom_documents.items():
+        checksum = _canonical_hash(document)
+        sbom_checksums[sbom_format] = checksum
+        session.add(SbomDocument(
+            run_id=run.id,
+            application_id=applications[0].id,
+            format=sbom_format,
+            format_version="1.5" if sbom_format == "CYCLONEDX" else "SPDX-2.3",
+            checksum=checksum,
+            document=document,
+        ))
 
     findings: list[tuple[str, str, Any]] = []
     for category, values in (
@@ -215,4 +272,7 @@ async def persist_analysis_report(
         "snapshot_hash": snapshot_hash,
         "application_ids": [item.id for item in applications],
         "findings_persisted": len(findings),
+        "dependencies_persisted": len(unique_dependencies),
+        "sbom_formats": list(sbom_documents.keys()),
+        "sbom_checksums": sbom_checksums,
     }
