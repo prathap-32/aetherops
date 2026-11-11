@@ -4,6 +4,7 @@ import uuid
 import json
 import datetime
 import logging
+import re
 from urllib.parse import quote
 from typing import Dict, Any, Optional, List
 
@@ -1300,7 +1301,7 @@ async def get_analyzer_source_context(
         db,
         connection_id,
         str(admin.get("username") or ""),
-        role=str(admin.get("role") or ""),
+        role="USER",
         user_uuid=str(claims["uuid"]),
         tenant_id=token_tenant,
     )
