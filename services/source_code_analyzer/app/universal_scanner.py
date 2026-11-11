@@ -897,24 +897,18 @@ async def run_remote_universal_scan(
         if not found_ports:
             found_ports.add(80)
 
-    # Fallback default port
-    if not found_ports:
-        if "FastAPI" in found_frameworks or "Django" in found_frameworks:
-            found_ports.add(8000)
-        elif "Flask" in found_frameworks:
-            found_ports.add(5000)
-        elif any(f in found_frameworks for f in ("Express", "Next.js", "React", "Vue.js")):
-            found_ports.add(3000)
-        elif has_docker:
-            found_ports.add(80)
-        else:
-            found_ports.add(8000)
-
-    all_langs = sorted(list(found_languages)) or ["JavaScript", "HTML"]
-    all_frameworks = sorted(list(found_frameworks)) or ["Static Web Application"]
+    all_langs = sorted(list(found_languages))
+    all_frameworks = sorted(list(found_frameworks))
     all_dbs = sorted(list(found_databases))
     all_ports = sorted(list(found_ports))
-    is_monorepo = False
+    workspace_markers = {"pnpm-workspace.yaml", "lerna.json", "nx.json", "turbo.json", "rush.json"}
+    has_workspace_marker = any(Path(item.get("path", "")).name in workspace_markers for item in tree)
+    package_roots = {
+        str(Path(item.get("path", "")).parent)
+        for item in tree
+        if Path(item.get("path", "")).name in {"package.json", "pyproject.toml", "Cargo.toml", "go.mod", "pom.xml"}
+    }
+    is_monorepo = has_workspace_marker or len(package_roots) > 1
 
     workload_type = classify_workload(all_langs, all_frameworks, all_ports, has_docker)
 
@@ -929,10 +923,10 @@ async def run_remote_universal_scan(
     docker_label = "Dockerized (Multi-Stage Dockerfile)" if is_multi_stage_docker else (
         "Dockerized (Standard Dockerfile)" if has_docker else "Native Process (No Dockerfile detected)"
     )
-    ports_str = ", ".join(f"Port {p}" for p in all_ports) if all_ports else "Port 80"
-    db_str = ", ".join(all_dbs) if all_dbs else "None (Stateless / External)"
-    frameworks_str = ", ".join(all_frameworks) if all_frameworks else "Static Web Application"
-    langs_str = ", ".join(all_langs) if all_langs else "Universal Multi-Language"
+    ports_str = ", ".join(f"Port {p}" for p in all_ports) if all_ports else "Not detected"
+    db_str = ", ".join(all_dbs) if all_dbs else "Not detected"
+    frameworks_str = ", ".join(all_frameworks) if all_frameworks else "Not detected"
+    langs_str = ", ".join(all_langs) if all_langs else "Not detected"
     start_cmd = start_cmds[0] if start_cmds else ("nginx -g 'daemon off;'" if "Nginx" in frameworks_str else "Automatic entrypoint")
     build_cmd = build_cmds[0] if build_cmds else "Standard container build"
 
@@ -1060,6 +1054,7 @@ async def run_remote_universal_scan(
         "status": "SUCCESS",
         "repo_path": f"https://github.com/{owner}/{repo}",
         "repo_name": repo,
+        "commit_sha": commit_sha,
         "environment_tier": environment_tier,
         "target_region": target_region,
         "workload_type": workload_type,
@@ -1077,6 +1072,9 @@ async def run_remote_universal_scan(
         "repo_metadata": repo_meta,
         "languages_breakdown": languages_breakdown,
         "inspected_manifests": inspected_manifests,
+        "manifest_count": len(manifest_paths),
+        "manifest_limit": manifest_limit,
+        "truncated_manifests": truncated_manifests,
         "manifest_count": len(manifest_paths),
         "manifest_limit": manifest_limit,
         "truncated_manifests": truncated_manifests,
