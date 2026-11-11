@@ -339,7 +339,7 @@ async def repo_readiness_endpoint(payload: ReadinessRequest, request: Request):
             owner=target_info["owner"],
             repo=target_info["repo"],
             branch=payload.branch or target_info.get("branch", "main"),
-            token=payload.github_token,
+            token=payload.github_token.get_secret_value() if payload.github_token else None,
         )
         return ReadinessResponse(**res)
 
@@ -368,7 +368,7 @@ async def repo_scan_report_endpoint(payload: ScanReportRequest, request: Request
             owner=target_info["owner"],
             repo=target_info["repo"],
             branch=payload.branch or target_info.get("branch", "main"),
-            token=payload.github_token,
+            token=payload.github_token.get_secret_value() if payload.github_token else None,
         )
         if not readiness["is_analyzable"]:
             raise HTTPException(
@@ -379,7 +379,7 @@ async def repo_scan_report_endpoint(payload: ScanReportRequest, request: Request
             owner=target_info["owner"],
             repo=target_info["repo"],
             branch=payload.branch or target_info.get("branch", "main"),
-            token=payload.github_token,
+            token=payload.github_token.get_secret_value() if payload.github_token else None,
             environment_tier=payload.environment_tier,
             target_region=payload.target_region,
         )
