@@ -33,7 +33,8 @@ jobs:
       - name: Install service and test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[test]"
+          pip install "fastapi>=0.110.0" "uvicorn>=0.28.0" "pydantic>=2.6.0" "httpx>=0.27.0" "rich>=13.0.0" "pyyaml>=6.0.0" "sqlalchemy>=2.0.0" "asyncpg>=0.29.0" "aiosqlite>=0.19.0" "PyJWT>=2.8.0" "pytest>=8.0.0" "pytest-asyncio>=0.23.0"
+          echo "PYTHONPATH=$PWD" >> "$GITHUB_ENV"
       - name: Compile service modules
         run: python -m compileall -q app
       - name: Run Module 3 tests
