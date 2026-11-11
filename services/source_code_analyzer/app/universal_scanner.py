@@ -349,39 +349,38 @@ async def fetch_manifest_in_memory(
     file_path: str,
     branch: str = "main",
     token: Optional[str] = None,
+    max_bytes: int = 1048576,
 ) -> Optional[str]:
-    """
-    Downloads only the manifest file text (e.g. Dockerfile, package.json)
-    directly into memory via raw GitHub content URL.
-    The content is inspected in memory and immediately discarded.
-    """
+    """Fetch bounded text in memory; never write repository content to disk."""
     effective_token = token or os.getenv("GITHUB_TOKEN") or os.getenv("GITHUB_PAT")
     headers = {"User-Agent": "AetherOps-Cloud-Inspector/1.0"}
     if effective_token and "mock" not in effective_token:
         headers["Authorization"] = f"Bearer {effective_token.strip()}"
 
-    # Try raw.githubusercontent.com first
-    raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{file_path}"
-    try:
-        async with httpx.AsyncClient(timeout=6.0) as client:
-            res = await client.get(raw_url, headers=headers)
-            if res.status_code == 200:
-                return res.text
-    except Exception:
-        pass
-
-    # Try GitHub API contents endpoint with raw header
-    api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}?ref={branch}"
-    try:
-        api_headers = {**headers, "Accept": "application/vnd.github.raw+json"}
-        async with httpx.AsyncClient(timeout=6.0) as client:
-            res = await client.get(api_url, headers=api_headers)
-            if res.status_code == 200:
-                return res.text
-    except Exception:
-        pass
-
+    urls = (
+        f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{file_path}",
+        f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}?ref={branch}",
+    )
+    for index, url in enumerate(urls):
+        try:
+            request_headers = headers if index == 0 else {
+                **headers, "Accept": "application/vnd.github.raw+json"
+            }
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                async with client.stream("GET", url, headers=request_headers) as response:
+                    if response.status_code != 200:
+                        continue
+                    chunks = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        chunks.extend(chunk)
+                        if len(chunks) > max_bytes:
+                            logger.warning("Skipping oversized repository file: %s", file_path)
+                            return None
+                    return chunks.decode("utf-8", errors="replace")
+        except httpx.RequestError:
+            continue
     return None
+
 
 async def fetch_github_repo_metadata(
     owner: str,
@@ -698,13 +697,25 @@ async def run_remote_universal_scan(
     ]
 
     inspected_manifests: List[str] = []
-
-    # Inspect manifests in-memory with deterministic parsers (Zero AI consumed)
+    skipped_large_manifests: List[str] = []
+    manifest_sizes = {item.get("path", ""): item.get("size", 0) for item in tree}
     manifest_limit = max(1, int(os.getenv("AETHER_MAX_MANIFESTS", "100")))
+    max_manifest_bytes = max(1024, int(os.getenv("AETHER_MAX_MANIFEST_BYTES", "1048576")))
     truncated_manifests = len(manifest_paths) > manifest_limit
     for m_path in manifest_paths[:manifest_limit]:
         name = Path(m_path).name
-        raw_content = await fetch_manifest_in_memory(owner, repo, m_path, branch=commit_sha, token=token)
+        declared_size = manifest_sizes.get(m_path, 0)
+        if isinstance(declared_size, int) and declared_size > max_manifest_bytes:
+            skipped_large_manifests.append(m_path)
+            continue
+        raw_content = await fetch_manifest_in_memory(
+            owner, repo, m_path, branch=commit_sha, token=token,
+            max_bytes=max_manifest_bytes,
+        )
+        if raw_content is None:
+            if declared_size > max_manifest_bytes:
+                skipped_large_manifests.append(m_path)
+            continue
         if not raw_content:
             continue
         inspected_manifests.append(m_path)
@@ -1028,6 +1039,8 @@ async def run_remote_universal_scan(
         "languages_breakdown": languages_breakdown,
         "inspected_manifests": inspected_manifests,
         "manifest_count": len(manifest_paths),
+        "max_manifest_bytes": max_manifest_bytes,
+        "skipped_large_manifests": skipped_large_manifests,
         "manifest_limit": manifest_limit,
         "truncated_manifests": truncated_manifests,
         "manifest_count": len(manifest_paths),
