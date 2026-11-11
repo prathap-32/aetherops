@@ -4,6 +4,7 @@ import uuid
 import json
 import datetime
 import logging
+from urllib.parse import quote
 from typing import Dict, Any, Optional, List
 
 import httpx
@@ -24,7 +25,7 @@ from app.schemas import (
     CloudConnectionCreate, CloudConnectionUpdate, CloudConnectionOut, CloudConnectionListOut,
     UnifiedFinalizeRequest, UnifiedFinalizeOut,
 )
-from app.auth import get_current_admin, login_admin, SESSION_COOKIE_NAME, create_access_token, MASTER_ADMIN_KEY
+from app.auth import get_current_admin, login_admin, SESSION_COOKIE_NAME, create_access_token, MASTER_ADMIN_KEY, decode_access_token
 from app.cache import cache_manager
 from app.aws_service import validate_aws_connection, mask_access_key
 from app.github_service import (
@@ -1272,6 +1273,220 @@ async def delete_connection(
 # ═══════════════════════════════════════════════════════════════════════════════
 # SOURCE SNAPSHOTS
 # ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/api/v1/connections/{connection_id}/analyzer-context")
+async def get_analyzer_source_context(
+    connection_id: str,
+    request: Request,
+    branch: Optional[str] = None,
+    max_manifests: int = 100,
+    max_manifest_bytes: int = 1048576,
+    max_total_bytes: int = 8388608,
+    db: AsyncSession = Depends(get_db),
+    admin: Dict[str, Any] = Depends(get_current_admin),
+):
+    """Serve bounded commit-pinned source metadata to Module 3 without exporting a GitHub PAT."""
+    authorization = request.headers.get("authorization", "")
+    scheme, _, bearer = authorization.partition(" ")
+    claims = decode_access_token(bearer.strip()) if scheme.lower() == "bearer" and bearer.strip() else None
+    if not claims or not claims.get("uuid") or not claims.get("tenant_id"):
+        raise HTTPException(status_code=403, detail="A verified tenant-scoped user token is required.")
+    token_tenant = str(claims["tenant_id"])
+    header_tenant = request.headers.get("x-tenant-id")
+    if header_tenant and header_tenant != token_tenant:
+        raise HTTPException(status_code=403, detail="Tenant header does not match the authenticated token.")
+
+    conn = await _get_conn_or_404(
+        db,
+        connection_id,
+        str(admin.get("username") or ""),
+        role=str(admin.get("role") or ""),
+        user_uuid=str(claims["uuid"]),
+        tenant_id=token_tenant,
+    )
+    if not conn.encrypted_pat or not conn.pat_nonce or not conn.pat_tag:
+        raise HTTPException(
+            status_code=409,
+            detail="This connection has no decryptable server-side GitHub credential; reconnect it using a supported PAT.",
+        )
+
+    try:
+        from app.crypto_envelope import decrypt_credential
+        github_token = decrypt_credential(
+            conn.encrypted_pat,
+            conn.pat_nonce,
+            conn.pat_tag,
+            conn.tenant_id,
+            conn.id,
+            "github_pat",
+        )
+    except Exception as exc:
+        logger.error("Unable to decrypt GitHub credential for connection %s: %s", conn.id, type(exc).__name__)
+        raise HTTPException(status_code=503, detail="The stored GitHub credential could not be opened; reconnect the repository.") from exc
+
+    max_manifests = min(max(int(max_manifests), 1), 200)
+    max_manifest_bytes = min(max(int(max_manifest_bytes), 1024), 4194304)
+    max_total_bytes = min(max(int(max_total_bytes), 1024), 33554432)
+    requested_branch = (branch or conn.branch or conn.default_branch or "main").strip()
+    owner_name, repo_name = _parse_owner_repo(conn.repo_url)
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "AetherOps-Module-2-Source-Broker/1.0",
+    }
+    api_base = f"https://api.github.com/repos/{owner_name}/{repo_name}"
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0)) as client:
+            commit_response = await client.get(f"{api_base}/commits/{quote(requested_branch, safe='')}", headers=headers)
+            if commit_response.status_code != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"GitHub commit lookup failed with HTTP {commit_response.status_code}.",
+                )
+            commit_data = commit_response.json()
+            commit_sha = str(commit_data.get("sha") or "")
+            if not re.fullmatch(r"[0-9a-fA-F]{40}", commit_sha):
+                raise HTTPException(status_code=502, detail="GitHub did not return a valid immutable commit SHA.")
+
+            tree_response = await client.get(f"{api_base}/git/trees/{commit_sha}?recursive=1", headers=headers)
+            if tree_response.status_code != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"GitHub tree lookup failed with HTTP {tree_response.status_code}.",
+                )
+            tree_data = tree_response.json()
+            if tree_data.get("truncated"):
+                raise HTTPException(
+                    status_code=422,
+                    detail="GitHub returned a truncated repository tree; increase repository partitioning before analysis.",
+                )
+
+            ignored = {
+                ".git", ".svn", ".hg", "node_modules", "vendor", ".venv", "venv", "env",
+                "__pycache__", ".pytest_cache", ".next", ".nuxt", "dist", "build", "target",
+                "bin", "obj", ".idea", ".vscode", "coverage",
+            }
+            tree = []
+            for item in tree_data.get("tree") or []:
+                path = str(item.get("path") or "")
+                parts = path.split("/")
+                if not path or path.startswith("/") or ".." in parts or any(part in ignored for part in parts):
+                    continue
+                if item.get("type") not in {"tree", "blob"}:
+                    continue
+                tree.append({
+                    "path": path,
+                    "type": "dir" if item.get("type") == "tree" else "file",
+                    "size": item.get("size", 0) if item.get("type") == "blob" else 0,
+                })
+            if len(tree) > 50000:
+                raise HTTPException(status_code=413, detail="Repository tree exceeds the 50,000-entry analysis limit.")
+
+            recognized = {
+                "package.json", "requirements.txt", "pyproject.toml", "Pipfile", "setup.py",
+                "go.mod", "pom.xml", "build.gradle", "build.gradle.kts", "Cargo.toml",
+                "composer.json", "Gemfile", "Dockerfile", "docker-compose.yml",
+                "docker-compose.yaml", "serverless.yml", "sam.yaml", "template.yaml",
+            }
+            candidates = [
+                item for item in tree
+                if item["type"] == "file" and (
+                    item["path"].rsplit("/", 1)[-1] in recognized
+                    or "compose" in item["path"].rsplit("/", 1)[-1].lower()
+                    or item["path"].rsplit("/", 1)[-1].startswith("requirements")
+                    and item["path"].rsplit("/", 1)[-1].endswith(".txt")
+                )
+            ]
+            manifest_contents: dict[str, str] = {}
+            skipped_large: list[str] = []
+            unavailable: list[str] = []
+            total_bytes = 0
+            selected = candidates[:max_manifests]
+            for item in selected:
+                path = item["path"]
+                declared_size = item.get("size") or 0
+                if isinstance(declared_size, int) and declared_size > max_manifest_bytes:
+                    skipped_large.append(path)
+                    continue
+                if total_bytes >= max_total_bytes:
+                    unavailable.append(path)
+                    continue
+                content_url = f"{api_base}/contents/{quote(path, safe='/')}?ref={commit_sha}"
+                try:
+                    async with client.stream(
+                        "GET",
+                        content_url,
+                        headers={**headers, "Accept": "application/vnd.github.raw+json"},
+                    ) as content_response:
+                        if content_response.status_code != 200:
+                            unavailable.append(path)
+                            continue
+                        content_bytes = bytearray()
+                        async for chunk in content_response.aiter_bytes():
+                            content_bytes.extend(chunk)
+                            if len(content_bytes) > max_manifest_bytes or total_bytes + len(content_bytes) > max_total_bytes:
+                                content_bytes.clear()
+                                break
+                        if not content_bytes:
+                            if declared_size > max_manifest_bytes or total_bytes >= max_total_bytes:
+                                skipped_large.append(path)
+                            else:
+                                unavailable.append(path)
+                            continue
+                        total_bytes += len(content_bytes)
+                        manifest_contents[path] = content_bytes.decode("utf-8", errors="replace")
+                except httpx.RequestError:
+                    unavailable.append(path)
+
+            repo_response = await client.get(api_base, headers=headers)
+            repo_metadata = {}
+            if repo_response.status_code == 200:
+                repo_data = repo_response.json()
+                repo_metadata = {
+                    "owner": owner_name,
+                    "repo": repo_name,
+                    "full_name": repo_data.get("full_name") or f"{owner_name}/{repo_name}",
+                    "description": repo_data.get("description") or "",
+                    "html_url": repo_data.get("html_url") or conn.repo_url,
+                    "default_branch": repo_data.get("default_branch") or conn.default_branch or "main",
+                    "visibility": "private" if repo_data.get("private") else "public",
+                    "stars_count": repo_data.get("stargazers_count", 0),
+                    "forks_count": repo_data.get("forks_count", 0),
+                    "open_issues_count": repo_data.get("open_issues_count", 0),
+                    "size_kb": repo_data.get("size", 0),
+                    "license": (repo_data.get("license") or {}).get("spdx_id") or "None",
+                    "topics": repo_data.get("topics") or [],
+                    "latest_commit": commit_data.get("commit", {}).get("message", "").split("\n")[0][:120],
+                }
+            return {
+                "connection_id": conn.id,
+                "project_id": conn.project_id,
+                "environment_id": conn.environment_id,
+                "tenant_id": conn.tenant_id,
+                "owner": owner_name,
+                "repo": repo_name,
+                "branch": requested_branch,
+                "commit_sha": commit_sha,
+                "tree": tree,
+                "manifest_contents": manifest_contents,
+                "manifest_count": len(candidates),
+                "manifest_limit": max_manifests,
+                "truncated_manifests": len(candidates) > max_manifests,
+                "max_manifest_bytes": max_manifest_bytes,
+                "max_total_bytes": max_total_bytes,
+                "manifest_bytes_fetched": total_bytes,
+                "skipped_large_manifests": skipped_large,
+                "unavailable_manifests": unavailable,
+                "repo_metadata": repo_metadata,
+            }
+    except HTTPException:
+        raise
+    except httpx.RequestError as exc:
+        logger.warning("GitHub source-context request failed for connection %s: %s", conn.id, type(exc).__name__)
+        raise HTTPException(status_code=502, detail="GitHub source-context request failed.") from exc
+
 
 @router.get("/api/v1/connections/{connection_id}/snapshot", response_model=SourceSnapshotOut)
 async def get_snapshot(
