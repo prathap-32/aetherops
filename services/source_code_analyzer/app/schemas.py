@@ -20,13 +20,15 @@ class ScanRequest(BaseModel):
 
 
 class CoverageOut(BaseModel):
-    files_scanned: int
-    files_skipped: int
-    bytes_read_kb: float
-    detectors_run: list[str]
-    detectors_failed: list[str]
-    limits_hit: list[str]
-    languages_without_framework_rules: list[str]
+    status: str = "MEASURED"
+    files_scanned: Optional[int] = None
+    files_skipped: Optional[int] = None
+    bytes_read_kb: Optional[float] = None
+    detectors_run: list[str] = Field(default_factory=list)
+    detectors_failed: list[str] = Field(default_factory=list)
+    limits_hit: list[str] = Field(default_factory=list)
+    languages_without_framework_rules: list[str] = Field(default_factory=list)
+    inspected_manifests: list[str] = Field(default_factory=list)
 
 
 class ComponentOut(BaseModel):
