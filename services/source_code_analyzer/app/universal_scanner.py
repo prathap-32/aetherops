@@ -591,6 +591,10 @@ async def fetch_connection_analysis_context(
             )
     except httpx.RequestError as exc:
         raise RuntimeError("Module 2 source credential broker is unavailable.") from exc
+    if response.status_code == 403 or response.status_code == 401:
+        raise PermissionError("Module 2 rejected the authenticated tenant identity.")
+    if response.status_code in {404, 409}:
+        raise ValueError("The connected repository or its stored GitHub credential is unavailable; reconnect it in Module 2.")
     if response.status_code != 200:
         raise RuntimeError(
             f"Module 2 could not provide repository analysis context (HTTP {response.status_code})."
@@ -913,7 +917,10 @@ async def run_remote_universal_scan(
                         break
 
     # Repository metadata is descriptive; all source reads use commit_sha.
-    repo_meta = (connection_context or {}).get("repo_metadata") or await fetch_github_repo_metadata(owner=owner, repo=repo, token=token)
+    if connection_context:
+        repo_meta = connection_context.get("repo_metadata") or {}
+    else:
+        repo_meta = await fetch_github_repo_metadata(owner=owner, repo=repo, token=token)
     repo_meta["latest_commit"] = commit_info
     language_bytes: Dict[str, int] = {}
     for item in tree:
