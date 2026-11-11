@@ -177,141 +177,109 @@ async def resolve_repo_target(
     raw_target: str,
     project_id: Optional[str] = None,
     environment_id: Optional[str] = None,
+    authorization: Optional[str] = None,
+    tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Disambiguates whether the repository target is:
-    1. A remote GitHub URL (https://github.com/owner/repo)
-    2. A GitHub slug (owner/repo)
-    3. A repository name matched from Module 2 Git connections (e.g. Docker_webApp_analogClock)
-    4. A local directory path (e.g. ., /home/user/code)
-    """
-    raw = raw_target.strip()
+    Resolve local paths or a repository already connected through Module 2.
 
-    # Check local paths first
+    Remote repository access is never inferred from a default owner and Module 3
+    does not query Module 2's database directly. The authenticated Module 2 API
+    remains the authority for repository connection ownership.
+    """
+    from urllib.parse import urlparse
+
+    raw = (raw_target or "").strip()
+    if not raw:
+        raise ValueError("Repository target is required.")
+
+    # Local paths are still subject to validate_safe_repo_path in the API layer.
     local_candidate = Path(raw).expanduser()
     if local_candidate.exists():
-        return {
-            "is_remote": False,
-            "path": str(local_candidate.resolve()),
-        }
+        return {"is_remote": False, "path": str(local_candidate.resolve())}
+
     root_candidate = Path(ROOT_DIR, raw).expanduser()
     if root_candidate.exists():
-        return {
-            "is_remote": False,
-            "path": str(root_candidate.resolve()),
-        }
+        return {"is_remote": False, "path": str(root_candidate.resolve())}
+
     cwd_candidate = Path(os.getcwd(), raw).expanduser()
     if cwd_candidate.exists():
-        return {
-            "is_remote": False,
-            "path": str(cwd_candidate.resolve()),
-        }
-    if raw.lower() in ("aetherops", "aether-cloud", ".", "workspace") or "aetherops" in raw.lower() or "aether-cloud" in raw.lower():
-        if os.path.exists(ROOT_DIR):
-            return {
-                "is_remote": False,
-                "path": ROOT_DIR,
-            }
-    # 1. Direct URL
-    if raw.startswith(("http://", "https://", "git@")):
-        clean = raw.split(".git")[0].rstrip("/")
-        parts = clean.split("/")
-        owner = parts[-2] if len(parts) >= 2 else "unknown"
-        repo = parts[-1] if len(parts) >= 1 else "unknown"
-        return {
-            "is_remote": True,
-            "owner": owner,
-            "repo": repo,
-            "branch": "main",
-            "url": raw,
-        }
+        return {"is_remote": False, "path": str(cwd_candidate.resolve())}
 
-    # 2. owner/repo slug
-    if "/" in raw and not os.path.exists(raw):
-        parts = raw.split("/")
-        return {
-            "is_remote": True,
-            "owner": parts[0],
-            "repo": parts[1],
-            "branch": "main",
-            "url": f"https://github.com/{raw}",
-        }
-    # 3. Check Module 2 Git connections if not present as local directory
-    if not os.path.exists(raw):
-        # Check SQLite db for connection metadata
-        db_candidates = [
-            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "source_and_cloud_connection", "source_connections.db"),
-            "./services/source_and_cloud_connection/source_connections.db",
-            "./source_connections.db",
-        ]
-        for db_path in db_candidates:
-            if os.path.exists(db_path):
-                try:
-                    con = sqlite3.connect(db_path)
-                    cur = con.cursor()
-                    query = "SELECT repo_name, repo_url, branch, id FROM sc_git_connections WHERE repo_name LIKE ? OR repo_url LIKE ?"
-                    cur.execute(query, (f"%{raw}%", f"%{raw}%"))
-                    row = cur.fetchone()
-                    if not row and environment_id:
-                        cur.execute("SELECT repo_name, repo_url, branch, id FROM sc_git_connections WHERE environment_id = ?", (environment_id,))
-                        row = cur.fetchone()
-                    con.close()
-                    if row:
-                        parts = row[0].split("/")
-                        owner = parts[0] if len(parts) > 1 else "unknown"
-                        repo = parts[-1]
-                        return {
-                            "is_remote": True,
-                            "owner": owner,
-                            "repo": repo,
-                            "branch": row[2] or "main",
-                            "url": row[1],
-                            "connection_id": row[3],
-                        }
-                except Exception as exc:
-                    logger.debug(f"SQLite lookup failed for {raw}: {exc}")
+    requested_slug: Optional[str] = None
+    if raw.startswith(("https://", "http://")):
+        parsed = urlparse(raw)
+        if parsed.scheme != "https" or (parsed.hostname or "").lower() != "github.com":
+            raise ValueError("Only HTTPS GitHub repository URLs are supported.")
+        parts = [part for part in parsed.path.strip("/").split("/") if part]
+        if len(parts) != 2:
+            raise ValueError("Provide a GitHub repository URL in owner/repository form.")
+        requested_slug = "/".join(parts).removesuffix(".git")
+    elif "/" in raw and not raw.startswith((".", "/")):
+        parts = [part for part in raw.strip("/").split("/") if part]
+        if len(parts) != 2:
+            raise ValueError("Repository slug must contain exactly owner/repository.")
+        requested_slug = "/".join(parts)
+    else:
+        requested_slug = raw
 
-        # Check Module 2 REST API if running
-        try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                res = await client.get(
-                    "http://localhost:8002/api/v1/connections",
-                    headers={"X-Admin-Key": os.getenv("ADMIN_API_KEY", "aetherops-secret-admin-key")},
-                )
-                if res.status_code == 200:
-                    data = res.json()
-                    for conn in data.get("connections", []):
-                        rname = conn.get("repo_name", "")
-                        rurl = conn.get("repo_url", "")
-                        if raw in rname or raw in rurl or (environment_id and conn.get("environment_id") == environment_id):
-                            parts = rname.split("/")
-                            owner = parts[0] if len(parts) > 1 else "unknown"
-                            repo = parts[-1]
-                            return {
-                                "is_remote": True,
-                                "owner": owner,
-                                "repo": repo,
-                                "branch": conn.get("branch", "main"),
-                                "url": rurl,
-                                "connection_id": conn.get("id"),
-                            }
-        except Exception:
-            pass
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise ValueError("An authenticated session is required to resolve a connected repository.")
 
-        # If it doesn't exist locally and looks like a repo name without slashes, assume GitHub repo
-        if not raw.startswith((".", "/")):
-            return {
-                "is_remote": True,
-                "owner": "prathap-32",  # Default account fallback
-                "repo": raw,
-                "branch": "main",
-                "url": f"https://github.com/prathap-32/{raw}",
-            }
+    headers = {"Authorization": authorization}
+    if tenant_id:
+        headers["X-Tenant-ID"] = tenant_id
 
-    # 4. Local filesystem path
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            response = await client.get(
+                "http://127.0.0.1:8002/api/v1/connections",
+                headers=headers,
+            )
+    except httpx.RequestError as exc:
+        raise RuntimeError("Module 2 repository connection service is unavailable.") from exc
+
+    if response.status_code != 200:
+        raise ValueError("Module 2 did not authorize access to repository connections.")
+
+    connections = response.json().get("connections", [])
+    matches = []
+    for connection in connections:
+        if project_id and connection.get("project_id") != project_id:
+            continue
+        if environment_id and connection.get("environment_id") != environment_id:
+            continue
+
+        repo_url = (connection.get("repo_url") or "").strip()
+        repo_name = (connection.get("repo_name") or "").strip()
+        parsed = urlparse(repo_url)
+        connected_slug = "/".join(part for part in parsed.path.strip("/").split("/") if part).removesuffix(".git")
+        if requested_slug.lower() in {connected_slug.lower(), repo_name.lower()}:
+            matches.append(connection)
+        elif "/" not in requested_slug and repo_name.lower().split("/")[-1] == requested_slug.lower():
+            matches.append(connection)
+
+    if len(matches) != 1:
+        if not matches:
+            raise ValueError("No authorized Module 2 repository connection matches this target and project environment.")
+        raise ValueError("Repository target is ambiguous; select its exact project environment.")
+
+    connection = matches[0]
+    repo_url = (connection.get("repo_url") or "").strip()
+    parsed = urlparse(repo_url)
+    parts = [part for part in parsed.path.strip("/").split("/") if part]
+    if parsed.hostname != "github.com" or len(parts) != 2:
+        raise ValueError("The connected repository is not a supported GitHub repository.")
+
     return {
-        "is_remote": False,
-        "path": raw,
+        "is_remote": True,
+        "owner": parts[0],
+        "repo": parts[1].removesuffix(".git"),
+        "branch": connection.get("branch") or connection.get("default_branch") or "main",
+        "url": repo_url,
+        "connection_id": connection.get("id"),
+        "project_id": connection.get("project_id"),
+        "environment_id": connection.get("environment_id"),
     }
 
 
