@@ -279,6 +279,11 @@ export const connectionsApi = {
 };
 
 export const repoAnalyzerApi = {
+  listRuns: (projectId, limit = 8) =>
+    apiRequest(`/api/v1/analysis-runs?project_id=${encodeURIComponent(projectId || '')}&limit=${limit}`),
+  getRun: (runId) =>
+    apiRequest(`/api/v1/analysis-runs/${encodeURIComponent(runId)}`),
+
   getSbom: (runId, format) =>
     apiRequest(`/api/v1/analysis-runs/${encodeURIComponent(runId)}/sbom${format ? `?format=${encodeURIComponent(format)}` : ''}`),
 
