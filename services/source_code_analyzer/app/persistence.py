@@ -182,12 +182,22 @@ async def persist_analysis_report(
         )
         session.add(finding)
         await session.flush()
-        evidence_paths = report.get("inspected_manifests") or []
-        for source_path in evidence_paths:
-            session.add(EvidenceRecord(
-                finding_id=finding.id, source_path=str(source_path),
-                evidence_type="MANIFEST",
-            ))
+
+    # Manifest evidence is recorded as its own finding so it is not falsely
+    # attributed to every language/framework/database result.
+    for source_path in report.get("inspected_manifests") or []:
+        manifest_finding = AnalysisFinding(
+            run_id=run.id, application_id=applications[0].id,
+            category="MANIFEST_INSPECTED", subject=str(source_path),
+            value={"path": str(source_path)}, verification_status="OBSERVED",
+            confidence="HIGH", detector="manifest_inventory",
+        )
+        session.add(manifest_finding)
+        await session.flush()
+        session.add(EvidenceRecord(
+            finding_id=manifest_finding.id, source_path=str(source_path),
+            evidence_type="MANIFEST",
+        ))
 
     run.status = "PARTIAL" if report.get("profile_completeness", "PARTIAL") == "PARTIAL" else "SUCCEEDED"
     run.completed_at = utc_now()
