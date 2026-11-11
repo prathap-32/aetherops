@@ -29,3 +29,55 @@ def test_local_monorepo_dependency_inventory_is_bounded_and_scoped(tmp_path):
         "fastapi", "react"
     }
     assert report["dependency_count"] == 2
+
+
+import pytest
+from app import universal_scanner
+
+
+@pytest.mark.anyio
+async def test_connection_context_requires_verified_tenant_identity():
+    with pytest.raises(ValueError):
+        await universal_scanner.fetch_connection_analysis_context(
+            connection_id="connection-1",
+            authorization="",
+            tenant_id="",
+        )
+
+
+@pytest.mark.anyio
+async def test_connection_context_rejects_cross_tenant_response(monkeypatch):
+    context = {
+        "connection_id": "connection-1",
+        "tenant_id": "tenant-other",
+        "project_id": "project-1",
+        "environment_id": "environment-1",
+        "commit_sha": "a" * 40,
+        "tree": [],
+        "manifest_contents": {},
+    }
+
+    class FakeResponse:
+        status_code = 200
+        def json(self):
+            return context
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *args):
+            return False
+        async def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(universal_scanner.httpx, "AsyncClient", FakeClient)
+    with pytest.raises(PermissionError):
+        await universal_scanner.fetch_connection_analysis_context(
+            connection_id="connection-1",
+            authorization="Bearer verified-token",
+            tenant_id="tenant-a",
+            project_id="project-1",
+            environment_id="environment-1",
+        )
