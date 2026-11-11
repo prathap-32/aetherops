@@ -47,13 +47,6 @@ export default function Navbar({
             }}
           />
         </div>
-
-        {activeProject && (
-          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200/85 text-blue-900 text-sm font-medium ml-2">
-            <span className="w-2 h-2 rounded-full bg-blue-600" />
-            <span className="truncate max-w-[180px]">{activeProject.name}</span>
-          </div>
-        )}
       </div>
 
       {/* Right: Quick Account Info & Actions */}
