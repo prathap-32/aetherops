@@ -762,7 +762,7 @@ export default function RepoAnalyzerView({
                 </div>
               )}
 
-              {scanReport.dependencies_detected?.length > 0 && (
+              {(scanReport.dependencies_detected?.length > 0 || scanReport.sbom_formats?.length > 0) && (
                 <div className="bg-white/5 rounded-lg p-2.5 border border-white/5">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
