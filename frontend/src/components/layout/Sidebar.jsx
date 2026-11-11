@@ -118,23 +118,28 @@ export default function Sidebar({
           /* Expanded Desktop Mode (w-64) */
           <div className="flex flex-col h-full justify-between">
             <div>
-              {/* Header with optimized logo and collapse button */}
-              <div className="h-16 px-4 border-b border-slate-100 flex items-center justify-between">
+              {/* Header with optimized logo image only and collapse button */}
+              <div 
+                className="h-16 px-4 border-b border-slate-100 flex items-center justify-between select-none"
+                onContextMenu={(e) => e.preventDefault()}
+              >
                 <div
                   onClick={() => navItemClick('dashboard', '/')}
-                  className="cursor-pointer group flex items-center gap-2.5 select-none min-w-0"
+                  className="cursor-pointer group flex items-center select-none"
                 >
                   <img
                     src="/static/logo/aetherops_light_transparent.webp"
-                    alt="AetherOps"
-                    className="w-9 h-9 object-contain shrink-0"
-                    width="36"
-                    height="36"
+                    alt="AetherOps Logo"
+                    className="h-9 max-w-[160px] w-auto object-contain object-left transition-opacity group-hover:opacity-90 select-none pointer-events-none"
                     draggable={false}
+                    onContextMenu={(e) => e.preventDefault()}
+                    style={{
+                      WebkitUserDrag: 'none',
+                      userSelect: 'none',
+                      WebkitTouchCallout: 'none',
+                      pointerEvents: 'none',
+                    }}
                   />
-                  <span className="font-bold text-slate-900 text-lg tracking-tight truncate">
-                    AetherOps
-                  </span>
                 </div>
                 <button
                   type="button"
@@ -272,7 +277,10 @@ export default function Sidebar({
           <div className="flex flex-col h-full justify-between">
             <div>
               {/* Top Compact Icon Logo */}
-              <div className="h-16 border-b border-slate-100 flex items-center justify-center">
+              <div 
+                className="h-16 border-b border-slate-100 flex items-center justify-center select-none"
+                onContextMenu={(e) => e.preventDefault()}
+              >
                 <button
                   type="button"
                   onClick={toggleDesktopExpanded}
@@ -282,11 +290,18 @@ export default function Sidebar({
                 >
                   <img
                     src="/static/logo/aetherops_light_transparent.webp"
-                    alt="AetherOps"
+                    alt="AetherOps Logo"
                     className="w-9 h-9 object-contain select-none pointer-events-none group-hover:scale-105 transition"
                     width="36"
                     height="36"
                     draggable={false}
+                    onContextMenu={(e) => e.preventDefault()}
+                    style={{
+                      WebkitUserDrag: 'none',
+                      userSelect: 'none',
+                      WebkitTouchCallout: 'none',
+                      pointerEvents: 'none',
+                    }}
                   />
                 </button>
               </div>
@@ -356,23 +371,28 @@ export default function Sidebar({
         aria-label="Mobile Navigation Drawer"
       >
         <div>
-          {/* Header with optimized logo and close button */}
-          <div className="h-16 px-4 border-b border-slate-100 flex items-center justify-between">
+          {/* Header with logo-only image and close button */}
+          <div 
+            className="h-16 px-4 border-b border-slate-100 flex items-center justify-between select-none"
+            onContextMenu={(e) => e.preventDefault()}
+          >
             <div
               onClick={() => navItemClick('dashboard', '/')}
-              className="cursor-pointer group flex items-center gap-2.5 select-none min-w-0"
+              className="cursor-pointer group flex items-center select-none"
             >
               <img
                 src="/static/logo/aetherops_light_transparent.webp"
-                alt="AetherOps"
-                className="w-9 h-9 object-contain shrink-0"
-                width="36"
-                height="36"
+                alt="AetherOps Logo"
+                className="h-9 max-w-[160px] w-auto object-contain object-left transition-opacity group-hover:opacity-90 select-none pointer-events-none"
                 draggable={false}
+                onContextMenu={(e) => e.preventDefault()}
+                style={{
+                  WebkitUserDrag: 'none',
+                  userSelect: 'none',
+                  WebkitTouchCallout: 'none',
+                  pointerEvents: 'none',
+                }}
               />
-              <span className="font-bold text-slate-900 text-lg tracking-tight truncate">
-                AetherOps
-              </span>
             </div>
 
             <button

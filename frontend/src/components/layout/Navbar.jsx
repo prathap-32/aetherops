@@ -13,7 +13,7 @@ export default function Navbar({
 }) {
   return (
     <header className="sticky top-0 z-20 h-16 lg:h-18 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-8 flex items-center justify-between min-w-0 transition-colors shadow-2xs">
-      {/* Left: Hamburger (Mobile) + Global Brand Logo & Name */}
+      {/* Left: Hamburger (Mobile) + Global Brand Logo */}
       <div className="flex items-center gap-3 sm:gap-4 min-w-0">
         {/* Mobile Hamburger Toggle Button */}
         <button
@@ -26,23 +26,26 @@ export default function Navbar({
           <Menu className="w-6 h-6" />
         </button>
 
-        {/* Global Brand Logo & Application Name */}
+        {/* Global Brand Logo (Logo contains text; anti-download protected) */}
         <div
-          className="flex items-center gap-2.5 shrink-0 select-none cursor-pointer"
+          className="flex items-center shrink-0 select-none cursor-pointer"
           onClick={() => onNavigate && onNavigate('dashboard', '/')}
           title="AetherOps Cloud Platform"
+          onContextMenu={(e) => e.preventDefault()}
         >
           <img
             src="/static/logo/aetherops_light_transparent.webp"
             alt="AetherOps Logo"
-            width="36"
-            height="36"
-            className="w-9 h-9 object-contain shrink-0"
-            draggable="false"
+            className="h-9 max-w-[160px] w-auto object-contain object-left select-none pointer-events-none"
+            draggable={false}
+            onContextMenu={(e) => e.preventDefault()}
+            style={{
+              WebkitUserDrag: 'none',
+              userSelect: 'none',
+              WebkitTouchCallout: 'none',
+              pointerEvents: 'none',
+            }}
           />
-          <span className="font-bold text-slate-900 tracking-tight text-lg sm:text-xl hidden sm:inline">
-            AetherOps
-          </span>
         </div>
 
         {activeProject && (
