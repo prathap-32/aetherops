@@ -560,18 +560,72 @@ async def fetch_github_latest_commit(
         "date": None,
     }
 
+async def fetch_connection_analysis_context(
+    *,
+    connection_id: str,
+    authorization: str,
+    tenant_id: str,
+    branch: str | None = None,
+    project_id: str | None = None,
+    environment_id: str | None = None,
+) -> Dict[str, Any]:
+    """Ask Module 2 to fetch commit-pinned manifests using its encrypted GitHub credential."""
+    if not authorization.lower().startswith("bearer ") or not tenant_id:
+        raise ValueError("A verified tenant-scoped bearer identity is required for connected repository analysis.")
+    service_url = os.getenv(
+        "SC_SERVICE_URL",
+        os.getenv("SOURCE_CONNECTION_SERVICE_URL", "http://127.0.0.1:8002"),
+    ).rstrip("/")
+    params = {
+        "branch": branch or "main",
+        "max_manifests": max(1, int(os.getenv("AETHER_MAX_MANIFESTS", "100"))),
+        "max_manifest_bytes": max(1024, int(os.getenv("AETHER_MAX_MANIFEST_BYTES", "1048576"))),
+    }
+    headers = {"Authorization": authorization, "X-Tenant-ID": tenant_id}
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{service_url}/api/v1/connections/{connection_id}/analyzer-context",
+                params=params,
+                headers=headers,
+            )
+    except httpx.RequestError as exc:
+        raise RuntimeError("Module 2 source credential broker is unavailable.") from exc
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Module 2 could not provide repository analysis context (HTTP {response.status_code})."
+        )
+    context = response.json()
+    if context.get("connection_id") != connection_id:
+        raise ValueError("Module 2 returned a different repository connection.")
+    if str(context.get("tenant_id") or "") != tenant_id:
+        raise PermissionError("Module 2 returned a repository outside the authenticated tenant.")
+    if project_id and str(context.get("project_id") or "") != project_id:
+        raise PermissionError("Module 2 returned a repository outside the selected project.")
+    if environment_id and str(context.get("environment_id") or "") != environment_id:
+        raise PermissionError("Module 2 returned a repository outside the selected environment.")
+    commit_sha = str(context.get("commit_sha") or "")
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", commit_sha):
+        raise ValueError("Module 2 did not return an immutable Git commit SHA.")
+    if not isinstance(context.get("tree"), list) or not isinstance(context.get("manifest_contents"), dict):
+        raise ValueError("Module 2 returned an invalid source-analysis context.")
+    return context
+
+
 async def check_remote_readiness(
     owner: str,
     repo: str,
     branch: str = "main",
     token: Optional[str] = None,
+    tree: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """
     Pre-flight AST readiness check for remote GitHub repositories.
     Inspects repository file tree in-memory with zero local disk clones.
     0 LLM tokens consumed.
     """
-    tree = await fetch_github_file_tree_in_memory(owner=owner, repo=repo, branch=branch, token=token)
+    if tree is None:
+        tree = await fetch_github_file_tree_in_memory(owner=owner, repo=repo, branch=branch, token=token)
     if not tree:
         return {
             "is_analyzable": False,
@@ -657,6 +711,7 @@ async def run_remote_universal_scan(
     token: Optional[str] = None,
     environment_tier: str = "development",
     target_region: str = "us-east-1",
+    connection_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Executes in-memory universal scan for remote GitHub repositories.
@@ -664,12 +719,17 @@ async def run_remote_universal_scan(
     into memory, extracts deployment primitives, and produces the human-understandable
     Key:Value report. Zero source code is written to disk.
     """
-    commit_info = await fetch_github_latest_commit(owner=owner, repo=repo, branch=branch, token=token)
-    commit_sha = commit_info.get("sha")
-    if not commit_sha or commit_sha == "latest":
-        raise ValueError("Unable to resolve an immutable commit SHA; analysis was not started.")
-
-    tree = await fetch_github_file_tree_in_memory(owner=owner, repo=repo, branch=commit_sha, token=token)
+    if connection_context:
+        commit_sha = str(connection_context["commit_sha"])
+        tree = connection_context["tree"]
+        manifest_contents = connection_context["manifest_contents"]
+    else:
+        commit_info = await fetch_github_latest_commit(owner=owner, repo=repo, branch=branch, token=token)
+        commit_sha = commit_info.get("sha")
+        if not commit_sha or commit_sha == "latest":
+            raise ValueError("Unable to resolve an immutable commit SHA; analysis was not started.")
+        tree = await fetch_github_file_tree_in_memory(owner=owner, repo=repo, branch=commit_sha, token=token)
+        manifest_contents = {}
 
     found_frameworks: Set[str] = set()
     found_databases: Set[str] = set()
@@ -699,7 +759,8 @@ async def run_remote_universal_scan(
 
     inspected_manifests: List[str] = []
     dependencies_detected: List[Dict[str, Any]] = []
-    skipped_large_manifests: List[str] = []
+    skipped_large_manifests: List[str] = list((connection_context or {}).get("skipped_large_manifests") or [])
+    unavailable_manifests: List[str] = list((connection_context or {}).get("unavailable_manifests") or [])
     manifest_sizes = {item.get("path", ""): item.get("size", 0) for item in tree}
     manifest_limit = max(1, int(os.getenv("AETHER_MAX_MANIFESTS", "100")))
     max_manifest_bytes = max(1024, int(os.getenv("AETHER_MAX_MANIFEST_BYTES", "1048576")))
@@ -710,7 +771,7 @@ async def run_remote_universal_scan(
         if isinstance(declared_size, int) and declared_size > max_manifest_bytes:
             skipped_large_manifests.append(m_path)
             continue
-        raw_content = await fetch_manifest_in_memory(
+        raw_content = manifest_contents.get(m_path) if connection_context else await fetch_manifest_in_memory(
             owner, repo, m_path, branch=commit_sha, token=token,
             max_bytes=max_manifest_bytes,
         )
@@ -845,7 +906,7 @@ async def run_remote_universal_scan(
                         break
 
     # Repository metadata is descriptive; all source reads use commit_sha.
-    repo_meta = await fetch_github_repo_metadata(owner=owner, repo=repo, token=token)
+    repo_meta = (connection_context or {}).get("repo_metadata") or await fetch_github_repo_metadata(owner=owner, repo=repo, token=token)
     repo_meta["latest_commit"] = commit_info
     language_bytes: Dict[str, int] = {}
     for item in tree:
@@ -1046,6 +1107,8 @@ async def run_remote_universal_scan(
         "manifest_count": len(manifest_paths),
         "max_manifest_bytes": max_manifest_bytes,
         "skipped_large_manifests": skipped_large_manifests,
+        "unavailable_manifests": unavailable_manifests,
+        "manifest_bytes_fetched": (connection_context or {}).get("manifest_bytes_fetched"),
         "manifest_limit": manifest_limit,
         "truncated_manifests": truncated_manifests,
         "manifest_count": len(manifest_paths),
