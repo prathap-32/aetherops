@@ -1,5 +1,5 @@
 // frontend/src/components/layout/Sidebar.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { formatAccountId } from '../../services/api';
 import {
@@ -95,19 +95,30 @@ export default function Sidebar({
     }
   };
 
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && mobileOpen && setMobileOpen) {
+        setMobileOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileOpen, setMobileOpen]);
+
   const initials = (user?.username || 'AO').slice(0, 2).toUpperCase();
   return (
     <>
-      {/* 1. Mobile Backdrop Overlay */}
+      {/* 1. Mobile Backdrop Overlay (below global top bar) */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 lg:hidden transition-opacity duration-200"
+          className="fixed inset-0 top-16 lg:top-18 bg-slate-900/50 backdrop-blur-xs z-30 lg:hidden transition-opacity duration-200"
           onClick={() => setMobileOpen && setMobileOpen(false)}
           aria-hidden="true"
         />
       )}
 
-      {/* 2. Desktop Sidebar */}
+      {/* 2. Desktop Sidebar (No logo/branding; top bar is sole branding location) */}
       <aside
         className={`hidden lg:flex flex-col h-full justify-between select-none bg-white border-r border-slate-200/80 transition-all duration-200 shrink-0 z-20 ${
           desktopExpanded ? 'w-64' : 'w-16'
@@ -118,29 +129,9 @@ export default function Sidebar({
           /* Expanded Desktop Mode (w-64) */
           <div className="flex flex-col h-full justify-between">
             <div>
-              {/* Header with optimized logo image only and collapse button */}
-              <div 
-                className="h-16 px-4 border-b border-slate-100 flex items-center justify-between select-none"
-                onContextMenu={(e) => e.preventDefault()}
-              >
-                <div
-                  onClick={() => navItemClick('dashboard', '/')}
-                  className="cursor-pointer group flex items-center select-none"
-                >
-                  <img
-                    src="/static/logo/aetherops_light_transparent.webp"
-                    alt="AetherOps Logo"
-                    className="h-9 max-w-[160px] w-auto object-contain object-left transition-opacity group-hover:opacity-90 select-none pointer-events-none"
-                    draggable={false}
-                    onContextMenu={(e) => e.preventDefault()}
-                    style={{
-                      WebkitUserDrag: 'none',
-                      userSelect: 'none',
-                      WebkitTouchCallout: 'none',
-                      pointerEvents: 'none',
-                    }}
-                  />
-                </div>
+              {/* Collapse Toggle Header (No logo) */}
+              <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Navigation</span>
                 <button
                   type="button"
                   onClick={toggleDesktopExpanded}
@@ -276,33 +267,16 @@ export default function Sidebar({
           /* Compact Desktop Mode (w-16) */
           <div className="flex flex-col h-full justify-between">
             <div>
-              {/* Top Compact Icon Logo */}
-              <div 
-                className="h-16 border-b border-slate-100 flex items-center justify-center select-none"
-                onContextMenu={(e) => e.preventDefault()}
-              >
+              {/* Expand Toggle Header (No logo) */}
+              <div className="py-3 border-b border-slate-100 flex items-center justify-center">
                 <button
                   type="button"
                   onClick={toggleDesktopExpanded}
-                  className="w-11 h-11 rounded-xl hover:bg-slate-100 flex items-center justify-center transition cursor-pointer group select-none"
+                  className="w-10 h-10 rounded-xl hover:bg-slate-100 flex items-center justify-center transition cursor-pointer text-slate-500"
                   title="Click to expand sidebar"
                   aria-label="Expand sidebar"
                 >
-                  <img
-                    src="/static/logo/aetherops_light_transparent.webp"
-                    alt="AetherOps Logo"
-                    className="w-9 h-9 object-contain select-none pointer-events-none group-hover:scale-105 transition"
-                    width="36"
-                    height="36"
-                    draggable={false}
-                    onContextMenu={(e) => e.preventDefault()}
-                    style={{
-                      WebkitUserDrag: 'none',
-                      userSelect: 'none',
-                      WebkitTouchCallout: 'none',
-                      pointerEvents: 'none',
-                    }}
-                  />
+                  <PanelLeftOpen className="w-5 h-5" />
                 </button>
               </div>
 
@@ -362,39 +336,18 @@ export default function Sidebar({
       </aside>
 
       {/* ─────────────────────────────────────────────────────────── */}
-      {/* 3. Mobile Navigation Drawer                                  */}
+      {/* 3. Mobile / Tablet Navigation Drawer (Rendered BELOW top bar) */}
       {/* ─────────────────────────────────────────────────────────── */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-80 max-w-[85vw] bg-white border-r border-slate-200/80 shadow-2xl flex flex-col h-full justify-between select-none transform transition-transform duration-300 ease-in-out lg:hidden ${
+        className={`fixed top-16 lg:top-18 bottom-0 left-0 z-40 w-80 max-w-[85vw] bg-white border-r border-slate-200/80 shadow-2xl flex flex-col h-[calc(100vh-4rem)] lg:h-[calc(100vh-4.5rem)] justify-between select-none transform transition-transform duration-300 ease-in-out lg:hidden ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         aria-label="Mobile Navigation Drawer"
       >
         <div>
-          {/* Header with logo-only image and close button */}
-          <div 
-            className="h-16 px-4 border-b border-slate-100 flex items-center justify-between select-none"
-            onContextMenu={(e) => e.preventDefault()}
-          >
-            <div
-              onClick={() => navItemClick('dashboard', '/')}
-              className="cursor-pointer group flex items-center select-none"
-            >
-              <img
-                src="/static/logo/aetherops_light_transparent.webp"
-                alt="AetherOps Logo"
-                className="h-9 max-w-[160px] w-auto object-contain object-left transition-opacity group-hover:opacity-90 select-none pointer-events-none"
-                draggable={false}
-                onContextMenu={(e) => e.preventDefault()}
-                style={{
-                  WebkitUserDrag: 'none',
-                  userSelect: 'none',
-                  WebkitTouchCallout: 'none',
-                  pointerEvents: 'none',
-                }}
-              />
-            </div>
-
+          {/* Drawer Header with Close Button (No logo; top bar is sole branding location) */}
+          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Navigation Menu</span>
             <button
               type="button"
               onClick={() => setMobileOpen && setMobileOpen(false)}
@@ -407,7 +360,7 @@ export default function Sidebar({
           </div>
 
           {/* Scrollable Navigation Groups */}
-          <div className="px-3 py-3 space-y-4 overflow-y-auto max-h-[calc(100vh-140px)]">
+          <div className="px-3 py-3 space-y-4 overflow-y-auto max-h-[calc(100vh-180px)]">
             {NAV_GROUPS.map((group) => {
               const isCollapsed = Boolean(collapsedGroups[group.name]);
               return (
@@ -492,7 +445,7 @@ export default function Sidebar({
         </div>
 
         {/* Mobile User Profile Footer */}
-        <div className="p-3 border-t border-slate-100 bg-slate-50/70 flex items-center justify-between gap-2">
+        <div className="p-3 border-t border-slate-100 bg-slate-50/70 flex items-center justify-between gap-2 shrink-0">
           <div
             onClick={handleOpenAccount}
             className="flex items-center gap-3 min-w-0 cursor-pointer p-1 rounded-lg hover:bg-slate-200/60 transition group flex-1"
