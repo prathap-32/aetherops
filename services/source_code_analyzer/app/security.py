@@ -11,6 +11,8 @@ from typing import Any
 import jwt
 from fastapi import HTTPException, Request, status
 
+DEV_DEFAULT_JWT_SECRET = "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master"
+
 INSECURE_SECRETS = {
     "", "secret", "changeme", "admin", "default", "test", "dev",
     "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master",
@@ -19,22 +21,26 @@ INSECURE_SECRETS = {
 
 def verify_request_identity(request: Request) -> dict[str, Any] | None:
     environment = os.getenv("AETHER_ENV", os.getenv("ENVIRONMENT", "development")).lower()
-    if environment != "production":
-        return None
-
-    secret = os.getenv("JWT_SECRET_KEY", "")
-    if secret in INSECURE_SECRETS:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Module 3 authentication is not securely configured.",
-        )
+    is_production = environment == "production"
 
     authorization = request.headers.get("authorization", "")
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() != "bearer" or not token.strip():
+        if is_production:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="A valid bearer token is required.",
+            )
+        return None
+
+    configured_secret = os.getenv("JWT_SECRET_KEY")
+    secret = configured_secret if configured_secret else (
+        None if is_production else DEV_DEFAULT_JWT_SECRET
+    )
+    if not secret or (is_production and secret in INSECURE_SECRETS):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="A valid bearer token is required.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Module 3 authentication is not securely configured.",
         )
 
     try:
@@ -50,19 +56,14 @@ def verify_request_identity(request: Request) -> dict[str, Any] | None:
             detail="The bearer token is invalid or expired.",
         ) from exc
 
-    if not claims.get("uuid") or not claims.get("sub"):
+    if not claims.get("uuid") or not claims.get("sub") or not claims.get("tenant_id"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="The authenticated token is missing required user identity claims.",
+            detail="The authenticated token is missing required user or tenant identity claims.",
         )
 
     header_tenant = request.headers.get("x-tenant-id")
-    token_tenant = claims.get("tenant_id")
-    if header_tenant and not token_tenant:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="A tenant header cannot establish tenant identity; the token must contain the tenant claim.",
-        )
+    token_tenant = claims["tenant_id"]
     if header_tenant and header_tenant != token_tenant:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
