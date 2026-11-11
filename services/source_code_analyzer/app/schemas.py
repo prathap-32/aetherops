@@ -150,8 +150,12 @@ class ScanReportResponse(BaseModel):
     is_remote: bool = False
     inspection_mode: str = "LOCAL_FILESYSTEM"  # LOCAL_FILESYSTEM | IN_MEMORY_ZERO_CLONE
     repo_metadata: Optional[dict[str, Any]] = None
+    commit_sha: Optional[str] = None
     languages_breakdown: Optional[list[dict[str, Any]]] = None
     inspected_manifests: Optional[list[str]] = None
+    manifest_count: Optional[int] = None
+    manifest_limit: Optional[int] = None
+    truncated_manifests: bool = False
     accuracy_score: Optional[int] = None
     accuracy_method: Optional[str] = "NOT_CALIBRATED"
 
