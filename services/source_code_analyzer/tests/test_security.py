@@ -54,3 +54,28 @@ def test_production_api_verifies_tenant_claim(monkeypatch):
     with pytest.raises(HTTPException) as error:
         verify_request_identity(request)
     assert error.value.status_code == 403
+
+def test_development_api_validates_present_bearer_token(monkeypatch):
+    secret = "aetherops-super-secure-production-cryptographic-jwt-token-signing-key-2026-cloudops-master"
+    monkeypatch.setenv("AETHER_ENV", "development")
+    monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
+    token = jwt.encode(
+        {
+            "sub": "test-user",
+            "uuid": "user-123",
+            "tenant_id": "tenant-123",
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+        },
+        secret,
+        algorithm="HS256",
+    )
+    identity = verify_request_identity(
+        make_request([(b"authorization", f"Bearer {token}".encode())])
+    )
+    assert identity["tenant_id"] == "tenant-123"
+
+
+def test_development_api_does_not_accept_unverified_tenant_header(monkeypatch):
+    monkeypatch.setenv("AETHER_ENV", "development")
+    monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
+    assert verify_request_identity(make_request([(b"x-tenant-id", b"tenant-forged")])) is None
