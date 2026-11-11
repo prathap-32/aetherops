@@ -279,6 +279,9 @@ export const connectionsApi = {
 };
 
 export const repoAnalyzerApi = {
+  getSbom: (runId, format) =>
+    apiRequest(`/api/v1/analysis-runs/${encodeURIComponent(runId)}/sbom${format ? `?format=${encodeURIComponent(format)}` : ''}`),
+
   checkReadiness: (payload) =>
     apiRequest('/api/v1/repo/readiness', {
       method: 'POST',
