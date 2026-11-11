@@ -16,6 +16,7 @@ import re
 import json
 import logging
 from pathlib import Path
+from app.dependency_inventory import parse_dependency_manifest
 from typing import Dict, Any, List, Optional, Set, Tuple
 
 import httpx
@@ -697,6 +698,7 @@ async def run_remote_universal_scan(
     ]
 
     inspected_manifests: List[str] = []
+    dependencies_detected: List[Dict[str, Any]] = []
     skipped_large_manifests: List[str] = []
     manifest_sizes = {item.get("path", ""): item.get("size", 0) for item in tree}
     manifest_limit = max(1, int(os.getenv("AETHER_MAX_MANIFESTS", "100")))
@@ -719,6 +721,8 @@ async def run_remote_universal_scan(
         if not raw_content:
             continue
         inspected_manifests.append(m_path)
+        if name in {"package.json", "requirements.txt", "pyproject.toml", "go.mod", "Cargo.toml", "pom.xml", "composer.json", "Gemfile"} or name.startswith("requirements") and name.endswith(".txt"):
+            dependencies_detected.extend(parse_dependency_manifest(m_path, raw_content))
 
         # 1. Dockerfile inspection
         if name.startswith("Dockerfile"):
@@ -1046,6 +1050,8 @@ async def run_remote_universal_scan(
         "manifest_count": len(manifest_paths),
         "manifest_limit": manifest_limit,
         "truncated_manifests": truncated_manifests,
+        "dependencies_detected": dependencies_detected,
+        "dependency_count": len(dependencies_detected),
         "accuracy_score": accuracy_score,
         "accuracy_method": "NOT_CALIBRATED",
     }
