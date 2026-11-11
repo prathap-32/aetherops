@@ -64,6 +64,7 @@ async def persist_analysis_report(
         repository.default_branch = branch
 
     commit_sha = str(report.get("commit_sha") or target.get("commit_sha") or "")
+    revision_kind = "GIT_COMMIT" if commit_sha else "PROFILE_FINGERPRINT"
     if not commit_sha:
         commit_sha = _canonical_hash({"branch": branch, "report": report})
     revision_result = await session.execute(
@@ -94,6 +95,7 @@ async def persist_analysis_report(
     )
     from app.models import utc_now
     run.started_at = utc_now()
+    run.coverage = {**(run.coverage or {}), "revision_kind": revision_kind}
     session.add(run)
     await session.flush()
 
@@ -207,6 +209,8 @@ async def persist_analysis_report(
         "analysis_run_id": run.id,
         "repository_id": repository.id,
         "revision_id": revision.id,
+        "revision_identifier": revision.commit_sha,
+        "revision_kind": revision_kind,
         "snapshot_id": snapshot.id,
         "snapshot_hash": snapshot_hash,
         "application_ids": [item.id for item in applications],
