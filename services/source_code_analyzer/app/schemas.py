@@ -146,6 +146,7 @@ class ScanReportResponse(BaseModel):
     ports: list[int]
     has_dockerfile: bool
     is_monorepo: bool
+    application_roots: list[str] = Field(default_factory=list)
     requires_user_acceptance: bool = True
     is_remote: bool = False
     inspection_mode: str = "LOCAL_FILESYSTEM"  # LOCAL_FILESYSTEM | IN_MEMORY_ZERO_CLONE
