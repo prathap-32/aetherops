@@ -99,7 +99,12 @@ def get_dashboard_page_html() -> str:
         body {
             background-color: var(--bg-page);
             color: var(--text-body);
+            font-size: 1.0625rem;
             transition: background-color 0.15s ease, color 0.15s ease;
+        }
+        button, input, select, textarea {
+            font-size: 1.0625rem;
+            min-height: 48px;
         }
         .aws-card {
             background-color: var(--bg-card);
