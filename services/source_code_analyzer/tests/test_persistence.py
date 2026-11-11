@@ -85,7 +85,7 @@ async def test_scan_report_is_persisted_as_revision_snapshot_and_profile():
             assert runs[0].status == "PARTIAL"
             assert len((await session.execute(select(AnalysisSnapshot))).scalars().all()) == 1
             assert len((await session.execute(select(ApplicationProfile))).scalars().all()) == 2
-            assert len((await session.execute(select(AnalysisFinding))).scalars().all()) == 5
+            assert len((await session.execute(select(AnalysisFinding))).scalars().all()) == 6
             assert len((await session.execute(select(EvidenceRecord))).scalars().all()) == 1
     finally:
         await engine.dispose()
