@@ -11,36 +11,9 @@ export default function Navbar({
   onOpenAccountModal,
   onNavigate,
 }) {
-  const VIEW_TITLES = {
-    dashboard: 'Platform Dashboard',
-    project_environment: 'Project and Environment',
-    projects: 'Projects',
-    environments: 'Environment',
-    source_cloud: 'Connect Cloud and Git',
-    repo_analyzer: 'Source Code Analyzer',
-    architecture: 'AI AWS Architecture Planning',
-    architecture_studio: 'AI AWS Architecture Planning',
-    architecture_designer: 'Architecture Designer',
-    risk_analysis: 'Pre-Deployment Risk Engine',
-    architecture_validation: 'Architecture Validation',
-    security: 'Architecture Validation',
-    iac: 'Infrastructure as Code Synthesizer',
-    execution: 'Approval & Execution Gate',
-    deployments: 'Application Deployments & Drift',
-    cicd: 'CI/CD GitOps Pipeline',
-    monitoring: 'Infrastructure Monitoring & APM',
-    optimization: 'Continuous Risk & FinOps',
-    audit: 'Security & Session Audit',
-    docs: 'Platform Documentation',
-    settings: 'Platform Settings',
-    admin: 'Administration Console',
-  };
-
-  const currentTitle = VIEW_TITLES[activeView] || 'Console';
-
   return (
     <header className="sticky top-0 z-20 h-16 lg:h-18 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-8 flex items-center justify-between min-w-0 transition-colors shadow-2xs">
-      {/* Left: Hamburger (Mobile) + Brand/Page Title */}
+      {/* Left: Hamburger (Mobile) + Global Brand Logo & Name */}
       <div className="flex items-center gap-3 sm:gap-4 min-w-0">
         {/* Mobile Hamburger Toggle Button */}
         <button
@@ -53,27 +26,27 @@ export default function Navbar({
           <Menu className="w-6 h-6" />
         </button>
 
-        {/* Mobile Brand Icon */}
+        {/* Global Brand Logo & Application Name */}
         <div
-          className="lg:hidden flex items-center shrink-0 select-none pointer-events-none"
-          onContextMenu={(e) => e.preventDefault()}
+          className="flex items-center gap-2.5 shrink-0 select-none cursor-pointer"
+          onClick={() => onNavigate && onNavigate('dashboard', '/')}
+          title="AetherOps Cloud Platform"
         >
           <img
-            src="/static/logo/aetherops_light_icon.png"
-            alt="AetherOps"
-            className="w-8 h-8 object-contain"
+            src="/static/logo/aetherops_light_transparent.webp"
+            alt="AetherOps Logo"
+            width="36"
+            height="36"
+            className="w-9 h-9 object-contain shrink-0"
             draggable="false"
           />
-        </div>
-
-        <div className="min-w-0">
-          <h1 className="font-semibold text-slate-900 tracking-tight text-base sm:text-lg truncate">
-            {currentTitle}
-          </h1>
+          <span className="font-bold text-slate-900 tracking-tight text-lg sm:text-xl hidden sm:inline">
+            AetherOps
+          </span>
         </div>
 
         {activeProject && (
-          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200/85 text-blue-900 text-sm font-medium">
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200/85 text-blue-900 text-sm font-medium ml-2">
             <span className="w-2 h-2 rounded-full bg-blue-600" />
             <span className="truncate max-w-[180px]">{activeProject.name}</span>
           </div>
