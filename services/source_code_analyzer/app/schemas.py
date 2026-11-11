@@ -172,6 +172,11 @@ class ScanReportResponse(BaseModel):
     snapshot_hash: Optional[str] = None
     application_ids: list[str] = Field(default_factory=list)
     findings_persisted: int = 0
+    dependencies_detected: list[dict[str, Any]] = Field(default_factory=list)
+    dependency_count: int = 0
+    dependencies_persisted: int = 0
+    sbom_formats: list[str] = Field(default_factory=list)
+    sbom_checksums: dict[str, str] = Field(default_factory=dict)
 
 class AcceptAndSizeRequest(BaseModel):
     repo_path: Optional[str] = Field(default="", description="Repository identifier or path")
