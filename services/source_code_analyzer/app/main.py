@@ -349,28 +349,6 @@ async def repo_readiness_endpoint(payload: ReadinessRequest, request: Request):
     res = check_readiness(repo_path)
     return ReadinessResponse(**res)
 
-async def _persist_scan_report(
-    report: dict,
-    target: dict,
-    payload: ScanReportRequest,
-    request: Request,
-    branch: str,
-) -> dict:
-    identity = getattr(request.state, "identity", None) or {}
-    persistence = await persist_analysis_report(
-        SessionLocal(),
-        report=report,
-        target=target,
-        project_id=target.get("project_id") or payload.project_id,
-        environment_id=target.get("environment_id") or payload.environment_id,
-        tenant_id=target.get("tenant_id") or identity.get("tenant_id"),
-        branch=branch,
-    )
-    # persist_analysis_report receives a session; commit it as one unit.
-    # This helper is replaced below with an explicit session context.
-    return persistence
-
-
 @app.post("/api/v1/repo/scan-report", response_model=ScanReportResponse, status_code=status.HTTP_200_OK)
 async def repo_scan_report_endpoint(payload: ScanReportRequest, request: Request):
     """
