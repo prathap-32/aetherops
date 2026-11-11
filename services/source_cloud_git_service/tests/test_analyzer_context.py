@@ -87,7 +87,9 @@ def test_manifest_redaction_preserves_dependency_fields_and_removes_json_tokens(
 
 
 def test_manifest_redaction_removes_yaml_and_xml_secret_values():
-    yaml_content = "environment:\\n  PASSWORD: super-secret\\n  API_TOKEN=ghp_sensitive"
+    yaml_content = """environment:
+  PASSWORD: super-secret
+  API_TOKEN=ghp_sensitive"""
     redacted_yaml = router_module._redact_analysis_manifest_content("compose.yaml", yaml_content)
     assert "super-secret" not in redacted_yaml
     assert "ghp_sensitive" not in redacted_yaml
