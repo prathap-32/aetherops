@@ -1,28 +1,35 @@
 // frontend/src/modules/dashboard/components/WelcomeSection.jsx
-import React, { useEffect } from 'react';
+import React from 'react';
 import { ArrowRight } from 'lucide-react';
 
 export default function WelcomeSection({ user, lifecycleState, primaryAction, onNavigate }) {
-  const isFirstTimeUser = lifecycleState === 'L00_FIRST_VISIT' || (user && user.has_seen_welcome === 0);
+  const displayName = user?.username || 'Cloud Operator';
 
-  useEffect(() => {
-    if (isFirstTimeUser) {
-      fetch('/api/v1/auth/ack-welcome', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      }).catch(() => {});
-    }
-  }, [isFirstTimeUser]);
+  let headingText = `Welcome back to AetherOps, ${displayName}`;
+  let descriptionText = "Pick up where you left off and continue managing your projects.";
+  let ctaLabel = primaryAction?.actionLabel || "View Projects";
+  let targetView = primaryAction?.targetView || 'projects';
+  let targetPath = primaryAction?.targetPath || '/project-environment';
 
-  const username = user?.username || 'Cloud Operator';
-  const headingText = isFirstTimeUser
-    ? `Welcome to AetherOps, ${username}`
-    : `Welcome back, ${username}`;
-
-  const supportingText = isFirstTimeUser
-    ? "Let's get your workspace set up and ready for your first project."
-    : "Continue where you left off in your workspace.";
+  if (lifecycleState === 'STATE_A_NEW_USER') {
+    headingText = `Welcome to AetherOps, ${displayName}`;
+    descriptionText = "Let's get your workspace set up and ready for your first project.";
+    ctaLabel = "Create Project";
+    targetView = "projects";
+    targetPath = "/project-environment";
+  } else if (lifecycleState === 'STATE_B_CONNECTION_SETUP') {
+    headingText = `Welcome back to AetherOps, ${displayName}`;
+    descriptionText = "Your workspace is ready. Connect your source repository and cloud account to continue.";
+    ctaLabel = "Connect Accounts";
+    targetView = "source_cloud";
+    targetPath = "/source-connection";
+  } else if (lifecycleState === 'STATE_C_READY_FOR_ANALYSIS') {
+    headingText = `Welcome back to AetherOps, ${displayName}`;
+    descriptionText = "Your source and cloud connections are ready. Continue with source analysis.";
+    ctaLabel = "Continue";
+    targetView = "repo_analyzer";
+    targetPath = "/source-analysis";
+  }
 
   return (
     <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
@@ -34,17 +41,17 @@ export default function WelcomeSection({ user, lifecycleState, primaryAction, on
             {headingText}
           </h2>
           <p className="text-slate-300 text-sm sm:text-base max-w-2xl leading-relaxed">
-            {supportingText}
+            {descriptionText}
           </p>
         </div>
 
         {primaryAction && (
           <div className="shrink-0">
             <button
-              onClick={() => onNavigate(primaryAction.targetView, primaryAction.targetPath)}
+              onClick={() => onNavigate(targetView, targetPath)}
               className="px-6 py-3.5 rounded-xl bg-[#ec7211] hover:bg-[#eb5f07] text-white font-semibold shadow-lg transition flex items-center gap-2.5 cursor-pointer min-h-[48px]"
             >
-              <span>{primaryAction.actionLabel}</span>
+              <span>{ctaLabel}</span>
               <ArrowRight className="w-5 h-5" />
             </button>
           </div>

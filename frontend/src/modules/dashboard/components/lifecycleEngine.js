@@ -1,53 +1,30 @@
 // frontend/src/modules/dashboard/components/lifecycleEngine.js
 /**
- * Resolves the AetherOps workspace lifecycle state (L00 - L12)
- * based on confirmed backend data: user onboarding state, projects, environments, connections, and deployments.
- * Rule: If projects already exist in the database, L00_FIRST_VISIT is never returned.
+ * Resolves the AetherOps dynamic welcome state (State A, B, C, D)
+ * and Next Best Action based on actual persisted database records.
  */
 export function resolveLifecycleState({ user = null, projects = [], environments = [], connections = { git: [], cloud: [] }, deployments = [] }) {
-  if (projects.length === 0 && environments.length === 0) {
-    if (user && user.has_seen_welcome === 0) {
-      return 'L00_FIRST_VISIT';
-    }
-    return 'L01_NO_PROJECTS';
+  if (projects.length === 0) {
+    return 'STATE_A_NEW_USER';
   }
 
-  // Check for critical operational failures / attention required
-  const hasFailedDeployment = deployments.some(d => d.status === 'FAILED' || d.status === 'ERROR');
-  if (hasFailedDeployment) {
-    return 'L11_ATTENTION_REQUIRED';
+  const hasGit = (connections.git?.length || 0) > 0;
+  const hasCloud = (connections.cloud?.length || 0) > 0;
+
+  if (!hasGit || !hasCloud) {
+    return 'STATE_B_CONNECTION_SETUP';
   }
 
-  if (projects.length > 0 && environments.length === 0) {
-    return 'L03_ENVIRONMENT_SETUP';
+  if (hasGit && hasCloud) {
+    return 'STATE_C_READY_FOR_ANALYSIS';
   }
 
-  const hasCloudOrGit = (connections.git?.length || 0) > 0 || (connections.cloud?.length || 0) > 0;
-  if (projects.length > 0 && environments.length > 0 && !hasCloudOrGit) {
-    return 'L04_CONNECTION_SETUP';
-  }
-
-  const hasActiveDeployments = deployments.some(d => d.status === 'RUNNING' || d.status === 'DEPLOYING');
-  if (hasActiveDeployments) {
-    return 'L09_DEPLOYMENT_IN_PROGRESS';
-  }
-
-  const hasSuccessfulDeployments = deployments.some(d => d.status === 'SUCCESS');
-  if (hasSuccessfulDeployments) {
-    return 'L10_ACTIVE_OPERATIONS';
-  }
-
-  if (projects.length > 0 && environments.length > 0 && hasCloudOrGit) {
-    return 'L08_PRE_DEPLOYMENT';
-  }
-
-  return 'L12_RETURNING_USER';
+  return 'STATE_D_RETURNING_USER';
 }
 
 export function getNextBestAction(lifecycleState, { projects = [], environments = [], connections = { git: [], cloud: [] } }) {
   switch (lifecycleState) {
-    case 'L00_FIRST_VISIT':
-    case 'L01_NO_PROJECTS':
+    case 'STATE_A_NEW_USER':
       return {
         title: 'Create Your First Project Workspace',
         description: 'Set up an isolated project boundary to begin infrastructure synthesis and deployment.',
@@ -55,45 +32,30 @@ export function getNextBestAction(lifecycleState, { projects = [], environments 
         targetView: 'projects',
         targetPath: '/project-environment',
       };
-    case 'L03_ENVIRONMENT_SETUP':
-      return {
-        title: 'Provision Target Environment',
-        description: 'Configure your first target environment (Development, Staging, or Production) for deployment.',
-        actionLabel: 'Configure Environment',
-        targetView: 'environments',
-        targetPath: '/project-environment',
-      };
-    case 'L04_CONNECTION_SETUP':
+    case 'STATE_B_CONNECTION_SETUP':
       return {
         title: 'Connect Cloud & Git Credentials',
-        description: 'Securely link your GitHub repository and AWS IAM role to enable code analysis and provisioning.',
+        description: 'Your workspace is ready. Connect your source repository and cloud account to continue.',
         actionLabel: 'Connect Accounts',
         targetView: 'source_cloud',
         targetPath: '/source-connection',
       };
-    case 'L08_PRE_DEPLOYMENT':
+    case 'STATE_C_READY_FOR_ANALYSIS':
       return {
-        title: 'Run AI Architecture & Dry Run',
-        description: 'Analyze your codebase, generate AWS architecture, and run pre-deployment risk evaluation.',
-        actionLabel: 'Start Architecture Planning',
-        targetView: 'architecture_studio',
-        targetPath: '/architecture-studio',
+        title: 'Continue with Source Analysis',
+        description: 'Your source and cloud connections are ready. Continue with source analysis.',
+        actionLabel: 'Continue',
+        targetView: 'repo_analyzer',
+        targetPath: '/source-analysis',
       };
-    case 'L11_ATTENTION_REQUIRED':
-      return {
-        title: 'Resolve Deployment Failure',
-        description: 'Review state inventory and approval execution logs to remediate the failed operational run.',
-        actionLabel: 'Inspect Deployments',
-        targetView: 'deployments',
-        targetPath: '/deployment',
-      };
+    case 'STATE_D_RETURNING_USER':
     default:
       return {
-        title: 'Synthesize & Deploy Infrastructure',
-        description: 'Review generated Terraform configurations and execute approved cloud deployments.',
-        actionLabel: 'View Infrastructure Synthesizer',
-        targetView: 'iac',
-        targetPath: '/terraform',
+        title: 'Manage Projects & Workspaces',
+        description: 'Pick up where you left off and continue managing your projects.',
+        actionLabel: 'View Projects',
+        targetView: 'projects',
+        targetPath: '/project-environment',
       };
   }
 }
