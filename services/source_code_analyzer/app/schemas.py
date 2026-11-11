@@ -150,8 +150,8 @@ class ScanReportResponse(BaseModel):
     repo_metadata: Optional[dict[str, Any]] = None
     languages_breakdown: Optional[list[dict[str, Any]]] = None
     inspected_manifests: Optional[list[str]] = None
-    accuracy_score: Optional[int] = 98
-    accuracy_method: Optional[str] = "DETERMINISTIC_PARSING_ZERO_AI"
+    accuracy_score: Optional[int] = None
+    accuracy_method: Optional[str] = "NOT_CALIBRATED"
 
 class AcceptAndSizeRequest(BaseModel):
     repo_path: Optional[str] = Field(default="", description="Repository identifier or path")
