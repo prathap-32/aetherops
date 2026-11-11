@@ -316,11 +316,18 @@ async def fetch_github_file_tree_in_memory(
             res = await client.get(url, headers=headers)
             if res.status_code == 200:
                 data = res.json()
+                if data.get("truncated"):
+                    raise ValueError("GitHub returned a truncated repository tree; full analysis is not possible.")
                 raw_items = data.get("tree", [])
                 out_tree = []
                 for item in raw_items:
                     p = item.get("path", "")
-                    if p.startswith(".git/"):
+                    path_parts = Path(p).parts
+                    if not p or p.startswith("/") or ".." in path_parts:
+                        continue
+                    if any(part in IGNORED_DIRS for part in path_parts):
+                        continue
+                    if item.get("type") not in {"tree", "blob"}:
                         continue
                     t = "dir" if item.get("type") == "tree" else "file"
                     sz = item.get("size", 0) if t == "file" else 0
