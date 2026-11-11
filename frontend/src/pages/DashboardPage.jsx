@@ -225,7 +225,7 @@ export default function DashboardPage() {
         return (
           <DashboardOverview
             onNavigate={handleNavigate}
-            onOpenCreateProject={handleCreateProjectClick = () => {}}
+            onOpenCreateProject={() => handleNavigate('projects', '/projects')}
             onSelectProject={selectProject}
           />
         );
