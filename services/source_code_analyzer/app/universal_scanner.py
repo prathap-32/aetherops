@@ -780,14 +780,15 @@ async def run_remote_universal_scan(
         name = Path(m_path).name
         declared_size = manifest_sizes.get(m_path, 0)
         if isinstance(declared_size, int) and declared_size > max_manifest_bytes:
-            skipped_large_manifests.append(m_path)
+            if m_path not in skipped_large_manifests:
+                skipped_large_manifests.append(m_path)
             continue
         raw_content = manifest_contents.get(m_path) if connection_context else await fetch_manifest_in_memory(
             owner, repo, m_path, branch=commit_sha, token=token,
             max_bytes=max_manifest_bytes,
         )
         if raw_content is None:
-            if isinstance(declared_size, int) and declared_size > max_manifest_bytes:
+            if isinstance(declared_size, int) and declared_size > max_manifest_bytes and m_path not in skipped_large_manifests:
                 skipped_large_manifests.append(m_path)
             continue
         if not raw_content:
