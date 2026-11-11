@@ -98,7 +98,6 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
   const projectsCount = projectsState.data.length;
   const environmentsCount = environmentsState.data.length;
 
-  // AWS regions in use from actual environments
   const activeAwsRegions = useMemo(() => {
     const regions = new Set();
     environmentsState.data.forEach((env) => {
@@ -128,90 +127,90 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
+    <div className="space-y-8 animate-in fade-in duration-200">
       {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
               Workspace Overview
             </h1>
-            {refreshing && <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />}
+            {refreshing && <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />}
           </div>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+          <p className="text-sm sm:text-base text-slate-600 mt-1.5 leading-relaxed">
             Manage your cloud projects, target environments, and deployed AWS infrastructure.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={() => fetchDashboardData(true)}
-            className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+            className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-sm font-medium rounded-xl shadow-2xs transition flex items-center gap-2 cursor-pointer min-h-[48px]"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-blue-600' : 'text-slate-400'}`} />
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-blue-600' : 'text-slate-400'}`} />
             <span>Refresh</span>
           </button>
 
           <button
             onClick={handleCreateProjectClick}
-            className="px-4 py-2 bg-[#1e40af] hover:bg-[#1d4ed8] text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer"
+            className="px-5 py-2.5 bg-[#1e40af] hover:bg-[#1d4ed8] text-white text-sm font-semibold rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer min-h-[48px]"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-5 h-5" />
             <span>New Project</span>
           </button>
         </div>
       </div>
 
-      {/* Summary Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Summary Metric Cards (Scaled KPI 34-40px values) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {/* Total Projects */}
         <div
           onClick={() => onNavigate('projects', '/projects')}
-          className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
+          className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Total Projects</span>
-            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center group-hover:scale-105 transition">
-              <FolderKanban className="w-4 h-4" />
+            <span className="text-sm font-medium text-slate-600">Total Projects</span>
+            <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center group-hover:scale-105 transition">
+              <FolderKanban className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">{projectsCount}</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">Isolated tenant workspaces</div>
+          <div className="mt-4">
+            <div className="text-4xl font-bold text-slate-900 tracking-tight">{projectsCount}</div>
+            <div className="text-xs text-slate-500 mt-1">Isolated tenant workspaces</div>
           </div>
         </div>
 
         {/* Active Environments */}
         <div
           onClick={() => onNavigate('environments', '/environments')}
-          className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
+          className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Active Environments</span>
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center group-hover:scale-105 transition">
-              <Boxes className="w-4 h-4" />
+            <span className="text-sm font-medium text-slate-600">Active Environments</span>
+            <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center group-hover:scale-105 transition">
+              <Boxes className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">{environmentsCount}</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">Dev, Staging &amp; Production</div>
+          <div className="mt-4">
+            <div className="text-4xl font-bold text-slate-900 tracking-tight">{environmentsCount}</div>
+            <div className="text-xs text-slate-500 mt-1">Dev, Staging &amp; Production</div>
           </div>
         </div>
 
         {/* AWS Regions in Use */}
         <div
           onClick={() => onNavigate('source_cloud', '/source-connection')}
-          className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
+          className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">AWS Regions in Use</span>
-            <div className="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-700 flex items-center justify-center group-hover:scale-105 transition">
-              <Globe className="w-4 h-4" />
+            <span className="text-sm font-medium text-slate-600">AWS Regions in Use</span>
+            <div className="w-11 h-11 rounded-xl bg-cyan-50 text-cyan-700 flex items-center justify-center group-hover:scale-105 transition">
+              <Globe className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">{activeAwsRegions.length}</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">
+          <div className="mt-4">
+            <div className="text-4xl font-bold text-slate-900 tracking-tight">{activeAwsRegions.length}</div>
+            <div className="text-xs text-slate-500 mt-1 truncate">
               {activeAwsRegions.length > 0 ? activeAwsRegions.join(', ') : 'No regions attached'}
             </div>
           </div>
@@ -220,129 +219,99 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
         {/* Connected Cloud & Git */}
         <div
           onClick={() => onNavigate('source_cloud', '/source-connection')}
-          className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
+          className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Connected Accounts</span>
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition">
-              <GitBranch className="w-4 h-4" />
+            <span className="text-sm font-medium text-slate-600">Connected Accounts</span>
+            <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition">
+              <GitBranch className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">
+          <div className="mt-4">
+            <div className="text-4xl font-bold text-slate-900 tracking-tight">
               {connectionsState.git.length + connectionsState.cloud.length}
             </div>
-            <div className="text-[11px] text-slate-500 mt-0.5">GitHub repos &amp; AWS IAM roles</div>
+            <div className="text-xs text-slate-500 mt-1">GitHub repos &amp; AWS IAM roles</div>
           </div>
         </div>
       </div>
 
       {/* Project Cards Section */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
+        <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50">
           <div>
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <FolderKanban className="w-4 h-4 text-[#1e40af]" />
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2.5">
+              <FolderKanban className="w-5 h-5 text-[#1e40af]" />
               <span>Project Workspaces ({projectsCount})</span>
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-sm text-slate-600 mt-0.5">
               Configured project boundaries, type classifications, and environment counts.
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5 w-full sm:w-auto">
-            <div className="relative flex-1 sm:w-64">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="relative flex-1 sm:w-72">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search projects by name or type..."
                 value={projectSearchQuery}
                 onChange={(e) => setProjectSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 font-medium"
+                className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 font-medium min-h-[48px]"
               />
             </div>
           </div>
         </div>
 
-        {loading ? (
-          <div className="p-12 text-center text-xs text-slate-500">Loading project workspaces...</div>
-        ) : filteredProjects.length === 0 ? (
-          <div className="p-12 text-center space-y-3">
-            <FolderKanban className="w-10 h-10 text-slate-300 mx-auto" />
-            <div className="text-sm font-bold text-slate-800">No project workspaces found</div>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              Get started by creating your first AetherOps project workspace to deploy cloud infrastructure.
-            </p>
-            <button
-              onClick={handleCreateProjectClick}
-              className="px-4 py-2 bg-[#1e40af] hover:bg-[#1d4ed8] text-white text-xs font-bold rounded-xl shadow-xs transition inline-flex items-center gap-2 cursor-pointer mt-2"
-            >
-              <Plus className="w-4 h-4" />
-              <span>New Project</span>
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-5 bg-slate-50/30">
-            {filteredProjects.map((project) => {
-              const pEnvs = environmentsState.data.filter((e) => e.project_id === (project.id || project.project_id));
-              const createdDate = project.created_at
-                ? new Date(project.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
-                : 'Recently';
-
-              return (
+        <div className="p-6">
+          {projectsState.status === 'loading' ? (
+            <div className="py-12 text-center text-slate-500 text-sm">
+              Loading project workspaces...
+            </div>
+          ) : filteredProjects.length === 0 ? (
+            <div className="py-12 text-center space-y-3">
+              <p className="text-slate-600 text-sm font-medium">No project workspaces found.</p>
+              <button
+                onClick={handleCreateProjectClick}
+                className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition"
+              >
+                Create First Project
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filteredProjects.map((proj) => (
                 <div
-                  key={project.id || project.project_id}
-                  className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs hover:shadow-md transition flex flex-col justify-between gap-4 group"
+                  key={proj.id || proj.project_id}
+                  onClick={() => handleOpenProject(proj)}
+                  className="p-5 rounded-xl border border-slate-200 hover:border-blue-500 hover:shadow-md transition cursor-pointer bg-white group flex flex-col justify-between"
                 >
-                  <div className="space-y-3">
+                  <div>
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 uppercase">
-                          {project.project_type || 'web_application'}
-                        </span>
-                        <h4 className="text-base font-bold text-slate-900 mt-2 group-hover:text-blue-600 transition">
-                          {project.name}
-                        </h4>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        (project.status || 'CREATED') === 'ACTIVE'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-slate-100 text-slate-700 border border-slate-200'
-                      }`}>
-                        {project.status || 'CREATED'}
+                      <h4 className="font-bold text-slate-900 group-hover:text-blue-600 transition text-base">
+                        {proj.name}
+                      </h4>
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
+                        {proj.project_type || 'Standard'}
                       </span>
                     </div>
-
-                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                      {project.description || 'No description provided for this cloud project workspace.'}
+                    <p className="text-slate-600 text-sm mt-2 line-clamp-2">
+                      {proj.description || 'No description provided for this tenant project.'}
                     </p>
                   </div>
 
-                  <div className="pt-3 border-t border-slate-100 space-y-3">
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                      <div className="flex items-center gap-1.5 font-medium">
-                        <Boxes className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>{pEnvs.length} Environments</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                        <Calendar className="w-3.5 h-3.5" />
-                        <span>{createdDate}</span>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => handleOpenProject(project)}
-                      className="w-full py-2 bg-slate-900 hover:bg-[#1e40af] text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <span>Open Project</span>
-                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition" />
-                    </button>
+                  <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
+                    <span>ID: {proj.id || proj.project_id}</span>
+                    <span className="text-blue-600 group-hover:translate-x-1 transition flex items-center gap-1 font-semibold">
+                      <span>Open</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

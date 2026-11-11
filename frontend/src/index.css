@@ -4,18 +4,16 @@
   --font-sans: "Amazon Ember", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", Menlo, Monaco, Consolas, monospace;
 
-  --font-size-body-mobile: 1rem;       /* 16px */
-  --font-size-body-desktop: 0.9375rem; /* 15px */
-  --font-size-secondary: 0.875rem;     /* 14px */
-  --font-size-caption: 0.8125rem;      /* 13px */
-  --font-size-heading-page: clamp(1.5rem, 2.5vw, 2rem);
-  --font-size-heading-section: clamp(1.25rem, 2vw, 1.5rem);
-  --font-size-heading-card: 1.125rem;  /* 18px */
+  --font-size-title: clamp(1.625rem, 2.5vw, 1.875rem); /* 26-30px */
+  --font-size-section: clamp(1.3125rem, 2vw, 1.4375rem); /* 21-23px */
+  --font-size-card: 1.125rem; /* 18px */
+  --font-size-body: 1rem; /* 16px */
+  --font-size-secondary: 0.875rem; /* 14px */
+  --font-size-metric: clamp(2.125rem, 3vw, 2.5rem); /* 34-40px */
 }
 
 @layer base {
   :root {
-    /* Pure Light Theme Only - Clean, Modern, Warm, Spacious (AWS Console inspired) */
     --bg-page: #F8FAFC;
     --bg-surface: #FFFFFF;
     --bg-subtle: #F1F5F9;
@@ -26,17 +24,10 @@
     --accent-primary: #D97706;
     --accent-primary-hover: #B45309;
     --accent-secondary: #2563EB;
-    --status-online-text: #065F46;
-    --status-online-bg: #D1FAE5;
-    --status-warn-text: #92400E;
-    --status-warn-bg: #FEF3C7;
-    --status-error-text: #991B1B;
-    --status-error-bg: #FEE2E2;
     --card-shadow: 0 4px 24px -2px rgba(15, 23, 42, 0.08), 0 2px 8px -1px rgba(15, 23, 42, 0.04);
     color-scheme: light;
   }
 
-  /* Lock dark mode to identical clean light styles (Light Theme Only) */
   .dark, [data-theme="dark"] {
     --bg-page: #F8FAFC;
     --bg-surface: #FFFFFF;
@@ -48,12 +39,6 @@
     --accent-primary: #D97706;
     --accent-primary-hover: #B45309;
     --accent-secondary: #2563EB;
-    --status-online-text: #065F46;
-    --status-online-bg: #D1FAE5;
-    --status-warn-text: #92400E;
-    --status-warn-bg: #FEF3C7;
-    --status-error-text: #991B1B;
-    --status-error-bg: #FEE2E2;
     --card-shadow: 0 4px 24px -2px rgba(15, 23, 42, 0.08), 0 2px 8px -1px rgba(15, 23, 42, 0.04);
     color-scheme: light;
   }
@@ -67,7 +52,7 @@
     background-color: var(--bg-page);
     color: var(--text-primary);
     font-family: var(--font-sans);
-    font-size: var(--font-size-body-mobile);
+    font-size: 1rem; /* 16px base body */
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     margin: 0;
@@ -75,20 +60,14 @@
     color-scheme: light;
   }
 
-  @media (min-width: 768px) {
-    body {
-      font-size: var(--font-size-body-desktop);
-    }
-  }
-
   button, input, textarea, select {
     font-family: inherit;
-    font-size: inherit;
+    font-size: 1rem; /* 16px to prevent mobile iOS zoom */
   }
 
-  /* Interactive touch target minimums (44-48px) on mobile */
-  button, select, input[type="button"], input[type="submit"] {
-    min-height: 40px;
+  /* 48-52px touch target standards */
+  button, select, input[type="button"], input[type="submit"], input[type="text"], input[type="password"], input[type="email"], input[type="search"] {
+    min-height: 48px;
   }
 }
 
