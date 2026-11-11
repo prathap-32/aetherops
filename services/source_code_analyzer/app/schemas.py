@@ -126,7 +126,7 @@ class ScanReportRequest(BaseModel):
     project_id: Optional[str] = None
     environment_id: Optional[str] = None
     branch: Optional[str] = "main"
-    github_token: Optional[str] = None
+    github_token: Optional[SecretStr] = None
     environment_tier: str = Field(default="development", description="development | staging | production")
     target_region: str = Field(default="us-east-1")
 
@@ -160,6 +160,14 @@ class ScanReportResponse(BaseModel):
     analysis_scope: Optional[str] = None
     accuracy_score: Optional[int] = None
     accuracy_method: Optional[str] = "NOT_CALIBRATED"
+    persistence_status: str = "SKIPPED_CONTEXT_REQUIRED"
+    analysis_run_id: Optional[str] = None
+    repository_id: Optional[str] = None
+    revision_id: Optional[str] = None
+    snapshot_id: Optional[str] = None
+    snapshot_hash: Optional[str] = None
+    application_ids: list[str] = Field(default_factory=list)
+    findings_persisted: int = 0
 
 class AcceptAndSizeRequest(BaseModel):
     repo_path: Optional[str] = Field(default="", description="Repository identifier or path")
