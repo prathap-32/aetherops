@@ -84,7 +84,9 @@ async def test_scan_report_is_persisted_as_revision_snapshot_and_profile():
             assert len(runs) == 1
             assert runs[0].status == "PARTIAL"
             assert len((await session.execute(select(AnalysisSnapshot))).scalars().all()) == 1
-            assert len((await session.execute(select(ApplicationProfile))).scalars().all()) == 2
+            profile_rows = (await session.execute(select(ApplicationProfile))).scalars().all()
+            assert len(profile_rows) == 2
+            assert {profile.profile["dependency_count"] for profile in profile_rows} == {1}
             assert len((await session.execute(select(AnalysisFinding))).scalars().all()) == 6
             assert len((await session.execute(select(EvidenceRecord))).scalars().all()) == 2
     finally:
