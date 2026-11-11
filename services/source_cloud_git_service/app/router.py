@@ -1425,16 +1425,26 @@ async def get_analyzer_source_context(
                             unavailable.append(path)
                             continue
                         content_bytes = bytearray()
+                        per_file_oversized = False
+                        total_limit_reached = False
                         async for chunk in content_response.aiter_bytes():
                             content_bytes.extend(chunk)
-                            if len(content_bytes) > max_manifest_bytes or total_bytes + len(content_bytes) > max_total_bytes:
+                            if len(content_bytes) > max_manifest_bytes:
+                                per_file_oversized = True
                                 content_bytes.clear()
                                 break
+                            if total_bytes + len(content_bytes) > max_total_bytes:
+                                total_limit_reached = True
+                                content_bytes.clear()
+                                break
+                        if per_file_oversized:
+                            skipped_large.append(path)
+                            continue
+                        if total_limit_reached:
+                            unavailable.append(path)
+                            continue
                         if not content_bytes:
-                            if declared_size > max_manifest_bytes or total_bytes >= max_total_bytes:
-                                skipped_large.append(path)
-                            else:
-                                unavailable.append(path)
+                            unavailable.append(path)
                             continue
                         total_bytes += len(content_bytes)
                         manifest_contents[path] = content_bytes.decode("utf-8", errors="replace")
