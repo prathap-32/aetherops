@@ -136,6 +136,7 @@ def build_sbom_documents(
     commit_sha: str | None,
     dependencies: list[dict[str, Any]],
     created_at: datetime | None = None,
+    document_id: str | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Build honest declared-direct-dependency SBOMs; unresolved ranges remain unversioned."""
     components = []
@@ -197,7 +198,7 @@ def build_sbom_documents(
         "dataLicense": "CC0-1.0",
         "SPDXID": "SPDXRef-DOCUMENT",
         "name": f"{application_name}-declared-dependencies",
-        "documentNamespace": f"{repository_url.rstrip('/')}/sbom/{commit_sha or 'profile'}-{_purl('generic', application_name, None)}",
+        "documentNamespace": f"{repository_url.rstrip('/')}/sbom/{commit_sha or 'profile'}/{quote(document_id or 'default', safe='.-_')}",
         "creationInfo": {"creators": ["Tool: AetherOps Module 3"], "created": timestamp},
         "packages": packages,
         "externalDocumentRefs": [],
