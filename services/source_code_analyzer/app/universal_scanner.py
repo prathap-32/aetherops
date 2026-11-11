@@ -1004,7 +1004,9 @@ async def run_remote_universal_scan(
     }
 
     return {
-        "status": "SUCCESS",
+        "status": "PARTIAL",
+        "profile_completeness": "PARTIAL",
+        "analysis_scope": "MANIFESTS_AND_CONFIG",
         "repo_path": f"https://github.com/{owner}/{repo}",
         "repo_name": repo,
         "commit_sha": commit_sha,
@@ -1570,7 +1572,9 @@ def run_universal_scan(
     }
 
     return {
-        "status": "SUCCESS",
+        "status": "PARTIAL",
+        "profile_completeness": "PARTIAL",
+        "analysis_scope": "LOCAL_MANIFESTS_AND_CONFIG",
         "repo_path": str(root),
         "repo_name": root.name,
         "environment_tier": environment_tier,
