@@ -29,7 +29,7 @@ from sqlalchemy import text, select
 from app.database import SessionLocal, dispose_analysis_db
 from app.security import verify_request_identity
 from app.persistence import persist_analysis_report
-from app.models import AnalysisFinding, AnalysisRun, AnalysisSnapshot, ApplicationProfile, EvidenceRecord, Repository, RepositoryRevision, SbomDocument
+from app.models import AnalysisFinding, AnalysisRun, AnalysisSnapshot, Application, ApplicationProfile, Dependency, EvidenceRecord, Repository, RepositoryRevision, SbomDocument
 
 from app.schemas import (
     ScanRequest, ScanResponse, DispatchRequest, DispatchResponse,
@@ -513,6 +513,20 @@ async def get_analysis_run(run_id: str, request: Request):
             select(AnalysisFinding).where(AnalysisFinding.run_id == run.id)
         )
         findings = finding_result.scalars().all()
+        application_ids = list(dict.fromkeys(profile.application_id for profile in profiles))
+        application_result = await session.execute(
+            select(Application).where(Application.id.in_(application_ids))
+        ) if application_ids else None
+        applications = application_result.scalars().all() if application_result is not None else []
+        application_by_id = {application.id: application for application in applications}
+        dependency_result = await session.execute(
+            select(Dependency).where(Dependency.application_id.in_(application_ids))
+        ) if application_ids else None
+        dependencies = dependency_result.scalars().all() if dependency_result is not None else []
+        sbom_result = await session.execute(
+            select(SbomDocument).where(SbomDocument.run_id == run.id)
+        )
+        sbom_documents = sbom_result.scalars().all()
         evidence_by_finding: dict[str, list[dict]] = {}
         if findings:
             evidence_result = await session.execute(
@@ -565,6 +579,29 @@ async def get_analysis_run(run_id: str, request: Request):
                     "evidence": evidence_by_finding.get(finding.id, []),
                 }
                 for finding in findings
+            ],
+            "dependencies": [
+                {
+                    "application_id": dependency.application_id,
+                    "application_root": application_by_id[dependency.application_id].root_path,
+                    "ecosystem": dependency.ecosystem,
+                    "package_name": dependency.package_name,
+                    "version": dependency.version,
+                    "purl": dependency.purl,
+                    "is_direct": dependency.is_direct,
+                    "source_path": dependency.source_path,
+                    "manifest_hash": dependency.manifest_hash,
+                }
+                for dependency in dependencies
+            ],
+            "sboms": [
+                {
+                    "format": document.format,
+                    "format_version": document.format_version,
+                    "checksum": document.checksum,
+                    "created_at": document.created_at.isoformat(),
+                }
+                for document in sbom_documents
             ],
         }
 
