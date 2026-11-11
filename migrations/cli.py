@@ -12,14 +12,16 @@ from sqlalchemy import text
 from migrations.runner import ensure_migration_table, get_applied_versions, record_migration, remove_migration
 import migrations.versions.v20261012_01_user_uuid_and_tenants as m_01
 import migrations.versions.v20261027_02_crypto_envelope as m_02
+import migrations.versions.v20261111_03_source_analysis_schema as m_03
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("aether-migrations")
 
-MIGRATIONS = [
-    m_01,
-    m_02,
-]
+MIGRATIONS_BY_TARGET = {
+    "project_manager": [m_01],
+    "source_connection": [m_01, m_02],
+    "source_analysis": [m_03],
+}
 
 
 async def run_migrations(db_url: str, target_schema: str = "all", direction: str = "upgrade"):
@@ -30,7 +32,7 @@ async def run_migrations(db_url: str, target_schema: str = "all", direction: str
     engine = create_async_engine(db_url, echo=False)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-    targets = ["project_manager", "source_connection"] if target_schema == "all" else [target_schema]
+    targets = list(MIGRATIONS_BY_TARGET) if target_schema == "all" else [target_schema]
 
     async with session_factory() as session:
         for target in targets:
@@ -39,8 +41,9 @@ async def run_migrations(db_url: str, target_schema: str = "all", direction: str
             applied = await get_applied_versions(session, dialect, schema=target)
             logger.info(f"Currently applied versions in '{target}': {applied}")
 
+            target_migrations = MIGRATIONS_BY_TARGET[target]
             if direction == "upgrade":
-                for m in MIGRATIONS:
+                for m in target_migrations:
                     if m.REVISION not in applied:
                         logger.info(f"Applying migration {m.REVISION}: {m.NAME}...")
                         await m.upgrade(session, dialect, target=target)
@@ -49,7 +52,7 @@ async def run_migrations(db_url: str, target_schema: str = "all", direction: str
                     else:
                         logger.info(f"Migration {m.REVISION} already applied to {target}. Skipping.")
             elif direction == "downgrade":
-                for m in reversed(MIGRATIONS):
+                for m in reversed(target_migrations):
                     if m.REVISION in applied:
                         logger.info(f"Reverting migration {m.REVISION}: {m.NAME}...")
                         await m.downgrade(session, dialect, target=target)
@@ -63,7 +66,7 @@ async def run_migrations(db_url: str, target_schema: str = "all", direction: str
 def main():
     parser = argparse.ArgumentParser(description="AetherOps Database Migration CLI")
     parser.add_argument("--db-url", required=True, help="Database connection URL")
-    parser.add_argument("--target", default="all", choices=["all", "project_manager", "source_connection"], help="Target schema/module")
+    parser.add_argument("--target", default="all", choices=["all", "project_manager", "source_connection", "source_analysis"], help="Target schema/module")
     parser.add_argument("--action", default="upgrade", choices=["upgrade", "downgrade"], help="Migration action")
     args = parser.parse_args()
 
