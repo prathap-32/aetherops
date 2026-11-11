@@ -27,6 +27,7 @@ from rich.logging import RichHandler
 from sqlalchemy import text
 
 from app.database import SessionLocal, dispose_analysis_db
+from app.security import verify_request_identity
 
 from app.schemas import (
     ScanRequest, ScanResponse, DispatchRequest, DispatchResponse,
@@ -151,6 +152,20 @@ async def global_exception_handler(request, exc: Exception):
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
+@app.middleware("http")
+async def enforce_authenticated_api_access(request: Request, call_next):
+    if request.url.path.startswith("/api/"):
+        try:
+            request.state.identity = verify_request_identity(request)
+        except HTTPException as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail},
+                headers=exc.headers,
+            )
+    return await call_next(request)
+
 
 @app.api_route("/app", methods=["GET", "POST", "HEAD"])
 @app.api_route("/app/{rest:path}", methods=["GET", "POST", "HEAD"])
