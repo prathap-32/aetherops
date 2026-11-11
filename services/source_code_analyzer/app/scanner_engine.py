@@ -33,42 +33,44 @@ def scan_repository(repo_path: str | Path, *, include_findings: bool = False) ->
 
     try:
         from repo_analyzer.pipeline import analyze  # type: ignore[import-not-found]
-        logger.info("Scanning repository via repo_analyzer: %s", root)
-        profile = analyze(root)
-    except (ImportError, Exception) as exc:
-        logger.info("repo_analyzer pipeline unavailable, using built-in universal_scanner: %s", exc)
-        try:
-            from app.universal_scanner import run_universal_scan
-            report = run_universal_scan(root)
-            languages = [l["name"].lower() for l in report.get("language_breakdown", [])]
-        except Exception as scan_err:
-            logger.warning("Universal scan fallback error: %s", scan_err)
-            languages = ["python"]
-            report = {}
-        return {
+    except ImportError as exc:
+        logger.info("Optional repo_analyzer pipeline unavailable; using deterministic manifest scanner: %s", exc)
+        from app.universal_scanner import run_universal_scan
+
+        report = run_universal_scan(root)
+        languages = list(report.get("languages") or [])
+        frameworks = list(report.get("frameworks") or [])
+        databases = list(report.get("databases") or [])
+        ports = list(report.get("ports") or [])
+        result: dict = {
+            "status": "PARTIAL",
+            "repo_name": report.get("repo_name") or root.name,
             "repo_path": str(root),
-            "is_monorepo": False,
-            "languages": languages or ["python"],
-            "frameworks": ["fastapi"] if "python" in languages else [],
-            "databases": [],
-            "ports": [8000],
-            "components": [{
-                "name": root.name,
-                "path": ".",
-                "type": "service",
-                "language": languages[0] if languages else "python",
-                "framework": "fastapi" if "python" in languages else None,
-                "port": 8000,
-                "has_container_config": report.get("docker_detected", False),
-            }],
-            "unknowns": [],
+            "commit_sha": None,
+            "is_monorepo": bool(report.get("is_monorepo", False)),
+            "components": [],
+            "languages_detected": languages,
+            "frameworks_detected": frameworks,
+            "databases_detected": databases,
+            "ports_detected": ports,
+            "unknowns": ["Component-level topology and line-level evidence are unavailable in manifest-only mode."],
+            "conflicts": [],
+            "errors": ["The optional repo_analyzer.pipeline package is not installed; manifest-only analysis was used."],
             "coverage": {
-                "total_files": 10,
-                "classified_files": 10,
-                "coverage_pct": 100.0,
+                "status": "NOT_MEASURED",
+                "inspected_manifests": list(report.get("inspected_manifests") or []),
             },
-            "findings": [],
+            "findings_count": 0,
         }
+        if include_findings:
+            result["findings"] = []
+        return result
+
+    try:
+        profile = analyze(root)
+    except Exception as exc:
+        logger.exception("Repository analysis pipeline failed")
+        raise RuntimeError("Repository analysis failed; no synthetic fallback profile was produced.") from exc
 
     logger.info(
         "Scan complete: %d component(s), monorepo=%s, %d findings, %d unknowns",
