@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 import tomllib
+from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 from urllib.parse import quote
 from typing import Any
@@ -73,10 +74,6 @@ def parse_dependency_manifest(path: str, content: str) -> list[dict[str, Any]]:
                     if match:
                         package, spec = match.groups()
                         output.append(_dependency("pypi", package.lower().replace("_", "-"), spec or None, path, "optional"))
-            for section in ("dependencies", "dev-dependencies"):
-                for package, value in (data.get(section) or {}).items():
-                    spec = value.get("version") if isinstance(value, dict) else value
-                    output.append(_dependency("cargo", package, str(spec) if spec else None, path, "excluded" if section == "dev-dependencies" else "required"))
         elif name == "go.mod":
             in_require = False
             for line in content.splitlines():
@@ -134,10 +131,12 @@ def build_sbom_documents(
     repository_url: str,
     commit_sha: str | None,
     dependencies: list[dict[str, Any]],
+    created_at: datetime | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Build honest declared-direct-dependency SBOMs; unresolved ranges remain unversioned."""
     components = []
     packages = []
+    timestamp = (created_at or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     for index, dep in enumerate(dependencies, start=1):
         component = {
             "type": "library",
@@ -194,15 +193,15 @@ def build_sbom_documents(
         "dataLicense": "CC0-1.0",
         "SPDXID": "SPDXRef-DOCUMENT",
         "name": f"{application_name}-declared-dependencies",
-        "documentNamespace": f"{repository_url.rstrip('/')}/sbom/{commit_sha or 'profile'}",
-        "creationInfo": {"creators": ["Tool: AetherOps Module 3"], "created": "2026-01-01T00:00:00Z"},
+        "documentNamespace": f"{repository_url.rstrip('/')}/sbom/{commit_sha or 'profile'}-{_purl('generic', application_name)}",
+        "creationInfo": {"creators": ["Tool: AetherOps Module 3"], "created": timestamp},
         "packages": packages,
         "externalDocumentRefs": [],
         "annotations": [{
             "annotationType": "OTHER",
             "annotator": "Tool: AetherOps Module 3",
             "comment": "Declared direct dependencies only; transitive dependencies and resolved lockfile versions are not included.",
-            "annotationDate": "2026-01-01T00:00:00Z",
+            "annotationDate": timestamp,
         }],
     }
     return {"CYCLONEDX": cyclonedx, "SPDX": spdx}
