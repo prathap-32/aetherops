@@ -337,11 +337,30 @@ async def repo_readiness_endpoint(payload: ReadinessRequest, request: Request):
         tenant_id=(getattr(request.state, "identity", None) or {}).get("tenant_id"),
     )
     if target_info.get("is_remote"):
+        identity = getattr(request.state, "identity", None) or {}
+        connection_context = None
+        if target_info.get("connection_id"):
+            try:
+                connection_context = await fetch_connection_analysis_context(
+                    connection_id=target_info["connection_id"],
+                    authorization=request.headers.get("authorization", ""),
+                    tenant_id=str(identity.get("tenant_id") or ""),
+                    branch=payload.branch or target_info.get("branch", "main"),
+                    project_id=target_info.get("project_id") or payload.project_id,
+                    environment_id=target_info.get("environment_id") or payload.environment_id,
+                )
+            except PermissionError as exc:
+                raise HTTPException(status_code=403, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            except RuntimeError as exc:
+                raise HTTPException(status_code=502, detail=str(exc)) from exc
         res = await check_remote_readiness(
             owner=target_info["owner"],
             repo=target_info["repo"],
             branch=payload.branch or target_info.get("branch", "main"),
             token=payload.github_token.get_secret_value() if payload.github_token else None,
+            tree=connection_context.get("tree") if connection_context else None,
         )
         return ReadinessResponse(**res)
 
