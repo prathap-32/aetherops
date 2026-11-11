@@ -1424,16 +1424,22 @@ def run_universal_scan(
     }
     raw_langs = set(ast_profile.get("languages_detected", []))
     ext_bytes: Dict[str, int] = {}
+    package_roots: Set[str] = set()
+    total_repo_bytes = 0
     try:
         for p in root.rglob("*"):
             if any(part in IGNORED_DIRS for part in p.parts):
                 continue
             if p.is_file():
+                file_size = p.stat().st_size
+                total_repo_bytes += file_size
+                if p.name in {"package.json", "pyproject.toml", "Cargo.toml", "go.mod", "pom.xml"}:
+                    package_roots.add(str(p.parent.relative_to(root)))
                 ext = p.suffix.lower()
                 lang = RECOGNIZED_CODE_EXTS.get(ext)
                 if lang:
                     raw_langs.add(lang)
-                    ext_bytes[lang] = ext_bytes.get(lang, 0) + max(p.stat().st_size, 50)
+                    ext_bytes[lang] = ext_bytes.get(lang, 0) + file_size
     except Exception:
         pass
 
@@ -1463,9 +1469,13 @@ def run_universal_scan(
         ast_profile.get("ports_detected", []) + deep_meta["ports"]
     )))
     has_docker = bool(deep_meta["has_docker"] or any(c.get("has_container_config") for c in ast_profile.get("components", [])))
-    is_monorepo = bool(ast_profile.get("is_monorepo") or len(ast_profile.get("components", [])) > 1)
+    workspace_markers = {"pnpm-workspace.yaml", "lerna.json", "nx.json", "turbo.json", "rush.json"}
+    has_workspace_marker = any(p.name in workspace_markers for p in root.rglob("*") if p.is_file())
+    is_monorepo = bool(ast_profile.get("is_monorepo") or len(package_roots) > 1 or has_workspace_marker)
 
     workload_type = classify_workload(all_langs, all_frameworks, all_ports, has_docker)
+    if not (all_langs or all_frameworks or has_docker):
+        workload_type = "UNKNOWN / INSUFFICIENT_EVIDENCE"
 
     tier_label = {
         "development": "DEV (Development - Cost Minimized)",
@@ -1476,16 +1486,16 @@ def run_universal_scan(
     }.get(environment_tier.lower(), f"{environment_tier.upper()} Tier")
 
     docker_label = "Dockerized (Multi-Stage Dockerfile)" if deep_meta.get("is_multi_stage_docker") else (
-        "Dockerized (Standard Dockerfile)" if has_docker else "Native Process (No Dockerfile detected)"
+        "Dockerized (Standard Dockerfile)" if has_docker else "No container configuration detected"
     )
 
-    ports_str = ", ".join(f"Port {p}" for p in all_ports) if all_ports else "Port 8000"
-    db_str = ", ".join(all_dbs) if all_dbs else "None (Stateless / External)"
-    frameworks_str = ", ".join(all_frameworks) if all_frameworks else "Standard HTTP Service"
-    langs_str = ", ".join(all_langs) if all_langs else "Universal Multi-Language"
+    ports_str = ", ".join(f"Port {p}" for p in all_ports) if all_ports else "Not detected"
+    db_str = ", ".join(all_dbs) if all_dbs else "Not detected"
+    frameworks_str = ", ".join(all_frameworks) if all_frameworks else "Not detected"
+    langs_str = ", ".join(all_langs) if all_langs else "Not detected"
 
-    start_cmd = deep_meta["start_commands"][0] if deep_meta["start_commands"] else "Automatic entrypoint"
-    build_cmd = deep_meta["build_commands"][0] if deep_meta["build_commands"] else "Standard runtime compilation"
+    start_cmd = deep_meta["start_commands"][0] if deep_meta["start_commands"] else "Not detected"
+    build_cmd = deep_meta["build_commands"][0] if deep_meta["build_commands"] else "Not detected"
 
     key_value_report = [
         {
@@ -1583,7 +1593,7 @@ def run_universal_scan(
         {
             "key": "monorepo_topology",
             "label": "Monorepo Workspace",
-            "value": "Yes (Multi-package Workspace)" if is_monorepo else "No (Single Service Application)",
+            "value": "Detected" if is_monorepo else "Not confirmed",
             "category": "architecture",
             "confidence": "HIGH",
             "editable": False,
@@ -1635,12 +1645,12 @@ def run_universal_scan(
             "stars_count": 0,
             "forks_count": 0,
             "open_issues_count": 0,
-            "size_kb": 120,
+            "size_kb": round(total_repo_bytes / 1024, 1),
             "license": "Local Project",
             "topics": [],
             "latest_commit": None,
         },
-        "languages_breakdown": local_breakdown or [{"name": l, "percentage": round(100.0/max(1, len(all_langs)), 1), "bytes": 1000, "color": LANGUAGE_COLORS.get(l, "#8b949e")} for l in all_langs],
+        "languages_breakdown": local_breakdown,
         "inspected_manifests": deep_meta.get("manifests_found", []),
         "accuracy_score": None,
         "accuracy_method": "NOT_CALIBRATED",
