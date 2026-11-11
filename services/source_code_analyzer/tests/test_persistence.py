@@ -29,15 +29,17 @@ async def test_scan_report_is_persisted_as_revision_snapshot_and_profile():
             "frameworks": ["FastAPI"],
             "databases": ["PostgreSQL"],
             "ports": [8000],
-            "is_monorepo": False,
-            "inspected_manifests": ["pyproject.toml"],
+            "is_monorepo": True,
+            "application_roots": ["apps/api", "apps/web"],
+            "inspected_manifests": ["apps/api/pyproject.toml", "apps/web/package.json"],
             "manifest_count": 1,
             "manifest_limit": 100,
             "truncated_manifests": False,
             "summary_dict": {"workload_type": "Backend REST API"},
             "repo_path": "https://github.com/example/sample-app",
             "dependencies_detected": [
-                {"ecosystem": "pypi", "package_name": "fastapi", "version": "0.115.0", "purl": "pkg:pypi/fastapi@0.115.0", "source_path": "pyproject.toml", "manifest_hash": "b" * 64, "is_direct": True, "scope": "required"}
+                {"ecosystem": "pypi", "package_name": "fastapi", "version": "0.115.0", "purl": "pkg:pypi/fastapi@0.115.0", "source_path": "apps/api/pyproject.toml", "manifest_hash": "b" * 64, "is_direct": True, "scope": "required"},
+                {"ecosystem": "npm", "package_name": "react", "version": "18.2.0", "purl": "pkg:npm/react@18.2.0", "source_path": "apps/web/package.json", "manifest_hash": "c" * 64, "is_direct": True, "scope": "required"}
             ],
         }
         target = {
@@ -64,11 +66,13 @@ async def test_scan_report_is_persisted_as_revision_snapshot_and_profile():
             assert result["revision_kind"] == "GIT_COMMIT"
             assert result["revision_identifier"] == "a" * 40
             assert result["findings_persisted"] == 4
-            assert result["dependencies_persisted"] == 1
+            assert result["dependencies_persisted"] == 2
             assert set(result["sbom_formats"]) == {"CYCLONEDX", "SPDX"}
-            assert len((await session.execute(select(Dependency))).scalars().all()) == 1
+            dependencies = (await session.execute(select(Dependency))).scalars().all()
+            assert len(dependencies) == 2
+            assert {item.application_id for item in dependencies} == {app.id for app in apps}
             sboms = (await session.execute(select(SbomDocument))).scalars().all()
-            assert len(sboms) == 2
+            assert len(sboms) == 4
             assert {item.format for item in sboms} == {"CYCLONEDX", "SPDX"}
 
             assert len((await session.execute(select(Repository))).scalars().all()) == 1
@@ -77,8 +81,10 @@ async def test_scan_report_is_persisted_as_revision_snapshot_and_profile():
             assert len(runs) == 1
             assert runs[0].status == "PARTIAL"
             assert len((await session.execute(select(AnalysisSnapshot))).scalars().all()) == 1
-            assert len((await session.execute(select(Application))).scalars().all()) == 1
-            assert len((await session.execute(select(ApplicationProfile))).scalars().all()) == 1
+            apps = (await session.execute(select(Application))).scalars().all()
+            assert len(apps) == 2
+            assert {app.root_path for app in apps} == {"apps/api", "apps/web"}
+            assert len((await session.execute(select(ApplicationProfile))).scalars().all()) == 2
             assert len((await session.execute(select(AnalysisFinding))).scalars().all()) == 5
             assert len((await session.execute(select(EvidenceRecord))).scalars().all()) == 1
     finally:
