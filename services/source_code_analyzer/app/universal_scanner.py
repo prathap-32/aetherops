@@ -706,7 +706,6 @@ async def run_remote_universal_scan(
         for item in tree
         if (
             Path(item.get("path", "")).name in RECOGNIZED_MANIFESTS
-            or Path(item.get("path", "")).name.startswith(".env")
             or "compose" in Path(item.get("path", "")).name.lower()
         )
     ]
