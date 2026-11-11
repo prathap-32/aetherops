@@ -57,7 +57,13 @@ def verify_request_identity(request: Request) -> dict[str, Any] | None:
         )
 
     header_tenant = request.headers.get("x-tenant-id")
-    if header_tenant and header_tenant != claims.get("tenant_id"):
+    token_tenant = claims.get("tenant_id")
+    if header_tenant and not token_tenant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A tenant header cannot establish tenant identity; the token must contain the tenant claim.",
+        )
+    if header_tenant and header_tenant != token_tenant:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Tenant identity does not match the authenticated token.",
