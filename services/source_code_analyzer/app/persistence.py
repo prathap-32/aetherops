@@ -228,11 +228,18 @@ async def persist_analysis_report(
                 manifest_hash=dependency.get("manifest_hash"),
             ))
 
+        reported_repo_url = str(report.get("repo_path") or "")
+        sbom_repository_url = (
+            reported_repo_url
+            if reported_repo_url.startswith("https://github.com/")
+            else f"https://aetherops.invalid/repositories/{external_id}"
+        )
         sbom_documents = build_sbom_documents(
             application_name=application.name,
-            repository_url=str(report.get("repo_path") or f"{provider}:{owner}/{name}"),
+            repository_url=sbom_repository_url,
             commit_sha=commit_sha if revision_kind == "GIT_COMMIT" else None,
             dependencies=app_dependencies,
+            document_id=run.id,
         )
         for sbom_format, document in sbom_documents.items():
             checksum = _canonical_hash(document)
