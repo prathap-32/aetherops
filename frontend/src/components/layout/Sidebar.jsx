@@ -60,17 +60,16 @@ export default function Sidebar({
     if (itemId === 'project_environment' && (currentView === 'projects' || currentView === 'environments')) return true;
     return false;
   };
-  // Collapsible category state (used when text is expanded)
-  const [collapsedGroups, setCollapsedGroups] = useState({});
 
-  // Desktop sidebar expand/collapse state (saved across sessions)
   const [desktopExpanded, setDesktopExpanded] = useState(() => {
     try {
-      return localStorage.getItem('aether_sidebar_desktop_expanded') === 'true';
-    } catch (e) {
-      return false;
-    }
+      const saved = localStorage.getItem('aether_sidebar_desktop_expanded');
+      if (saved !== null) return saved === 'true';
+    } catch (e) {}
+    return true;
   });
+
+  const [collapsedGroups, setCollapsedGroups] = useState({});
 
   const toggleDesktopExpanded = () => {
     setDesktopExpanded((prev) => {
@@ -91,7 +90,6 @@ export default function Sidebar({
 
   const navItemClick = (viewId, path) => {
     handleNavigation(viewId, path);
-    // Auto-close overlay on mobile after clicking an item
     if (setMobileOpen) {
       setMobileOpen(false);
     }
@@ -100,9 +98,7 @@ export default function Sidebar({
   const initials = (user?.username || 'AO').slice(0, 2).toUpperCase();
   return (
     <>
-      {/* ─────────────────────────────────────────────────────────── */}
-      {/* 1. Mobile Backdrop Overlay (only on mobile when open)        */}
-      {/* ─────────────────────────────────────────────────────────── */}
+      {/* 1. Mobile Backdrop Overlay */}
       {mobileOpen && (
         <div
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 lg:hidden transition-opacity duration-200"
@@ -111,9 +107,7 @@ export default function Sidebar({
         />
       )}
 
-      {/* ─────────────────────────────────────────────────────────── */}
-      {/* 2. Desktop Sidebar (Hidden on mobile <1024px, Flex on lg+)  */}
-      {/* ─────────────────────────────────────────────────────────── */}
+      {/* 2. Desktop Sidebar */}
       <aside
         className={`hidden lg:flex flex-col h-full justify-between select-none bg-white border-r border-slate-200/80 transition-all duration-200 shrink-0 z-20 ${
           desktopExpanded ? 'w-64' : 'w-16'
@@ -124,52 +118,50 @@ export default function Sidebar({
           /* Expanded Desktop Mode (w-64) */
           <div className="flex flex-col h-full justify-between">
             <div>
-              {/* Header with full logo and collapse button */}
-              <div className="h-14 px-4 border-b border-slate-100 flex items-center justify-between">
+              {/* Header with optimized logo and collapse button */}
+              <div className="h-16 px-4 border-b border-slate-100 flex items-center justify-between">
                 <div
                   onClick={() => navItemClick('dashboard', '/')}
-                  className="cursor-pointer group flex items-center gap-2 select-none"
+                  className="cursor-pointer group flex items-center gap-2.5 select-none min-w-0"
                 >
                   <img
-                    src="/static/logo/aetherops_light_full.png"
+                    src="/static/logo/aetherops_light_transparent.webp"
                     alt="AetherOps"
-                    className="h-8 max-w-[160px] w-auto object-contain object-left transition-opacity group-hover:opacity-90 select-none pointer-events-none"
+                    className="w-9 h-9 object-contain shrink-0"
+                    width="36"
+                    height="36"
                     draggable={false}
-                    onContextMenu={(e) => e.preventDefault()}
-                    style={{
-                      WebkitUserDrag: 'none',
-                      userSelect: 'none',
-                      WebkitTouchCallout: 'none',
-                      pointerEvents: 'none',
-                    }}
                   />
+                  <span className="font-bold text-slate-900 text-lg tracking-tight truncate">
+                    AetherOps
+                  </span>
                 </div>
                 <button
                   type="button"
                   onClick={toggleDesktopExpanded}
-                  className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 cursor-pointer transition"
+                  className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 cursor-pointer transition min-h-[40px] min-w-[40px] flex items-center justify-center"
                   title="Collapse sidebar to icon-only"
                   aria-label="Collapse sidebar"
                 >
-                  <PanelLeftClose className="w-4 h-4" />
+                  <PanelLeftClose className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Full text nav items */}
-              <div className="px-3 py-3 space-y-4 overflow-y-auto max-h-[calc(100vh-140px)] no-scrollbar">
+              {/* Scrollable Navigation Groups */}
+              <div className="px-3 py-3 space-y-4 overflow-y-auto max-h-[calc(100vh-140px)]">
                 {NAV_GROUPS.map((group) => {
                   const isCollapsed = Boolean(collapsedGroups[group.name]);
                   return (
                     <div key={group.name} className="space-y-1">
                       <div
                         onClick={() => toggleGroup(group.name)}
-                        className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center justify-between cursor-pointer hover:text-slate-600"
+                        className="px-3 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center justify-between cursor-pointer hover:text-slate-600"
                       >
                         <span>{group.name}</span>
                         {isCollapsed ? (
-                          <ChevronRight className="w-3 h-3" />
+                          <ChevronRight className="w-4 h-4" />
                         ) : (
-                          <ChevronDown className="w-3 h-3" />
+                          <ChevronDown className="w-4 h-4" />
                         )}
                       </div>
 
@@ -182,15 +174,15 @@ export default function Sidebar({
                               <button
                                 key={item.id}
                                 onClick={() => navItemClick(item.id, item.path)}
-                                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition duration-150 text-left cursor-pointer ${
+                                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition duration-150 text-left cursor-pointer min-h-[48px] ${
                                   isActive
                                     ? 'bg-[#1e40af] text-white shadow-xs font-semibold'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                                    : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200'
                                 }`}
                               >
-                                <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="flex items-center gap-3 min-w-0">
                                   <Icon
-                                    className={`w-4 h-4 shrink-0 ${
+                                    className={`w-5 h-5 shrink-0 ${
                                       isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'
                                     }`}
                                   />
@@ -205,30 +197,30 @@ export default function Sidebar({
                   );
                 })}
 
-                {/* Admin console button */}
+                {/* Admin Link */}
                 {isAdmin && (
                   <div className="pt-2 border-t border-slate-100 mt-2 space-y-1">
-                    <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-blue-600 mb-1 flex items-center gap-1">
+                    <div className="px-3 text-xs font-bold uppercase tracking-wider text-blue-600 mb-1 flex items-center gap-1">
                       <span>ADMINISTRATION</span>
                     </div>
                     <button
                       onClick={() => navItemClick('admin', '/admin')}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition text-left cursor-pointer ${
+                      className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition text-left cursor-pointer min-h-[48px] ${
                         currentView === 'admin'
                           ? 'bg-blue-900 text-white shadow-xs font-semibold'
                           : 'text-blue-950 bg-blue-50/70 hover:bg-blue-100/70 border border-blue-200/60'
                       }`}
                     >
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex items-center gap-3">
                         <ShieldCheck
-                          className={`w-4 h-4 shrink-0 ${
+                          className={`w-5 h-5 shrink-0 ${
                             currentView === 'admin' ? 'text-white' : 'text-blue-600'
                           }`}
                         />
                         <span className="truncate">Admin Console</span>
                       </div>
                       <span
-                        className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded uppercase ${
+                        className={`text-xs font-bold font-mono px-2 py-0.5 rounded uppercase ${
                           currentView === 'admin' ? 'bg-white/20 text-white' : 'bg-blue-100 text-[#1e40af]'
                         }`}
                       >
@@ -240,36 +232,38 @@ export default function Sidebar({
               </div>
             </div>
 
-            {/* Bottom account footer */}
+            {/* Desktop User Profile Footer */}
             <div className="p-3 border-t border-slate-100 bg-slate-50/70 flex items-center justify-between gap-2">
               <div
                 onClick={handleOpenAccount}
-                className="flex items-center gap-2.5 min-w-0 cursor-pointer p-1 rounded-lg hover:bg-slate-200/60 transition group flex-1"
+                className="flex items-center gap-3 min-w-0 cursor-pointer p-1 rounded-lg hover:bg-slate-200/60 transition group flex-1"
                 title="Click to manage account profile"
               >
-                <div className="w-8 h-8 rounded-full bg-[#1e40af] text-white flex items-center justify-center font-bold font-mono text-xs shadow-xs group-hover:scale-105 transition shrink-0">
+                <div className="w-10 h-10 rounded-full bg-[#1e40af] text-white flex items-center justify-center font-bold font-mono text-sm shadow-xs group-hover:scale-105 transition shrink-0">
                   {initials}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-slate-800 truncate">
+                  <div className="text-sm font-bold text-slate-900 truncate">
                     {user?.username || 'developer'}
                   </div>
-                  <div className="text-[10px] text-slate-500 truncate">
+                  <div className="text-xs text-slate-500 truncate">
                     {user?.email || 'user@aetherops.cloud'}
                   </div>
                 </div>
               </div>
 
               <button
+                type="button"
                 onClick={() => navItemClick('settings', '/settings')}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                className={`p-2.5 rounded-xl text-sm font-semibold transition shrink-0 cursor-pointer flex items-center justify-center shadow-xs min-h-[44px] min-w-[44px] ${
                   currentView === 'settings'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                 }`}
                 title="User & Credential Settings"
+                aria-label="User & Credential Settings"
               >
-                <Settings className="w-3.5 h-3.5" />
+                <Settings className="w-5 h-5" />
               </button>
             </div>
           </div>
@@ -278,111 +272,74 @@ export default function Sidebar({
           <div className="flex flex-col h-full justify-between">
             <div>
               {/* Top Compact Icon Logo */}
-              <div className="h-14 border-b border-slate-100 flex items-center justify-center">
+              <div className="h-16 border-b border-slate-100 flex items-center justify-center">
                 <button
                   type="button"
                   onClick={toggleDesktopExpanded}
-                  className="w-10 h-10 rounded-xl hover:bg-slate-100 flex items-center justify-center transition cursor-pointer group select-none"
+                  className="w-11 h-11 rounded-xl hover:bg-slate-100 flex items-center justify-center transition cursor-pointer group select-none"
                   title="Click to expand sidebar"
                   aria-label="Expand sidebar"
                 >
                   <img
-                    src="/static/logo/aetherops_light_icon.png"
+                    src="/static/logo/aetherops_light_transparent.webp"
                     alt="AetherOps"
-                    className="w-8 h-8 object-contain select-none pointer-events-none group-hover:scale-105 transition"
+                    className="w-9 h-9 object-contain select-none pointer-events-none group-hover:scale-105 transition"
+                    width="36"
+                    height="36"
                     draggable={false}
-                    onContextMenu={(e) => e.preventDefault()}
-                    style={{
-                      WebkitUserDrag: 'none',
-                      userSelect: 'none',
-                      WebkitTouchCallout: 'none',
-                      pointerEvents: 'none',
-                    }}
-                    width="32"
-                    height="32"
                   />
                 </button>
               </div>
 
-              {/* Navigation Icon List */}
-              <div className="px-2 py-3 space-y-2 overflow-y-auto max-h-[calc(100vh-140px)] no-scrollbar">
-                {NAV_GROUPS.map((group, gIdx) => (
-                  <div key={group.name} className="space-y-1.5">
-                    {gIdx > 0 && <div className="h-px bg-slate-100 my-2 mx-1" />}
-                    {group.items.map((item) => {
-                      const Icon = item.icon;
-                      const isActive = isItemActive(item.id);
-                      return (
-                        <button
-                          key={item.id}
-                          onClick={() => navItemClick(item.id, item.path)}
-                          className={`w-10 h-10 mx-auto rounded-xl flex items-center justify-center transition duration-150 cursor-pointer ${
-                            isActive
-                              ? 'bg-[#1e40af] text-white shadow-xs font-semibold'
-                              : 'text-slate-400 hover:text-slate-800 hover:bg-slate-100'
-                          }`}
-                          title={item.label}
-                          aria-label={item.label}
-                        >
-                          <Icon className="w-4 h-4 shrink-0" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
-
-                {/* Admin Icon */}
-                {isAdmin && (
-                  <div className="pt-2 border-t border-slate-100 mt-2">
+              {/* Compact Nav Icons */}
+              <div className="p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-140px)] flex flex-col items-center">
+                {NAV_GROUPS[0].items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = isItemActive(item.id);
+                  return (
                     <button
-                      onClick={() => navItemClick('admin', '/admin')}
-                      className={`w-10 h-10 mx-auto rounded-xl flex items-center justify-center transition cursor-pointer ${
-                        currentView === 'admin'
-                          ? 'bg-blue-900 text-white shadow-xs font-semibold'
-                          : 'text-blue-600 bg-blue-50/70 hover:bg-blue-100 border border-blue-200/60'
+                      key={item.id}
+                      onClick={() => navItemClick(item.id, item.path)}
+                      className={`w-11 h-11 rounded-xl flex items-center justify-center transition cursor-pointer relative group ${
+                        isActive
+                          ? 'bg-[#1e40af] text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                       }`}
-                      title="Admin Console (Privileged)"
-                      aria-label="Admin Console"
+                      title={item.label}
+                      aria-label={item.label}
                     >
-                      <ShieldCheck className="w-4 h-4 shrink-0" />
+                      <Icon className="w-5 h-5" />
                     </button>
-                  </div>
+                  );
+                })}
+
+                {isAdmin && (
+                  <button
+                    onClick={() => navItemClick('admin', '/admin')}
+                    className={`w-11 h-11 rounded-xl flex items-center justify-center transition cursor-pointer ${
+                      currentView === 'admin'
+                        ? 'bg-blue-900 text-white shadow-xs'
+                        : 'text-blue-600 bg-blue-50/80 hover:bg-blue-100 border border-blue-200'
+                    }`}
+                    title="Admin Console"
+                    aria-label="Admin Console"
+                  >
+                    <ShieldCheck className="w-5 h-5" />
+                  </button>
                 )}
               </div>
             </div>
 
-            {/* Bottom Actions in Compact Mode */}
-            <div className="p-2 border-t border-slate-100 bg-slate-50/70 flex flex-col items-center gap-2">
+            {/* Compact Bottom Avatar */}
+            <div className="p-2 border-t border-slate-100 flex flex-col items-center gap-2">
               <button
                 type="button"
-                onClick={toggleDesktopExpanded}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition cursor-pointer"
-                title="Expand sidebar"
-                aria-label="Expand sidebar"
-              >
-                <PanelLeftOpen className="w-4 h-4" />
-              </button>
-
-              <button
                 onClick={handleOpenAccount}
-                className="w-8 h-8 rounded-full bg-[#1e40af] text-white flex items-center justify-center font-bold font-mono text-xs shadow-xs hover:scale-105 transition cursor-pointer"
-                title={`Account: ${user?.username || 'user'} (${formatAccountId(user?.account_id || '109283746519')})`}
+                className="w-10 h-10 rounded-full bg-[#1e40af] text-white flex items-center justify-center font-bold font-mono text-sm shadow-xs hover:scale-105 transition cursor-pointer"
+                title={`Account: ${user?.username || 'user'}`}
                 aria-label="Open Account Profile"
               >
                 {initials}
-              </button>
-
-              <button
-                onClick={() => navItemClick('settings', '/settings')}
-                className={`p-1.5 rounded-lg transition shrink-0 cursor-pointer ${
-                  currentView === 'settings'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/60'
-                }`}
-                title="User & Credential Settings"
-                aria-label="User & Credential Settings"
-              >
-                <Settings className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -390,44 +347,42 @@ export default function Sidebar({
       </aside>
 
       {/* ─────────────────────────────────────────────────────────── */}
-      {/* 3. Mobile Off-Canvas Drawer (Slide-Out on Mobile <1024px)   */}
+      {/* 3. Mobile Navigation Drawer                                  */}
       {/* ─────────────────────────────────────────────────────────── */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-white border-r border-slate-200/80 shadow-2xl flex flex-col h-full justify-between select-none transform transition-transform duration-300 ease-in-out lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 w-80 max-w-[85vw] bg-white border-r border-slate-200/80 shadow-2xl flex flex-col h-full justify-between select-none transform transition-transform duration-300 ease-in-out lg:hidden ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         aria-label="Mobile Navigation Drawer"
       >
         <div>
-          {/* Header with full logo and close button */}
-          <div className="h-14 px-4 border-b border-slate-100 flex items-center justify-between">
+          {/* Header with optimized logo and close button */}
+          <div className="h-16 px-4 border-b border-slate-100 flex items-center justify-between">
             <div
               onClick={() => navItemClick('dashboard', '/')}
-              className="cursor-pointer group flex items-center gap-2 select-none"
+              className="cursor-pointer group flex items-center gap-2.5 select-none min-w-0"
             >
               <img
-                src="/static/logo/aetherops_light_full.png"
+                src="/static/logo/aetherops_light_transparent.webp"
                 alt="AetherOps"
-                className="h-8 max-w-[160px] w-auto object-contain object-left transition-opacity group-hover:opacity-90 select-none pointer-events-none"
+                className="w-9 h-9 object-contain shrink-0"
+                width="36"
+                height="36"
                 draggable={false}
-                onContextMenu={(e) => e.preventDefault()}
-                style={{
-                  WebkitUserDrag: 'none',
-                  userSelect: 'none',
-                  WebkitTouchCallout: 'none',
-                  pointerEvents: 'none',
-                }}
               />
+              <span className="font-bold text-slate-900 text-lg tracking-tight truncate">
+                AetherOps
+              </span>
             </div>
 
             <button
               type="button"
               onClick={() => setMobileOpen && setMobileOpen(false)}
-              className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 cursor-pointer transition"
+              className="p-2.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 cursor-pointer transition min-h-[44px] min-w-[44px] flex items-center justify-center"
               aria-label="Close navigation"
               title="Close navigation"
             >
-              <X className="w-5 h-5" />
+              <X className="w-6 h-6" />
             </button>
           </div>
 
@@ -439,13 +394,13 @@ export default function Sidebar({
                 <div key={group.name} className="space-y-1">
                   <div
                     onClick={() => toggleGroup(group.name)}
-                    className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center justify-between cursor-pointer hover:text-slate-600"
+                    className="px-3 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center justify-between cursor-pointer hover:text-slate-600"
                   >
                     <span>{group.name}</span>
                     {isCollapsed ? (
-                      <ChevronRight className="w-3 h-3" />
+                      <ChevronRight className="w-4 h-4" />
                     ) : (
-                      <ChevronDown className="w-3 h-3" />
+                      <ChevronDown className="w-4 h-4" />
                     )}
                   </div>
 
@@ -458,15 +413,15 @@ export default function Sidebar({
                           <button
                             key={item.id}
                             onClick={() => navItemClick(item.id, item.path)}
-                            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition duration-150 text-left cursor-pointer ${
+                            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition duration-150 text-left cursor-pointer min-h-[48px] ${
                               isActive
                                 ? 'bg-[#1e40af] text-white shadow-xs font-semibold'
-                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200'
+                                : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200'
                             }`}
                           >
-                            <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="flex items-center gap-3 min-w-0">
                               <Icon
-                                className={`w-4 h-4 shrink-0 ${
+                                className={`w-5 h-5 shrink-0 ${
                                   isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'
                                 }`}
                               />
@@ -484,27 +439,27 @@ export default function Sidebar({
             {/* Mobile Admin Link */}
             {isAdmin && (
               <div className="pt-2 border-t border-slate-100 mt-2 space-y-1">
-                <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-blue-600 mb-1 flex items-center gap-1">
+                <div className="px-3 text-xs font-bold uppercase tracking-wider text-blue-600 mb-1 flex items-center gap-1">
                   <span>ADMINISTRATION</span>
                 </div>
                 <button
                   onClick={() => navItemClick('admin', '/admin')}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition text-left cursor-pointer ${
+                  className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition text-left cursor-pointer min-h-[48px] ${
                     currentView === 'admin'
                       ? 'bg-blue-900 text-white shadow-xs font-semibold'
                       : 'text-blue-950 bg-blue-50/70 hover:bg-blue-100/70 border border-blue-200/60'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-3">
                     <ShieldCheck
-                      className={`w-4 h-4 shrink-0 ${
+                      className={`w-5 h-5 shrink-0 ${
                         currentView === 'admin' ? 'text-white' : 'text-blue-600'
                       }`}
                     />
                     <span className="truncate">Admin Console</span>
                   </div>
                   <span
-                    className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded uppercase ${
+                    className={`text-xs font-bold font-mono px-2 py-0.5 rounded uppercase ${
                       currentView === 'admin' ? 'bg-white/20 text-white' : 'bg-blue-100 text-[#1e40af]'
                     }`}
                   >
@@ -520,32 +475,33 @@ export default function Sidebar({
         <div className="p-3 border-t border-slate-100 bg-slate-50/70 flex items-center justify-between gap-2">
           <div
             onClick={handleOpenAccount}
-            className="flex items-center gap-2.5 min-w-0 cursor-pointer p-1 rounded-lg hover:bg-slate-200/60 transition group flex-1"
+            className="flex items-center gap-3 min-w-0 cursor-pointer p-1 rounded-lg hover:bg-slate-200/60 transition group flex-1"
             title="Click to manage account profile"
           >
-            <div className="w-8 h-8 rounded-full bg-[#1e40af] text-white flex items-center justify-center font-bold font-mono text-xs shadow-xs group-hover:scale-105 transition shrink-0">
+            <div className="w-10 h-10 rounded-full bg-[#1e40af] text-white flex items-center justify-center font-bold font-mono text-sm shadow-xs group-hover:scale-105 transition shrink-0">
               {initials}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-bold text-slate-800 truncate">
+              <div className="text-sm font-bold text-slate-900 truncate">
                 {user?.username || 'developer'}
               </div>
-              <div className="text-[10px] text-slate-500 truncate">
+              <div className="text-xs text-slate-500 truncate">
                 {user?.email || 'user@aetherops.cloud'}
               </div>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={() => navItemClick('settings', '/settings')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition shrink-0 cursor-pointer flex items-center gap-1.5 shadow-xs ${
+            className={`px-3.5 py-2.5 rounded-xl text-sm font-semibold transition shrink-0 cursor-pointer flex items-center gap-2 shadow-xs min-h-[44px] ${
               currentView === 'settings'
                 ? 'bg-blue-600 text-white'
                 : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
             }`}
             title="User Settings"
           >
-            <Settings className="w-3.5 h-3.5" />
+            <Settings className="w-4 h-4" />
             <span>Settings</span>
           </button>
         </div>
