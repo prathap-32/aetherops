@@ -24,12 +24,13 @@ async def upgrade(session: AsyncSession, dialect: str, target: str = "source_ana
             CREATE OR REPLACE FUNCTION source_analysis.reject_analysis_snapshot_mutation()
             RETURNS trigger
             LANGUAGE plpgsql
-            AS $
+            AS $function$
             BEGIN
                 RAISE EXCEPTION 'Analysis snapshots are immutable; create a new snapshot instead.';
             END;
-            $
+            $function$
         """))
+        await session.execute(text('DROP TRIGGER IF EXISTS trg_sa_analysis_snapshots_immutable ON source_analysis.sa_analysis_snapshots'))
         await session.execute(text("""
             CREATE TRIGGER trg_sa_analysis_snapshots_immutable
             BEFORE UPDATE OR DELETE ON source_analysis.sa_analysis_snapshots
