@@ -156,6 +156,8 @@ class ScanReportResponse(BaseModel):
     manifest_count: Optional[int] = None
     manifest_limit: Optional[int] = None
     truncated_manifests: bool = False
+    profile_completeness: str = "PARTIAL"
+    analysis_scope: Optional[str] = None
     accuracy_score: Optional[int] = None
     accuracy_method: Optional[str] = "NOT_CALIBRATED"
 
