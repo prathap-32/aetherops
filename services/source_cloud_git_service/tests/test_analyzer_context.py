@@ -77,3 +77,21 @@ async def test_analyzer_context_requires_encrypted_pat(monkeypatch):
             "conn-1", request, db=object(), admin={"username": "alice"}
         )
     assert error.value.status_code == 409
+
+def test_manifest_redaction_preserves_dependency_fields_and_removes_json_tokens():
+    content = '{"dependencies":{"fastapi":"==0.115.0"},"token":"ghp_sensitive"}'
+    redacted = router_module._redact_analysis_manifest_content("package.json", content)
+    assert '"fastapi":"==0.115.0"' in redacted
+    assert "ghp_sensitive" not in redacted
+    assert "[REDACTED]" in redacted
+
+
+def test_manifest_redaction_removes_yaml_and_xml_secret_values():
+    yaml_content = "environment:\\n  PASSWORD: super-secret\\n  API_TOKEN=ghp_sensitive"
+    redacted_yaml = router_module._redact_analysis_manifest_content("compose.yaml", yaml_content)
+    assert "super-secret" not in redacted_yaml
+    assert "ghp_sensitive" not in redacted_yaml
+    xml_content = "<settings><password>super-secret</password></settings>"
+    redacted_xml = router_module._redact_analysis_manifest_content("pom.xml", xml_content)
+    assert "super-secret" not in redacted_xml
+    assert "[REDACTED]" in redacted_xml
