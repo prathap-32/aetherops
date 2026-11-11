@@ -29,7 +29,7 @@ from sqlalchemy import text, select
 from app.database import SessionLocal, dispose_analysis_db
 from app.security import verify_request_identity
 from app.persistence import persist_analysis_report
-from app.models import AnalysisFinding, AnalysisRun, AnalysisSnapshot, ApplicationProfile, EvidenceRecord, Repository, RepositoryRevision
+from app.models import AnalysisFinding, AnalysisRun, AnalysisSnapshot, ApplicationProfile, EvidenceRecord, Repository, RepositoryRevision, SbomDocument
 
 from app.schemas import (
     ScanRequest, ScanResponse, DispatchRequest, DispatchResponse,
@@ -566,6 +566,55 @@ async def get_analysis_run(run_id: str, request: Request):
                 }
                 for finding in findings
             ],
+        }
+
+
+@app.get("/api/v1/analysis-runs/{run_id}/sbom")
+async def get_analysis_run_sbom(
+    run_id: str,
+    request: Request,
+    sbom_format: str | None = Query(default=None, alias="format"),
+):
+    """Fetch generated SBOM documents for a tenant-owned analysis run."""
+    identity = getattr(request.state, "identity", None) or {}
+    tenant_id = identity.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant-scoped identity is required.")
+    normalized_format = sbom_format.upper() if sbom_format else None
+    if normalized_format and normalized_format not in {"CYCLONEDX", "SPDX"}:
+        raise HTTPException(status_code=400, detail="Supported SBOM formats are CYCLONEDX and SPDX.")
+    async with SessionLocal() as session:
+        statement = (
+            select(SbomDocument)
+            .join(AnalysisRun, SbomDocument.run_id == AnalysisRun.id)
+            .join(Repository, AnalysisRun.repository_id == Repository.id)
+            .where(AnalysisRun.id == run_id, Repository.tenant_id == tenant_id)
+            .order_by(SbomDocument.format.asc())
+        )
+        if normalized_format:
+            statement = statement.where(SbomDocument.format == normalized_format)
+        documents = (await session.execute(statement)).scalars().all()
+        if not documents:
+            exists_result = await session.execute(
+                select(AnalysisRun.id)
+                .join(Repository, AnalysisRun.repository_id == Repository.id)
+                .where(AnalysisRun.id == run_id, Repository.tenant_id == tenant_id)
+            )
+            if exists_result.scalar_one_or_none() is None:
+                raise HTTPException(status_code=404, detail="Analysis run not found.")
+        return {
+            "run_id": run_id,
+            "documents": [
+                {
+                    "format": document.format,
+                    "format_version": document.format_version,
+                    "checksum": document.checksum,
+                    "document": document.document,
+                    "created_at": document.created_at.isoformat(),
+                }
+                for document in documents
+            ],
+            "count": len(documents),
         }
 
 
