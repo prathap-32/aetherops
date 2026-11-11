@@ -1,11 +1,16 @@
 // frontend/src/modules/dashboard/components/lifecycleEngine.js
 /**
  * Resolves the AetherOps workspace lifecycle state (L00 - L12)
- * based on confirmed backend data: projects, environments, connections, analysis, and deployments.
+ * based on confirmed backend data: user onboarding state, projects, environments, connections, and deployments.
  */
-export function resolveLifecycleState({ projects = [], environments = [], connections = { git: [], cloud: [] }, deployments = [], hasVisitedBefore = true }) {
-  if (!hasVisitedBefore || projects.length === 0 && environments.length === 0) {
-    return projects.length === 0 ? 'L01_NO_PROJECTS' : 'L00_FIRST_VISIT';
+export function resolveLifecycleState({ user = null, projects = [], environments = [], connections = { git: [], cloud: [] }, deployments = [] }) {
+  // Authoritative first-time user check from backend user profile
+  if (user && user.has_seen_welcome === 0) {
+    return 'L00_FIRST_VISIT';
+  }
+
+  if (projects.length === 0 && environments.length === 0) {
+    return 'L01_NO_PROJECTS';
   }
 
   // Check for critical operational failures / attention required

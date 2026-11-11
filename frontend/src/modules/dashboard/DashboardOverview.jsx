@@ -111,15 +111,16 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
     return Array.from(regions);
   }, [environmentsState.data]);
 
-  // Resolve Lifecycle State & Next Best Action
+  // Resolve Lifecycle State & Next Best Action with user onboarding context
   const lifecycleState = useMemo(() => {
     return resolveLifecycleState({
+      user,
       projects: projectsState.data,
       environments: environmentsState.data,
       connections: connectionsState,
       deployments: deploymentsState.data,
     });
-  }, [projectsState.data, environmentsState.data, connectionsState, deploymentsState.data]);
+  }, [user, projectsState.data, environmentsState.data, connectionsState, deploymentsState.data]);
 
   const primaryAction = useMemo(() => {
     return getNextBestAction(lifecycleState, {
