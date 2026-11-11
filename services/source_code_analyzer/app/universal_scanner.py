@@ -894,8 +894,6 @@ async def run_remote_universal_scan(
     has_js = any("JavaScript" in l for l in found_languages)
     if (has_html or has_js) and not found_frameworks and has_docker:
         found_frameworks.add("Static Web Application")
-        if not found_ports:
-            found_ports.add(80)
 
     all_langs = sorted(list(found_languages))
     all_frameworks = sorted(list(found_frameworks))
@@ -911,6 +909,8 @@ async def run_remote_universal_scan(
     is_monorepo = has_workspace_marker or len(package_roots) > 1
 
     workload_type = classify_workload(all_langs, all_frameworks, all_ports, has_docker)
+    if not (all_langs or all_frameworks or has_docker):
+        workload_type = "UNKNOWN / INSUFFICIENT_EVIDENCE"
 
     tier_label = {
         "development": "DEV (Development - Cost Minimized)",
@@ -921,14 +921,14 @@ async def run_remote_universal_scan(
     }.get(environment_tier.lower(), f"{environment_tier.upper()} Tier")
 
     docker_label = "Dockerized (Multi-Stage Dockerfile)" if is_multi_stage_docker else (
-        "Dockerized (Standard Dockerfile)" if has_docker else "Native Process (No Dockerfile detected)"
+        "Dockerized (Standard Dockerfile)" if has_docker else "No container configuration detected"
     )
     ports_str = ", ".join(f"Port {p}" for p in all_ports) if all_ports else "Not detected"
     db_str = ", ".join(all_dbs) if all_dbs else "Not detected"
     frameworks_str = ", ".join(all_frameworks) if all_frameworks else "Not detected"
     langs_str = ", ".join(all_langs) if all_langs else "Not detected"
-    start_cmd = start_cmds[0] if start_cmds else ("nginx -g 'daemon off;'" if "Nginx" in frameworks_str else "Automatic entrypoint")
-    build_cmd = build_cmds[0] if build_cmds else "Standard container build"
+    start_cmd = start_cmds[0] if start_cmds else "Not detected"
+    build_cmd = build_cmds[0] if build_cmds else "Not detected"
 
     key_value_report = [
         {
@@ -1026,9 +1026,9 @@ async def run_remote_universal_scan(
         {
             "key": "monorepo_topology",
             "label": "Monorepo Workspace",
-            "value": "No (Single Service Application)",
+            "value": "Detected" if is_monorepo else "Not confirmed",
             "category": "architecture",
-            "confidence": "HIGH",
+            "confidence": "MEDIUM" if is_monorepo else "LOW",
             "editable": False,
         },
     ]
