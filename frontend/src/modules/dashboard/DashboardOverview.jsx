@@ -9,19 +9,18 @@ import {
   Plus,
   Search,
   Globe,
-  Calendar,
-  Layers,
-  CheckCircle2,
   RefreshCw,
-  Server,
 } from 'lucide-react';
 import {
   projectsApi,
   connectionsApi,
   deploymentsApi,
-  dashboardApi,
 } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { resolveLifecycleState, getNextBestAction } from './components/lifecycleEngine';
+import WelcomeSection from './components/WelcomeSection';
+import NextActionPanel from './components/NextActionPanel';
+import AttentionPanel from './components/AttentionPanel';
 
 export default function DashboardOverview({ onNavigate, onOpenCreateProject, onSelectProject }) {
   const { user } = useAuth();
@@ -32,12 +31,13 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
   const [projectsState, setProjectsState] = useState({ status: 'loading', data: [], error: null });
   const [environmentsState, setEnvironmentsState] = useState({ status: 'loading', data: [], error: null });
   const [connectionsState, setConnectionsState] = useState({ status: 'loading', git: [], cloud: [], error: null });
+  const [deploymentsState, setDeploymentsState] = useState({ status: 'loading', data: [], error: null });
 
   const handleCreateProjectClick = () => {
     if (onOpenCreateProject) {
       onOpenCreateProject();
     } else if (onNavigate) {
-      onNavigate('projects', '/projects');
+      onNavigate('projects', '/project-environment');
     }
   };
 
@@ -46,10 +46,11 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
     else setLoading(true);
 
     try {
-      const [projRes, gitRes, cloudRes] = await Promise.allSettled([
+      const [projRes, gitRes, cloudRes, depRes] = await Promise.allSettled([
         projectsApi.list(),
         connectionsApi.listGit(),
         connectionsApi.listCloud(),
+        deploymentsApi.list ? deploymentsApi.list() : Promise.resolve([]),
       ]);
 
       let loadedProjects = [];
@@ -83,6 +84,10 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
         cloud: cloudData,
         error: null,
       });
+
+      const depData = depRes.status === 'fulfilled' && Array.isArray(depRes.value) ? depRes.value : [];
+      setDeploymentsState({ status: 'success', data: depData, error: null });
+
     } catch (err) {
       console.warn('Dashboard fetch error:', err);
     } finally {
@@ -106,6 +111,24 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
     return Array.from(regions);
   }, [environmentsState.data]);
 
+  // Resolve Lifecycle State & Next Best Action
+  const lifecycleState = useMemo(() => {
+    return resolveLifecycleState({
+      projects: projectsState.data,
+      environments: environmentsState.data,
+      connections: connectionsState,
+      deployments: deploymentsState.data,
+    });
+  }, [projectsState.data, environmentsState.data, connectionsState, deploymentsState.data]);
+
+  const primaryAction = useMemo(() => {
+    return getNextBestAction(lifecycleState, {
+      projects: projectsState.data,
+      environments: environmentsState.data,
+      connections: connectionsState,
+    });
+  }, [lifecycleState, projectsState.data, environmentsState.data, connectionsState]);
+
   const filteredProjects = useMemo(() => {
     const q = projectSearchQuery.toLowerCase().trim();
     if (!q) return projectsState.data;
@@ -122,7 +145,7 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
       onSelectProject(project);
     }
     if (onNavigate) {
-      onNavigate('projects', '/projects', { activeProjectId: project.id });
+      onNavigate('projects', '/project-environment', { activeProjectId: project.id });
     }
   };
 
@@ -133,7 +156,7 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-              Workspace Overview
+              Platform Dashboard
             </h1>
             {refreshing && <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />}
           </div>
@@ -161,11 +184,27 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
         </div>
       </div>
 
-      {/* Summary Metric Cards (Scaled KPI 34-40px values) */}
+      {/* Lifecycle-Driven Welcome Banner */}
+      <WelcomeSection
+        user={user}
+        lifecycleState={lifecycleState}
+        primaryAction={primaryAction}
+        onNavigate={onNavigate}
+      />
+
+      {/* Conditional Attention Panel for L11 */}
+      {lifecycleState === 'L11_ATTENTION_REQUIRED' && (
+        <AttentionPanel onNavigate={onNavigate} />
+      )}
+
+      {/* Next Best Action Panel */}
+      <NextActionPanel primaryAction={primaryAction} onNavigate={onNavigate} />
+
+      {/* Summary Metric Cards (Scaled KPI 36-42px values) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {/* Total Projects */}
         <div
-          onClick={() => onNavigate('projects', '/projects')}
+          onClick={() => onNavigate('projects', '/project-environment')}
           className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
         >
           <div className="flex items-center justify-between">
@@ -182,7 +221,7 @@ export default function DashboardOverview({ onNavigate, onOpenCreateProject, onS
 
         {/* Active Environments */}
         <div
-          onClick={() => onNavigate('environments', '/environments')}
+          onClick={() => onNavigate('environments', '/project-environment')}
           className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer group"
         >
           <div className="flex items-center justify-between">
