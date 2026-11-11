@@ -707,7 +707,7 @@ async def run_remote_universal_scan(
         raw_content = await fetch_manifest_in_memory(owner, repo, m_path, branch=commit_sha, token=token)
         if not raw_content:
             continue
-        inspected_manifests.append(name)
+        inspected_manifests.append(m_path)
 
         # 1. Dockerfile inspection
         if name.startswith("Dockerfile"):
