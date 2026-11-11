@@ -111,292 +111,95 @@ export default function DashboardPage() {
 
   // Resolve initial view from window.location.pathname or hash
   const getInitialView = () => {
-    const pathname = window.location.pathname.replace(/\/$/, '') || '/';
-    if (PATH_VIEW_MAP[pathname]) {
-      return PATH_VIEW_MAP[pathname];
+    const path = window.location.pathname;
+    if (PATH_VIEW_MAP[path]) return PATH_VIEW_MAP[path];
+    if (window.location.hash) {
+      const cleanHash = window.location.hash.replace('#', '');
+      if (PATH_VIEW_MAP['/' + cleanHash]) return PATH_VIEW_MAP['/' + cleanHash];
+      if (PATH_VIEW_MAP[cleanHash]) return PATH_VIEW_MAP[cleanHash];
     }
-    const hash = window.location.hash.replace('#', '');
-    if (hash && VIEW_PATH_MAP[hash]) {
-      return hash;
-    }
-    return 'projects';
+    return 'dashboard';
   };
 
   const [activeView, setActiveView] = useState(getInitialView);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [isAccountModalOpen, setIsAccountModalOpen] = useState(() => {
-    return typeof window !== 'undefined' && window.location.pathname.startsWith('/account');
-  });
-  const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
 
-  // Active Project & Environment Context
+  // Active Project & Environment State
   const [activeProject, setActiveProject] = useState(() => {
     try {
-      const saved = localStorage.getItem('aether_active_project');
-      return saved ? JSON.parse(saved) : null;
+      const cached = localStorage.getItem('aether_active_project');
+      return cached ? JSON.parse(cached) : null;
     } catch (e) {
       return null;
     }
   });
 
-  const [activeEnvironment, setActiveEnvironment] = useState(() => {
+  const selectProject = (project) => {
+    setActiveProject(project);
     try {
-      const saved = localStorage.getItem('aether_active_env');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  });
-
-  const selectProject = (proj) => {
-    setActiveProject(proj);
-    try {
-      if (proj) localStorage.setItem('aether_active_project', JSON.stringify(proj));
-      else localStorage.removeItem('aether_active_project');
+      if (project) {
+        localStorage.setItem('aether_active_project', JSON.stringify(project));
+      } else {
+        localStorage.removeItem('aether_active_project');
+      }
     } catch (e) {}
   };
 
-  const selectEnvironment = (env) => {
-    setActiveEnvironment(env);
+  // Sync browser URL history on view change
+  const handleNavigate = (viewId, customPath, extraState = {}) => {
+    setActiveView(viewId);
+    const targetPath = customPath || VIEW_PATH_MAP[viewId] || '/';
     try {
-      if (env) localStorage.setItem('aether_active_env', JSON.stringify(env));
-      else localStorage.removeItem('aether_active_env');
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState({ viewId, ...extraState }, '', targetPath);
+      }
     } catch (e) {}
   };
 
-  // Sync state with browser navigation (popstate & hashchange)
   useEffect(() => {
-    const handleLocationChange = () => {
-      const pathname = window.location.pathname.replace(/\/$/, '') || '/';
-      const resolvedView = PATH_VIEW_MAP[pathname] || window.location.hash.replace('#', '');
-      if (pathname === '/account' || resolvedView === 'account') {
-        setIsAccountModalOpen(true);
-      }
-      if (resolvedView) {
-        if (resolvedView === 'admin' && !isAdmin) {
-          window.history.pushState(null, '', '/projects');
-          setActiveView('projects');
-        } else {
-          setActiveView(resolvedView);
-        }
-      }
+    const handlePopState = () => {
+      const resolved = getInitialView();
+      setActiveView(resolved);
     };
-
-    window.addEventListener('popstate', handleLocationChange);
-    window.addEventListener('hashchange', handleLocationChange);
-    return () => {
-      window.removeEventListener('popstate', handleLocationChange);
-      window.removeEventListener('hashchange', handleLocationChange);
-    };
-  }, [isAdmin]);
-
-  const [navState, setNavState] = useState(null);
-
-  const resolveViewKey = (keyOrPath) => {
-    if (!keyOrPath || typeof keyOrPath !== 'string') return 'projects';
-    const trimmed = keyOrPath.trim();
-    if (trimmed.startsWith('/')) {
-      return PATH_VIEW_MAP[trimmed] || trimmed.replace(/^\//, '');
-    }
-    if (PATH_VIEW_MAP[`/${trimmed}`]) {
-      return PATH_VIEW_MAP[`/${trimmed}`];
-    }
-    return trimmed;
-  };
-
-  const handleOpenCreateProject = () => {
-    setIsCreateProjectModalOpen(true);
-    handleNavigate('projects', '/projects');
-  };
-
-  const handleNavigate = (viewKey, targetPathOrState, extraState) => {
-    let resolvedKey = resolveViewKey(viewKey);
-    let path = VIEW_PATH_MAP[resolvedKey] || VIEW_PATH_MAP[viewKey] || `/${viewKey}`;
-
-    if (typeof targetPathOrState === 'string' && targetPathOrState.startsWith('/')) {
-      path = targetPathOrState;
-      if (PATH_VIEW_MAP[targetPathOrState]) {
-        resolvedKey = PATH_VIEW_MAP[targetPathOrState];
-      }
-      if (extraState) {
-        setNavState(extraState);
-      }
-    } else if (typeof targetPathOrState === 'object' && targetPathOrState !== null) {
-      setNavState(targetPathOrState);
-    }
-
-    if (resolvedKey === 'admin' && !isAdmin) {
-      alert('Access Restricted: The Admin Console is only accessible by platform administrators.');
-      return;
-    }
-
-    try {
-      window.history.pushState(null, '', path);
-    } catch (e) {
-      window.location.hash = `#${resolvedKey}`;
-    }
-    setActiveView(resolvedKey);
-  };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const renderActiveModule = () => {
     switch (activeView) {
-      case 'dashboard':
-      case 'app':
-      case '/':
-        return (
-          <DashboardOverview
-            onNavigate={handleNavigate}
-            onOpenCreateProject={handleOpenCreateProject}
-            onSelectProject={selectProject}
-          />
-        );
       case 'project_environment':
-      case 'project-environment':
       case 'projects':
-        return (
-          <ProjectEnvironmentView
-            onNavigate={handleNavigate}
-            isCreateModalOpen={isCreateProjectModalOpen}
-            onCloseCreateModal={() => setIsCreateProjectModalOpen(false)}
-            onOpenCreateProject={handleOpenCreateProject}
-            activeProject={activeProject}
-            activeEnvironment={activeEnvironment}
-            onSelectProject={selectProject}
-            onSelectEnvironment={selectEnvironment}
-            navState={navState}
-            initialTab={navState?.tab || 'projects'}
-          />
-        );
       case 'environments':
         return (
           <ProjectEnvironmentView
             onNavigate={handleNavigate}
-            isCreateModalOpen={isCreateProjectModalOpen}
-            onCloseCreateModal={() => setIsCreateProjectModalOpen(false)}
-            onOpenCreateProject={handleOpenCreateProject}
             activeProject={activeProject}
-            activeEnvironment={activeEnvironment}
             onSelectProject={selectProject}
-            onSelectEnvironment={selectEnvironment}
-            navState={navState}
-            initialTab="environments"
           />
         );
       case 'source_cloud':
-      case 'source-connection':
-      case 'source_connection':
-        return (
-          <SourceCloudView
-            onNavigate={handleNavigate}
-            activeProject={activeProject}
-            activeEnvironment={activeEnvironment}
-            navState={navState}
-          />
-        );
+        return <SourceCloudView onNavigate={handleNavigate} />;
       case 'repo_analyzer':
-      case 'requirements':
-      case 'source-analysis':
-      case 'source_analysis':
-        return (
-          <RepoAnalyzerView
-            onNavigate={handleNavigate}
-            activeProject={activeProject}
-            activeEnvironment={activeEnvironment}
-            navState={navState}
-          />
-        );
+        return <RepoAnalyzerView onNavigate={handleNavigate} />;
       case 'architecture_studio':
-      case 'architecture':
-      case 'architecture-studio':
-        return (
-          <ArchitectureView
-            onNavigate={handleNavigate}
-            activeProject={activeProject}
-            activeEnvironment={activeEnvironment}
-            navState={navState}
-            user={user}
-          />
-        );
+        return <ArchitectureView onNavigate={handleNavigate} />;
       case 'architecture_designer':
-      case 'architecture-designer':
-      case 'architecture/designer':
-      case 'designer':
-        return (
-          <ArchitectureDesigner
-            onNavigate={handleNavigate}
-            activeProject={activeProject}
-            activeEnvironment={activeEnvironment}
-            navState={navState}
-            user={user}
-          />
-        );
+        return <ArchitectureDesigner onNavigate={handleNavigate} />;
       case 'risk_analysis':
-      case 'risk-analysis':
-      case 'risk':
-        return (
-          <RiskEngineView
-            onNavigate={handleNavigate}
-            activeProject={activeProject}
-            activeEnvironment={activeEnvironment}
-            navState={navState}
-            user={user}
-          />
-        );
+        return <RiskEngineView onNavigate={handleNavigate} />;
       case 'architecture_validation':
-      case 'architecture/validation':
-      case 'architecture-validation':
       case 'security':
-      case 'validation':
-        return (
-          <ArchitectureValidationView
-            onNavigate={handleNavigate}
-            activeProject={activeProject}
-            activeEnvironment={activeEnvironment}
-            user={user}
-          />
-        );
+        return <ArchitectureValidationView onNavigate={handleNavigate} />;
       case 'iac':
-      case 'terraform':
-        return (
-          <IacView
-            onNavigate={handleNavigate}
-            activeProject={activeProject}
-            activeEnvironment={activeEnvironment}
-            navState={navState}
-            user={user}
-          />
-        );
+        return <IacView onNavigate={handleNavigate} />;
       case 'execution':
-      case 'approval':
       case 'approval_gate':
-      case 'approval-gate':
-        return (
-          <ApprovalExecutionView
-            onNavigate={handleNavigate}
-            activeProject={activeProject}
-            activeEnvironment={activeEnvironment}
-            user={user}
-          />
-        );
+        return <ApprovalExecutionView onNavigate={handleNavigate} />;
       case 'state_inventory':
-      case 'state-inventory':
-      case 'state':
-        return (
-          <StateInventoryView
-            activeProject={activeProject}
-            activeEnvironment={activeEnvironment}
-          />
-        );
+        return <StateInventoryView onNavigate={handleNavigate} />;
       case 'deployments':
-      case 'deployment':
-        return (
-          <DeploymentsView
-            onNavigate={handleNavigate}
-            activeProject={activeProject}
-            activeEnvironment={activeEnvironment}
-            user={user}
-          />
-        );
+        return <DeploymentsView onNavigate={handleNavigate} />;
       case 'cicd':
       case 'cicd-pipeline':
         return <CicdView onNavigate={handleNavigate} />;
@@ -422,7 +225,7 @@ export default function DashboardPage() {
         return (
           <DashboardOverview
             onNavigate={handleNavigate}
-            onOpenCreateProject={handleOpenCreateProject}
+            onOpenCreateProject={handleCreateProjectClick = () => {}}
             onSelectProject={selectProject}
           />
         );
@@ -430,22 +233,9 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="flex h-screen bg-[#f8f9ff] text-slate-900 font-sans antialiased overflow-hidden">
-      {/* Unified Global Sidebar */}
-      <Sidebar
-        activeView={activeView}
-        activeItem={activeView}
-        setActiveView={handleNavigate}
-        onNavigate={handleNavigate}
-        mobileOpen={mobileSidebarOpen}
-        setMobileOpen={setMobileSidebarOpen}
-        onOpenAccountModal={() => setIsAccountModalOpen(true)}
-        onOpenAccount={() => setIsAccountModalOpen(true)}
-      />
-
-      {/* Main Orchestrator Workspace */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Unified Top Navbar with Mobile Drawer Toggle and Context */}
+    <div className="flex flex-col h-screen bg-[#f8f9ff] text-slate-900 font-sans antialiased overflow-hidden">
+      {/* 1. Global Full-Width Top Bar (Zone Top) */}
+      <div className="w-full shrink-0 z-30">
         <Navbar
           activeView={activeView}
           onToggleMobileSidebar={() => setMobileSidebarOpen((prev) => !prev)}
@@ -454,16 +244,33 @@ export default function DashboardPage() {
           onOpenAccountModal={() => setIsAccountModalOpen(true)}
           onNavigate={handleNavigate}
         />
+      </div>
 
-        {/* Dynamic Responsive Workspace Container */}
-        <main className="flex-1 overflow-y-auto p-3.5 sm:p-5 md:p-6 lg:p-8">
-          <div className="w-full max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto">
+      {/* 2. Below Top Bar: Three-Zone Layout Container */}
+      <div className="flex flex-1 min-h-0 overflow-hidden w-full">
+        {/* Zone A: Left Sidebar */}
+        <Sidebar
+          activeView={activeView}
+          activeItem={activeView}
+          setActiveView={handleNavigate}
+          onNavigate={handleNavigate}
+          mobileOpen={mobileSidebarOpen}
+          setMobileOpen={setMobileSidebarOpen}
+          onOpenAccountModal={() => setIsAccountModalOpen(true)}
+          onOpenAccount={() => setIsAccountModalOpen(true)}
+        />
+
+        {/* Zone B: Main Dashboard Content Container */}
+        <main className="flex-1 flex flex-col min-w-0 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#f8f9ff]">
+          <div className="w-full max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto flex-1 flex flex-col">
             {renderActiveModule()}
           </div>
         </main>
+
+        {/* Zone C: Right-Side Content Slot (Flex container when contextual panels are present) */}
       </div>
 
-      {/* Account Profile Update Modal (Dynamic updates in DB & Dashboard) */}
+      {/* Account Profile Update Modal */}
       <AccountModal
         isOpen={isAccountModalOpen}
         onClose={() => setIsAccountModalOpen(false)}
