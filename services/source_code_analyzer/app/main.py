@@ -28,6 +28,7 @@ from sqlalchemy import text
 
 from app.database import SessionLocal, dispose_analysis_db
 from app.security import verify_request_identity
+from app.persistence import persist_analysis_report
 
 from app.schemas import (
     ScanRequest, ScanResponse, DispatchRequest, DispatchResponse,
@@ -348,6 +349,28 @@ async def repo_readiness_endpoint(payload: ReadinessRequest, request: Request):
     res = check_readiness(repo_path)
     return ReadinessResponse(**res)
 
+async def _persist_scan_report(
+    report: dict,
+    target: dict,
+    payload: ScanReportRequest,
+    request: Request,
+    branch: str,
+) -> dict:
+    identity = getattr(request.state, "identity", None) or {}
+    persistence = await persist_analysis_report(
+        SessionLocal(),
+        report=report,
+        target=target,
+        project_id=target.get("project_id") or payload.project_id,
+        environment_id=target.get("environment_id") or payload.environment_id,
+        tenant_id=target.get("tenant_id") or identity.get("tenant_id"),
+        branch=branch,
+    )
+    # persist_analysis_report receives a session; commit it as one unit.
+    # This helper is replaced below with an explicit session context.
+    return persistence
+
+
 @app.post("/api/v1/repo/scan-report", response_model=ScanReportResponse, status_code=status.HTTP_200_OK)
 async def repo_scan_report_endpoint(payload: ScanReportRequest, request: Request):
     """
@@ -383,6 +406,24 @@ async def repo_scan_report_endpoint(payload: ScanReportRequest, request: Request
             environment_tier=payload.environment_tier,
             target_region=payload.target_region,
         )
+        identity = getattr(request.state, "identity", None) or {}
+        async with SessionLocal() as session:
+            try:
+                persistence = await persist_analysis_report(
+                    session,
+                    report=report,
+                    target=target_info,
+                    project_id=target_info.get("project_id") or payload.project_id,
+                    environment_id=target_info.get("environment_id") or payload.environment_id,
+                    tenant_id=target_info.get("tenant_id") or identity.get("tenant_id"),
+                    branch=payload.branch or target_info.get("branch", "main"),
+                )
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                logger.exception("Failed to persist remote source-analysis run")
+                raise HTTPException(status_code=503, detail="Analysis completed but persistence failed; retry the scan.")
+        report.update(persistence)
         return ScanReportResponse(**report)
 
     local_target = target_info.get("path") or payload.repo_path
@@ -399,6 +440,24 @@ async def repo_scan_report_endpoint(payload: ScanReportRequest, request: Request
         environment_tier=payload.environment_tier,
         target_region=payload.target_region,
     )
+    identity = getattr(request.state, "identity", None) or {}
+    async with SessionLocal() as session:
+        try:
+            persistence = await persist_analysis_report(
+                session,
+                report=report,
+                target=target_info,
+                project_id=payload.project_id,
+                environment_id=payload.environment_id,
+                tenant_id=identity.get("tenant_id"),
+                branch=payload.branch or "local",
+            )
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            logger.exception("Failed to persist local source-analysis run")
+            raise HTTPException(status_code=503, detail="Analysis completed but persistence failed; retry the scan.")
+    report.update(persistence)
     return ScanReportResponse(**report)
 
 @app.post("/api/v1/repo/accept-and-size", response_model=AwsSizingOutput, status_code=status.HTTP_200_OK)
