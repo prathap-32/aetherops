@@ -14,7 +14,6 @@ import os
 import sys
 import re
 import json
-import sqlite3
 import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Set, Tuple
@@ -229,11 +228,15 @@ async def resolve_repo_target(
     headers = {"Authorization": authorization}
     if tenant_id:
         headers["X-Tenant-ID"] = tenant_id
+    source_connection_url = os.getenv(
+        "SC_SERVICE_URL",
+        os.getenv("SOURCE_CONNECTION_SERVICE_URL", "http://127.0.0.1:8002"),
+    ).rstrip("/")
 
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
             response = await client.get(
-                "http://127.0.0.1:8002/api/v1/connections",
+                f"{source_connection_url}/api/v1/connections",
                 headers=headers,
             )
     except httpx.RequestError as exc:
