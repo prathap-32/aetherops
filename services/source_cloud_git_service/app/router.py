@@ -1276,7 +1276,7 @@ async def delete_connection(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _SENSITIVE_MANIFEST_KEY = re.compile(
-    r"(?i)^(?:password|passwd|secret|secret_key|token|api[_-]?key|private[_-]?key|client[_-]?secret|access[_-]?key|session[_-]?token)$"
+    r"(?i)^(?:password|passwd|secret|secret_key|token|api[_-]?(?:key|token)|private[_-]?key|client[_-]?secret|access[_-]?key|session[_-]?token)$"
 )
 
 
