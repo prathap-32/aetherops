@@ -56,6 +56,8 @@ async def test_scan_report_is_persisted_as_revision_snapshot_and_profile():
             assert result["persistence_status"] == "PERSISTED"
             assert result["analysis_run_id"]
             assert result["snapshot_hash"]
+            assert result["revision_kind"] == "GIT_COMMIT"
+            assert result["revision_identifier"] == "a" * 40
             assert result["findings_persisted"] == 4
 
             assert len((await session.execute(select(Repository))).scalars().all()) == 1
