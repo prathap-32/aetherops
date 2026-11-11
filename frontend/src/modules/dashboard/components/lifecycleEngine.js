@@ -2,14 +2,13 @@
 /**
  * Resolves the AetherOps workspace lifecycle state (L00 - L12)
  * based on confirmed backend data: user onboarding state, projects, environments, connections, and deployments.
+ * Rule: If projects already exist in the database, L00_FIRST_VISIT is never returned.
  */
 export function resolveLifecycleState({ user = null, projects = [], environments = [], connections = { git: [], cloud: [] }, deployments = [] }) {
-  // Authoritative first-time user check from backend user profile
-  if (user && user.has_seen_welcome === 0) {
-    return 'L00_FIRST_VISIT';
-  }
-
   if (projects.length === 0 && environments.length === 0) {
+    if (user && user.has_seen_welcome === 0) {
+      return 'L00_FIRST_VISIT';
+    }
     return 'L01_NO_PROJECTS';
   }
 
