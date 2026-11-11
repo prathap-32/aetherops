@@ -304,7 +304,7 @@ def validate_safe_repo_path(raw_path: str, must_exist: bool = True) -> Path:
 
 
 @app.post("/api/v1/repo/readiness", response_model=ReadinessResponse, status_code=status.HTTP_200_OK)
-async def repo_readiness_endpoint(payload: ReadinessRequest):
+async def repo_readiness_endpoint(payload: ReadinessRequest, request: Request):
     """
     Pre-flight AST readiness check: verify repository is valid, readable,
     and contains recognized application manifests or source code before
@@ -316,6 +316,8 @@ async def repo_readiness_endpoint(payload: ReadinessRequest):
         raw_target=payload.repo_path,
         project_id=payload.project_id,
         environment_id=payload.environment_id,
+        authorization=request.headers.get("authorization"),
+        tenant_id=request.headers.get("x-tenant-id"),
     )
     if target_info.get("is_remote"):
         res = await check_remote_readiness(
@@ -332,7 +334,7 @@ async def repo_readiness_endpoint(payload: ReadinessRequest):
     return ReadinessResponse(**res)
 
 @app.post("/api/v1/repo/scan-report", response_model=ScanReportResponse, status_code=status.HTTP_200_OK)
-async def repo_scan_report_endpoint(payload: ScanReportRequest):
+async def repo_scan_report_endpoint(payload: ScanReportRequest, request: Request):
     """
     Universal Polyglot Codebase Scan: inspects any language, framework,
     manifests, and container files. Produces a human-understandable
