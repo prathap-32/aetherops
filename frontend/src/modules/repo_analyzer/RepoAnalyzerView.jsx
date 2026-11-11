@@ -664,6 +664,12 @@ export default function RepoAnalyzerView({
                 </div>
               )}
 
+              {scanReport.profile_completeness === "PARTIAL" && (
+                <div className="rounded-lg p-2.5 border border-amber-700/50 bg-amber-950/20 text-amber-200 text-[11px]">
+                  Preliminary profile: this scan currently covers repository manifests and configuration. It is not yet a complete dependency graph or architecture inventory.
+                </div>
+              )}
+
               {scanReport.truncated_manifests && (
                 <div className="rounded-lg p-2.5 border border-amber-700/50 bg-amber-950/20 text-amber-200 text-[11px]">
                   Manifest inspection was limited to {scanReport.manifest_limit} of {scanReport.manifest_count} candidate files. Treat this profile as partial coverage.
