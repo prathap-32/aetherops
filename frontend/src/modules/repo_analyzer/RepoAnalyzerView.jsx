@@ -64,6 +64,7 @@ export default function RepoAnalyzerView({
   // Scan & Report Results
   const [readinessResult, setReadinessResult] = useState(null);
   const [scanReport, setScanReport] = useState(null);
+  const [analysisRuns, setAnalysisRuns] = useState([]);
   const [editableKeyValue, setEditableKeyValue] = useState([]);
 
   // Final Sizing Output
@@ -132,6 +133,22 @@ export default function RepoAnalyzerView({
       console.warn('Failed to load environments:', err);
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedProjectId) {
+      setAnalysisRuns([]);
+      return () => { cancelled = true; };
+    }
+    repoAnalyzerApi.listRuns(selectedProjectId, 8)
+      .then((response) => {
+        if (!cancelled) setAnalysisRuns(response.items || []);
+      })
+      .catch(() => {
+        if (!cancelled) setAnalysisRuns([]);
+      });
+    return () => { cancelled = true; };
+  }, [selectedProjectId, scanReport?.analysis_run_id]);
 
   const handleProjectChange = (e) => {
     const pid = e.target.value;
@@ -413,6 +430,30 @@ export default function RepoAnalyzerView({
           )}
           <span>{statusMessage.text}</span>
         </div>
+      )}
+
+      {analysisRuns.length > 0 && (
+        <section className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-700">Recent Source Analysis Runs</div>
+            <span className="text-[10px] text-slate-400">{analysisRuns.length} recent</span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {analysisRuns.map((run) => (
+              <div key={run.run_id} className="px-4 py-2.5 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-xs font-medium text-slate-800 truncate">{run.repository}</div>
+                  <div className="text-[10px] text-slate-500 font-mono truncate">
+                    {run.branch} · {run.revision_kind === 'GIT_COMMIT' ? (run.commit_sha || '').slice(0, 12) : 'Local profile fingerprint'}
+                  </div>
+                </div>
+                <span className={`shrink-0 rounded px-2 py-1 text-[9px] font-semibold ${run.status === 'PARTIAL' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                  {run.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* STEP 1: Repository & Environment Context Card */}
