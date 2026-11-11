@@ -25,6 +25,7 @@ import {
   FolderKanban,
   GitBranch,
   ExternalLink,
+  Download,
   ChevronDown
 } from 'lucide-react';
 import { repoAnalyzerApi, projectsApi, connectionsApi } from '../../services/api';
@@ -212,6 +213,29 @@ export default function RepoAnalyzerView({
       copy[index] = { ...copy[index], value: newValue };
       return copy;
     });
+  };
+
+  const handleDownloadSbom = async (format) => {
+    if (!scanReport?.analysis_run_id) return;
+    try {
+      const response = await repoAnalyzerApi.getSbom(scanReport.analysis_run_id, format);
+      const sbomDocument = response.documents?.[0]?.document;
+      if (!sbomDocument) throw new Error(`No ${format} SBOM is available for this run.`);
+      const blob = new Blob([JSON.stringify(sbomDocument, null, 2)], { type: 'application/json' });
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = `${scanReport.repo_name || 'repository'}-${format.toLowerCase()}-sbom.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      setStatusMessage({
+        type: 'error',
+        text: error.message || `Unable to retrieve the ${format} SBOM.`,
+      });
+    }
   };
 
   // Step 2: User Verifies & Accepts Specification -> Triggers Environment-Aware Sizing
@@ -679,6 +703,59 @@ export default function RepoAnalyzerView({
               {scanReport.truncated_manifests && (
                 <div className="rounded-lg p-2.5 border border-amber-700/50 bg-amber-950/20 text-amber-200 text-[11px]">
                   Manifest inspection was limited to {scanReport.manifest_limit} of {scanReport.manifest_count} candidate files. Treat this profile as partial coverage.
+                </div>
+              )}
+
+              {scanReport.application_roots?.length > 0 && (
+                <div className="bg-white/5 rounded-lg p-2.5 border border-white/5">
+                  <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-1">
+                    Discovered Application Roots
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {scanReport.application_roots.map((root) => (
+                      <span key={root} className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-200 border border-slate-700">
+                        {root}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {scanReport.dependencies_detected?.length > 0 && (
+                <div className="bg-white/5 rounded-lg p-2.5 border border-white/5">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                      Declared Direct Dependencies ({scanReport.dependency_count || scanReport.dependencies_detected.length})
+                    </div>
+                    <span className="text-[9px] text-amber-300">Transitive resolution not included</span>
+                  </div>
+                  <div className="space-y-1.5 max-h-44 overflow-y-auto">
+                    {scanReport.dependencies_detected.slice(0, 20).map((dependency, index) => (
+                      <div key={`${dependency.source_path}-${dependency.ecosystem}-${dependency.package_name}-${index}`} className="flex items-start justify-between gap-3 text-[10px]">
+                        <div className="min-w-0">
+                          <div className="text-slate-200 font-medium break-all">{dependency.package_name}</div>
+                          <div className="text-slate-500 font-mono break-all">{dependency.ecosystem} · {dependency.source_path}</div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className="text-slate-300 font-mono">{dependency.version || dependency.declared_version || 'Unresolved'}</div>
+                          <div className="text-slate-500">{dependency.scope || 'required'}</div>
+                        </div>
+                      </div>
+                    ))}
+                    {scanReport.dependencies_detected.length > 20 && (
+                      <div className="text-[10px] text-slate-500">Showing first 20 dependencies in this preview.</div>
+                    )}
+                  </div>
+                  {scanReport.persistence_status === 'PERSISTED' && scanReport.analysis_run_id && (
+                    <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-slate-700/60">
+                      <button type="button" onClick={() => handleDownloadSbom('CYCLONEDX')} className="inline-flex items-center gap-1.5 rounded-md border border-cyan-700/60 px-2.5 py-1.5 text-[10px] text-cyan-200 hover:bg-cyan-950/40">
+                        <Download className="w-3 h-3" /> CycloneDX 1.5
+                      </button>
+                      <button type="button" onClick={() => handleDownloadSbom('SPDX')} className="inline-flex items-center gap-1.5 rounded-md border border-cyan-700/60 px-2.5 py-1.5 text-[10px] text-cyan-200 hover:bg-cyan-950/40">
+                        <Download className="w-3 h-3" /> SPDX 2.3
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
