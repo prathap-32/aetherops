@@ -334,7 +334,7 @@ async def repo_readiness_endpoint(payload: ReadinessRequest, request: Request):
         project_id=payload.project_id,
         environment_id=payload.environment_id,
         authorization=request.headers.get("authorization"),
-        tenant_id=request.headers.get("x-tenant-id"),
+        tenant_id=(getattr(request.state, "identity", None) or {}).get("tenant_id"),
     )
     if target_info.get("is_remote"):
         res = await check_remote_readiness(
@@ -363,7 +363,7 @@ async def repo_scan_report_endpoint(payload: ScanReportRequest, request: Request
         project_id=payload.project_id,
         environment_id=payload.environment_id,
         authorization=request.headers.get("authorization"),
-        tenant_id=request.headers.get("x-tenant-id"),
+        tenant_id=(getattr(request.state, "identity", None) or {}).get("tenant_id"),
     )
     if target_info.get("is_remote"):
         readiness = await check_remote_readiness(
