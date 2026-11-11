@@ -670,6 +670,12 @@ export default function RepoAnalyzerView({
                 </div>
               )}
 
+              {scanReport.skipped_large_manifests?.length > 0 && (
+                <div className="rounded-lg p-2.5 border border-amber-700/50 bg-amber-950/20 text-amber-200 text-[11px]">
+                  {scanReport.skipped_large_manifests.length} manifest file(s) exceeded the {Math.round((scanReport.max_manifest_bytes || 0) / 1024)} KB inspection limit and were not downloaded.
+                </div>
+              )}
+
               {scanReport.truncated_manifests && (
                 <div className="rounded-lg p-2.5 border border-amber-700/50 bg-amber-950/20 text-amber-200 text-[11px]">
                   Manifest inspection was limited to {scanReport.manifest_limit} of {scanReport.manifest_count} candidate files. Treat this profile as partial coverage.
