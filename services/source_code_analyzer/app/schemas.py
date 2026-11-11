@@ -164,6 +164,8 @@ class ScanReportResponse(BaseModel):
     analysis_run_id: Optional[str] = None
     repository_id: Optional[str] = None
     revision_id: Optional[str] = None
+    revision_identifier: Optional[str] = None
+    revision_kind: Optional[str] = None
     snapshot_id: Optional[str] = None
     snapshot_hash: Optional[str] = None
     application_ids: list[str] = Field(default_factory=list)
