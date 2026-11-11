@@ -159,6 +159,8 @@ class ScanReportResponse(BaseModel):
     truncated_manifests: bool = False
     max_manifest_bytes: Optional[int] = None
     skipped_large_manifests: list[str] = Field(default_factory=list)
+    unavailable_manifests: list[str] = Field(default_factory=list)
+    manifest_bytes_fetched: Optional[int] = None
     profile_completeness: str = "PARTIAL"
     analysis_scope: Optional[str] = None
     accuracy_score: Optional[int] = None
