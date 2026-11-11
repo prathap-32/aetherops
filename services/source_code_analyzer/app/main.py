@@ -360,6 +360,8 @@ async def repo_scan_report_endpoint(payload: ScanReportRequest, request: Request
         raw_target=payload.repo_path,
         project_id=payload.project_id,
         environment_id=payload.environment_id,
+        authorization=request.headers.get("authorization"),
+        tenant_id=request.headers.get("x-tenant-id"),
     )
     if target_info.get("is_remote"):
         readiness = await check_remote_readiness(
