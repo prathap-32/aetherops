@@ -1,6 +1,7 @@
 """Deterministic extraction of declared direct dependencies from manifests."""
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import tomllib
@@ -44,6 +45,7 @@ def _dependency(ecosystem: str, name: str, declared: str | None, source: str, sc
 
 def parse_dependency_manifest(path: str, content: str) -> list[dict[str, Any]]:
     name = path.rsplit("/", 1)[-1]
+    manifest_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
     output: list[dict[str, Any]] = []
     try:
         if name == "package.json":
@@ -122,6 +124,8 @@ def parse_dependency_manifest(path: str, content: str) -> list[dict[str, Any]]:
     for item in output:
         key = (item["ecosystem"], item["package_name"].lower(), item["version"], item["source_path"])
         unique[key] = item
+    for item in unique.values():
+        item["manifest_hash"] = manifest_hash
     return list(unique.values())
 
 
