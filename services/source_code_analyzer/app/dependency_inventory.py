@@ -197,7 +197,7 @@ def build_sbom_documents(
         "dataLicense": "CC0-1.0",
         "SPDXID": "SPDXRef-DOCUMENT",
         "name": f"{application_name}-declared-dependencies",
-        "documentNamespace": f"{repository_url.rstrip('/')}/sbom/{commit_sha or 'profile'}-{_purl('generic', application_name)}",
+        "documentNamespace": f"{repository_url.rstrip('/')}/sbom/{commit_sha or 'profile'}-{_purl('generic', application_name, None)}",
         "creationInfo": {"creators": ["Tool: AetherOps Module 3"], "created": timestamp},
         "packages": packages,
         "externalDocumentRefs": [],
