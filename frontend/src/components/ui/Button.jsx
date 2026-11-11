@@ -3,15 +3,15 @@ import React from 'react';
 
 const VARIANT_MAP = {
   primary: 'bg-blue-600 hover:bg-blue-700 text-white border-transparent shadow-xs focus:ring-blue-500/35',
-  secondary: 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-xs focus:ring-slate-400/30',
-  outline: 'bg-transparent hover:bg-blue-50 text-blue-700 border-blue-200 focus:ring-blue-500/30',
+  secondary: 'bg-white hover:bg-slate-50 text-slate-800 border-slate-300 shadow-xs focus:ring-slate-400/30',
+  outline: 'bg-transparent hover:bg-blue-50 text-blue-700 border-blue-300 focus:ring-blue-500/30',
   destructive: 'bg-rose-600 hover:bg-rose-700 text-white border-transparent shadow-xs focus:ring-rose-500/30',
-  ghost: 'bg-transparent hover:bg-slate-100 text-slate-600 hover:text-slate-900 border-transparent',
+  ghost: 'bg-transparent hover:bg-slate-100 text-slate-700 hover:text-slate-900 border-transparent',
 };
 
 const SIZE_MAP = {
-  sm: 'text-sm px-3.5 py-2 rounded-lg gap-2 min-h-[40px]',
-  md: 'text-base px-5 py-3 rounded-xl gap-2.5 min-h-[48px]', /* 48px touch target */
+  sm: 'text-sm px-4 py-2.5 rounded-lg gap-2 min-h-[44px]',
+  md: 'text-base sm:text-lg px-5 py-3 rounded-xl gap-2.5 min-h-[48px]', /* 48px touch target, 16-17px text */
   lg: 'text-lg px-6 py-3.5 rounded-xl gap-3 min-h-[52px]',   /* 52px touch target */
 };
 
@@ -36,7 +36,7 @@ export default function Button({
       type={type}
       disabled={disabled || isLoading}
       onClick={onClick}
-      className={`inline-flex items-center justify-center font-medium border transition cursor-pointer select-none focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${variantStyles} ${sizeStyles} ${className}`}
+      className={`inline-flex items-center justify-center font-semibold border transition cursor-pointer select-none focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${variantStyles} ${sizeStyles} ${className}`}
       {...props}
     >
       {isLoading ? (
