@@ -19,16 +19,17 @@ import time
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import FastAPI, HTTPException, status, Request
+from fastapi import FastAPI, HTTPException, status, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from rich.logging import RichHandler
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 from app.database import SessionLocal, dispose_analysis_db
 from app.security import verify_request_identity
 from app.persistence import persist_analysis_report
+from app.models import AnalysisFinding, AnalysisRun, AnalysisSnapshot, ApplicationProfile, EvidenceRecord, Repository, RepositoryRevision
 
 from app.schemas import (
     ScanRequest, ScanResponse, DispatchRequest, DispatchResponse,
@@ -437,6 +438,132 @@ async def repo_scan_report_endpoint(payload: ScanReportRequest, request: Request
             raise HTTPException(status_code=503, detail="Analysis completed but persistence failed; retry the scan.")
     report.update(persistence)
     return ScanReportResponse(**report)
+
+@app.get("/api/v1/analysis-runs")
+async def list_analysis_runs(
+    request: Request,
+    project_id: str | None = None,
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    """List persisted Module 3 runs visible to the authenticated tenant."""
+    identity = getattr(request.state, "identity", None) or {}
+    tenant_id = identity.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant-scoped identity is required.")
+    async with SessionLocal() as session:
+        statement = (
+            select(AnalysisRun, Repository, RepositoryRevision)
+            .join(Repository, AnalysisRun.repository_id == Repository.id)
+            .join(RepositoryRevision, AnalysisRun.revision_id == RepositoryRevision.id)
+            .where(Repository.tenant_id == tenant_id)
+            .order_by(AnalysisRun.created_at.desc())
+            .limit(limit)
+        )
+        if project_id:
+            statement = statement.where(Repository.project_id == project_id)
+        rows = (await session.execute(statement)).all()
+        return {
+            "items": [
+                {
+                    "run_id": run.id,
+                    "repository_id": repository.id,
+                    "repository": f"{repository.owner}/{repository.name}",
+                    "project_id": repository.project_id,
+                    "environment_id": repository.environment_id,
+                    "branch": revision.branch,
+                    "commit_sha": revision.commit_sha,
+                    "status": run.status,
+                    "analysis_mode": run.analysis_mode,
+                    "coverage": run.coverage,
+                    "started_at": run.started_at.isoformat() if run.started_at else None,
+                    "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+                    "created_at": run.created_at.isoformat(),
+                }
+                for run, repository, revision in rows
+            ],
+            "count": len(rows),
+        }
+
+
+@app.get("/api/v1/analysis-runs/{run_id}")
+async def get_analysis_run(run_id: str, request: Request):
+    """Return a tenant-authorized run, profile, findings and source-path evidence."""
+    identity = getattr(request.state, "identity", None) or {}
+    tenant_id = identity.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant-scoped identity is required.")
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(AnalysisRun, Repository, RepositoryRevision)
+            .join(Repository, AnalysisRun.repository_id == Repository.id)
+            .join(RepositoryRevision, AnalysisRun.revision_id == RepositoryRevision.id)
+            .where(AnalysisRun.id == run_id, Repository.tenant_id == tenant_id)
+        )
+        row = result.one_or_none()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Analysis run not found.")
+        run, repository, revision = row
+        profile_result = await session.execute(
+            select(ApplicationProfile).where(ApplicationProfile.run_id == run.id)
+        )
+        profiles = profile_result.scalars().all()
+        finding_result = await session.execute(
+            select(AnalysisFinding).where(AnalysisFinding.run_id == run.id)
+        )
+        findings = finding_result.scalars().all()
+        evidence_by_finding: dict[str, list[dict]] = {}
+        if findings:
+            evidence_result = await session.execute(
+                select(EvidenceRecord).where(
+                    EvidenceRecord.finding_id.in_([item.id for item in findings])
+                )
+            )
+            for evidence in evidence_result.scalars().all():
+                evidence_by_finding.setdefault(evidence.finding_id, []).append({
+                    "source_path": evidence.source_path,
+                    "line_start": evidence.line_start,
+                    "line_end": evidence.line_end,
+                    "content_hash": evidence.content_hash,
+                    "evidence_type": evidence.evidence_type,
+                })
+        return {
+            "run": {
+                "run_id": run.id,
+                "repository": f"{repository.owner}/{repository.name}",
+                "project_id": repository.project_id,
+                "environment_id": repository.environment_id,
+                "branch": revision.branch,
+                "commit_sha": revision.commit_sha,
+                "status": run.status,
+                "analysis_mode": run.analysis_mode,
+                "coverage": run.coverage,
+                "started_at": run.started_at.isoformat() if run.started_at else None,
+                "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+            },
+            "profiles": [
+                {
+                    "application_id": profile.application_id,
+                    "snapshot_id": profile.snapshot_id,
+                    "profile_version": profile.profile_version,
+                    "profile": profile.profile,
+                }
+                for profile in profiles
+            ],
+            "findings": [
+                {
+                    "finding_id": finding.id,
+                    "category": finding.category,
+                    "subject": finding.subject,
+                    "value": finding.value,
+                    "verification_status": finding.verification_status,
+                    "confidence": finding.confidence,
+                    "detector": finding.detector,
+                    "evidence": evidence_by_finding.get(finding.id, []),
+                }
+                for finding in findings
+            ],
+        }
+
 
 @app.post("/api/v1/repo/accept-and-size", response_model=AwsSizingOutput, status_code=status.HTTP_200_OK)
 async def repo_accept_and_size_endpoint(payload: AcceptAndSizeRequest):
