@@ -68,6 +68,9 @@ async def test_scan_report_is_persisted_as_revision_snapshot_and_profile():
             assert result["findings_persisted"] == 4
             assert result["dependencies_persisted"] == 2
             assert set(result["sbom_formats"]) == {"CYCLONEDX", "SPDX"}
+            apps = (await session.execute(select(Application))).scalars().all()
+            assert len(apps) == 2
+            assert {app.root_path for app in apps} == {"apps/api", "apps/web"}
             dependencies = (await session.execute(select(Dependency))).scalars().all()
             assert len(dependencies) == 2
             assert {item.application_id for item in dependencies} == {app.id for app in apps}
@@ -81,9 +84,6 @@ async def test_scan_report_is_persisted_as_revision_snapshot_and_profile():
             assert len(runs) == 1
             assert runs[0].status == "PARTIAL"
             assert len((await session.execute(select(AnalysisSnapshot))).scalars().all()) == 1
-            apps = (await session.execute(select(Application))).scalars().all()
-            assert len(apps) == 2
-            assert {app.root_path for app in apps} == {"apps/api", "apps/web"}
             assert len((await session.execute(select(ApplicationProfile))).scalars().all()) == 2
             assert len((await session.execute(select(AnalysisFinding))).scalars().all()) == 5
             assert len((await session.execute(select(EvidenceRecord))).scalars().all()) == 1
