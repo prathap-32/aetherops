@@ -878,15 +878,8 @@ async def run_remote_universal_scan(
     if commit_info.get("sha") and commit_info.get("sha") != "latest":
         repo_meta["latest_commit"] = commit_info
 
-    # Calculate deterministic accuracy score based on verified artifacts
-    accuracy_score = 92
-    if inspected_manifests:
-        accuracy_score += 3
-    if has_docker:
-        accuracy_score += 2
-    if found_ports and list(found_ports) != [8000]:
-        accuracy_score += 2
-    accuracy_score = min(99, accuracy_score)
+    # Detection coverage is not a calibrated accuracy measurement.
+    accuracy_score = None
 
     # If static HTML/JS/CSS without backend framework
     has_html = any("HTML" in l for l in found_languages)
@@ -1076,7 +1069,7 @@ async def run_remote_universal_scan(
         "languages_breakdown": languages_breakdown,
         "inspected_manifests": inspected_manifests,
         "accuracy_score": accuracy_score,
-        "accuracy_method": "DETERMINISTIC_PARSING_ZERO_AI",
+        "accuracy_method": "NOT_CALIBRATED",
     }
 
 
@@ -1395,11 +1388,10 @@ def run_universal_scan(
     Builds the human-understandable Key:Value report.
     """
     root = Path(repo_path).resolve()
-    try:
-        ast_profile = scan_repository(root, include_findings=False)
-    except Exception as exc:
-        logger.warning("scan_repository notice: %s. Continuing with deep manifest scanner.", exc)
-        ast_profile = {}
+    # Keep the deterministic manifest scanner independent from scanner_engine.
+    # Calling scan_repository here creates a recursive fallback when the optional
+    # repo_analyzer package is not installed.
+    ast_profile = {}
     deep_meta = _scan_deep_manifest_contents(root)
 
     canonical_fw = {
@@ -1640,6 +1632,6 @@ def run_universal_scan(
         },
         "languages_breakdown": local_breakdown or [{"name": l, "percentage": round(100.0/max(1, len(all_langs)), 1), "bytes": 1000, "color": LANGUAGE_COLORS.get(l, "#8b949e")} for l in all_langs],
         "inspected_manifests": deep_meta.get("manifests_found", []),
-        "accuracy_score": 98,
-        "accuracy_method": "DETERMINISTIC_PARSING_ZERO_AI",
+        "accuracy_score": None,
+        "accuracy_method": "NOT_CALIBRATED",
     }
