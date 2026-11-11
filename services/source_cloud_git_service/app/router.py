@@ -1527,7 +1527,7 @@ async def get_analyzer_source_context(
                 "commit_info": {
                     "sha": commit_sha,
                     "short_sha": commit_sha[:7],
-                    "message": (commit_data.get("commit", {}).get("message") or "").split("\\n")[0][:120],
+                    "message": (commit_data.get("commit", {}).get("message") or "").splitlines()[0][:120],
                     "author": (commit_data.get("commit", {}).get("author") or {}).get("name") or (commit_data.get("author") or {}).get("login") or owner_name,
                     "date": (commit_data.get("commit", {}).get("author") or {}).get("date"),
                 },
