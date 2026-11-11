@@ -655,6 +655,21 @@ export default function RepoAnalyzerView({
                 </div>
               </div>
 
+              {scanReport.commit_sha && (
+                <div className="bg-white/5 rounded-lg p-2.5 border border-white/5">
+                  <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-1">
+                    Analyzed Revision
+                  </div>
+                  <code className="text-[11px] text-slate-200 break-all">{scanReport.commit_sha}</code>
+                </div>
+              )}
+
+              {scanReport.truncated_manifests && (
+                <div className="rounded-lg p-2.5 border border-amber-700/50 bg-amber-950/20 text-amber-200 text-[11px]">
+                  Manifest inspection was limited to {scanReport.manifest_limit} of {scanReport.manifest_count} candidate files. Treat this profile as partial coverage.
+                </div>
+              )}
+
               <div className="bg-white/5 rounded-lg p-2.5 border border-white/5">
                 <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold flex items-center gap-1.5 mb-1">
                   <HardDrive className="w-3 h-3 text-cyan-400" />
