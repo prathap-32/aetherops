@@ -30,7 +30,7 @@ class Base(DeclarativeBase):
 class Repository(Base):
     __tablename__ = "sa_repositories"
     __table_args__ = (
-        UniqueConstraint("provider", "external_repo_id", name="uq_sa_repository_provider_external"),
+        UniqueConstraint("tenant_id", "provider", "external_repo_id", name="uq_sa_repository_tenant_provider_external"),
         Index("ix_sa_repositories_project_environment", "project_id", "environment_id"),
         Index("ix_sa_repositories_tenant", "tenant_id"),
     )
