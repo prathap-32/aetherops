@@ -123,11 +123,12 @@ async def persist_analysis_report(
         await session.flush()
 
     component_items = report.get("components") or []
-    roots = [str(item.get("path") or ".") for item in component_items if isinstance(item, dict)]
-    if not roots:
-        roots = ["."]
+    roots = report.get("application_roots") or [
+        str(item.get("path") or ".") for item in component_items if isinstance(item, dict)
+    ]
+    roots = list(dict.fromkeys(str(root or ".").strip("/") or "." for root in roots)) or ["."]
     applications: list[Application] = []
-    for root_path in dict.fromkeys(roots):
+    for root_path in roots:
         app_result = await session.execute(
             select(Application).where(
                 Application.repository_id == repository.id,
@@ -141,13 +142,13 @@ async def persist_analysis_report(
                 repository_id=repository.id, revision_id=revision.id,
                 name=name if root_path == "." else root_path.rstrip("/").split("/")[-1],
                 root_path=root_path, application_type=str(report.get("workload_type") or "UNKNOWN"),
-                discovery_status="INFERRED",
+                discovery_status="OBSERVED_MANIFEST_ROOT" if root_path != "." else "INFERRED",
             )
             session.add(application)
             await session.flush()
         applications.append(application)
 
-    profile = {
+    profile_base = {
         "repo_name": report.get("repo_name"),
         "commit_sha": report.get("commit_sha"),
         "status": report.get("status"),
@@ -158,19 +159,24 @@ async def persist_analysis_report(
         "databases": report.get("databases") or [],
         "ports": report.get("ports") or [],
         "is_monorepo": bool(report.get("is_monorepo")),
+        "application_roots": roots,
         "components": component_items,
         "summary": report.get("summary_dict") or {},
         "coverage": report.get("coverage") or {},
         "inspected_manifests": report.get("inspected_manifests") or [],
-        "dependency_count": len(report.get("dependencies_detected") or []),
         "dependency_completeness": "DECLARED_DIRECT_DEPENDENCIES_ONLY",
     }
-    session.add(ApplicationProfile(
-        application_id=applications[0].id, run_id=run.id, snapshot_id=snapshot.id,
-        profile_version=run.id, profile=profile,
-    ))
+    for application in applications:
+        application_profile = {
+            **profile_base,
+            "application_root": application.root_path,
+        }
+        session.add(ApplicationProfile(
+            application_id=application.id, run_id=run.id, snapshot_id=snapshot.id,
+            profile_version=run.id, profile=application_profile,
+        ))
 
-    # Persist deterministic direct dependency inventory for this revision.
+    # Persist direct dependencies against the application root containing each manifest.
     dependencies = report.get("dependencies_detected") or []
     unique_dependencies: dict[tuple[str, str, str | None, str], dict[str, Any]] = {}
     for dependency in dependencies:
@@ -185,43 +191,60 @@ async def persist_analysis_report(
         if key[1] and key[3]:
             unique_dependencies[key] = dependency
 
-    existing_dependencies = await session.execute(
-        select(Dependency).where(Dependency.application_id == applications[0].id)
-    )
-    for existing in existing_dependencies.scalars().all():
-        await session.delete(existing)
-    await session.flush()
-
+    dependencies_by_application: dict[str, list[dict[str, Any]]] = {
+        application.id: [] for application in applications
+    }
     for dependency in unique_dependencies.values():
-        session.add(Dependency(
-            application_id=applications[0].id,
-            ecosystem=str(dependency.get("ecosystem") or "unknown"),
-            package_name=str(dependency["package_name"]),
-            version=dependency.get("version"),
-            purl=dependency.get("purl"),
-            is_direct=True,
-            source_path=str(dependency["source_path"]),
-            manifest_hash=dependency.get("manifest_hash"),
-        ))
+        source_path = str(dependency["source_path"]).lstrip("./")
+        candidates = [
+            application for application in applications
+            if application.root_path == "."
+            or source_path == application.root_path
+            or source_path.startswith(application.root_path.rstrip("/") + "/")
+        ]
+        if candidates:
+            selected = max(candidates, key=lambda item: len(item.root_path))
+            dependencies_by_application[selected.id].append(dependency)
 
-    sbom_documents = build_sbom_documents(
-        application_name=applications[0].name,
-        repository_url=str(report.get("repo_path") or f"{provider}:{owner}/{name}"),
-        commit_sha=commit_sha if revision_kind == "GIT_COMMIT" else None,
-        dependencies=list(unique_dependencies.values()),
-    )
     sbom_checksums: dict[str, str] = {}
-    for sbom_format, document in sbom_documents.items():
-        checksum = _canonical_hash(document)
-        sbom_checksums[sbom_format] = checksum
-        session.add(SbomDocument(
-            run_id=run.id,
-            application_id=applications[0].id,
-            format=sbom_format,
-            format_version="1.5" if sbom_format == "CYCLONEDX" else "SPDX-2.3",
-            checksum=checksum,
-            document=document,
-        ))
+    for application in applications:
+        existing_dependencies = await session.execute(
+            select(Dependency).where(Dependency.application_id == application.id)
+        )
+        for existing in existing_dependencies.scalars().all():
+            await session.delete(existing)
+        await session.flush()
+
+        app_dependencies = dependencies_by_application[application.id]
+        for dependency in app_dependencies:
+            session.add(Dependency(
+                application_id=application.id,
+                ecosystem=str(dependency.get("ecosystem") or "unknown"),
+                package_name=str(dependency["package_name"]),
+                version=dependency.get("version"),
+                purl=dependency.get("purl"),
+                is_direct=True,
+                source_path=str(dependency["source_path"]),
+                manifest_hash=dependency.get("manifest_hash"),
+            ))
+
+        sbom_documents = build_sbom_documents(
+            application_name=application.name,
+            repository_url=str(report.get("repo_path") or f"{provider}:{owner}/{name}"),
+            commit_sha=commit_sha if revision_kind == "GIT_COMMIT" else None,
+            dependencies=app_dependencies,
+        )
+        for sbom_format, document in sbom_documents.items():
+            checksum = _canonical_hash(document)
+            sbom_checksums[f"{application.root_path}:{sbom_format}"] = checksum
+            session.add(SbomDocument(
+                run_id=run.id,
+                application_id=application.id,
+                format=sbom_format,
+                format_version="1.5" if sbom_format == "CYCLONEDX" else "SPDX-2.3",
+                checksum=checksum,
+                document=document,
+            ))
 
     findings: list[tuple[str, str, Any]] = []
     for category, values in (
@@ -246,7 +269,10 @@ async def persist_analysis_report(
     # attributed to every language/framework/database result.
     for source_path in report.get("inspected_manifests") or []:
         manifest_finding = AnalysisFinding(
-            run_id=run.id, application_id=applications[0].id,
+            run_id=run.id, application_id=next((
+                app.id for app in sorted(applications, key=lambda item: len(item.root_path), reverse=True)
+                if app.root_path == "." or str(source_path).lstrip("./").startswith(app.root_path.rstrip("/") + "/")
+            ), applications[0].id),
             category="MANIFEST_INSPECTED", subject=str(source_path),
             value={"path": str(source_path)}, verification_status="OBSERVED",
             confidence="HIGH", detector="manifest_inventory",
@@ -273,6 +299,6 @@ async def persist_analysis_report(
         "application_ids": [item.id for item in applications],
         "findings_persisted": len(findings),
         "dependencies_persisted": len(unique_dependencies),
-        "sbom_formats": list(sbom_documents.keys()),
+        "sbom_formats": ["CYCLONEDX", "SPDX"],
         "sbom_checksums": sbom_checksums,
     }
