@@ -42,7 +42,7 @@ from app.scanner_engine import scan_repository
 from app.universal_scanner import (
     check_readiness, run_universal_scan,
     is_remote_target, resolve_repo_target,
-    check_remote_readiness, run_remote_universal_scan
+    check_remote_readiness, run_remote_universal_scan, fetch_connection_analysis_context
 )
 from app.gemini_sizer import gemini_sizer, recalculate_custom_aws_sizing
 
@@ -366,11 +366,30 @@ async def repo_scan_report_endpoint(payload: ScanReportRequest, request: Request
         tenant_id=(getattr(request.state, "identity", None) or {}).get("tenant_id"),
     )
     if target_info.get("is_remote"):
+        identity = getattr(request.state, "identity", None) or {}
+        connection_context = None
+        if target_info.get("connection_id"):
+            try:
+                connection_context = await fetch_connection_analysis_context(
+                    connection_id=target_info["connection_id"],
+                    authorization=request.headers.get("authorization", ""),
+                    tenant_id=str(identity.get("tenant_id") or ""),
+                    branch=payload.branch or target_info.get("branch", "main"),
+                    project_id=target_info.get("project_id") or payload.project_id,
+                    environment_id=target_info.get("environment_id") or payload.environment_id,
+                )
+            except PermissionError as exc:
+                raise HTTPException(status_code=403, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            except RuntimeError as exc:
+                raise HTTPException(status_code=502, detail=str(exc)) from exc
         readiness = await check_remote_readiness(
             owner=target_info["owner"],
             repo=target_info["repo"],
             branch=payload.branch or target_info.get("branch", "main"),
             token=payload.github_token.get_secret_value() if payload.github_token else None,
+            tree=connection_context.get("tree") if connection_context else None,
         )
         if not readiness["is_analyzable"]:
             raise HTTPException(
@@ -384,6 +403,7 @@ async def repo_scan_report_endpoint(payload: ScanReportRequest, request: Request
             token=payload.github_token.get_secret_value() if payload.github_token else None,
             environment_tier=payload.environment_tier,
             target_region=payload.target_region,
+            connection_context=connection_context,
         )
         identity = getattr(request.state, "identity", None) or {}
         async with SessionLocal() as session:
