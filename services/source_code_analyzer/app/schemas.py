@@ -4,7 +4,7 @@ Pydantic schemas for Module 3 — Repository Analyzer Service.
 from __future__ import annotations
 
 from typing import Optional, Any, Dict, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 
 class ScanRequest(BaseModel):
@@ -96,7 +96,7 @@ class ReadinessRequest(BaseModel):
     project_id: Optional[str] = None
     environment_id: Optional[str] = None
     branch: Optional[str] = "main"
-    github_token: Optional[str] = None
+    github_token: Optional[SecretStr] = None
 
 
 class ReadinessResponse(BaseModel):
