@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.models import (
     AnalysisFinding, AnalysisRun, AnalysisSnapshot, Application,
     ApplicationProfile, Base, EvidenceRecord, Repository, RepositoryRevision,
+    Dependency, SbomDocument,
 )
 from app.persistence import persist_analysis_report
 
@@ -34,6 +35,10 @@ async def test_scan_report_is_persisted_as_revision_snapshot_and_profile():
             "manifest_limit": 100,
             "truncated_manifests": False,
             "summary_dict": {"workload_type": "Backend REST API"},
+            "repo_path": "https://github.com/example/sample-app",
+            "dependencies_detected": [
+                {"ecosystem": "pypi", "package_name": "fastapi", "version": "0.115.0", "purl": "pkg:pypi/fastapi@0.115.0", "source_path": "pyproject.toml", "manifest_hash": "b" * 64, "is_direct": True, "scope": "required"}
+            ],
         }
         target = {
             "is_remote": True,
@@ -59,6 +64,12 @@ async def test_scan_report_is_persisted_as_revision_snapshot_and_profile():
             assert result["revision_kind"] == "GIT_COMMIT"
             assert result["revision_identifier"] == "a" * 40
             assert result["findings_persisted"] == 4
+            assert result["dependencies_persisted"] == 1
+            assert set(result["sbom_formats"]) == {"CYCLONEDX", "SPDX"}
+            assert len((await session.execute(select(Dependency))).scalars().all()) == 1
+            sboms = (await session.execute(select(SbomDocument))).scalars().all()
+            assert len(sboms) == 2
+            assert {item.format for item in sboms} == {"CYCLONEDX", "SPDX"}
 
             assert len((await session.execute(select(Repository))).scalars().all()) == 1
             assert len((await session.execute(select(RepositoryRevision))).scalars().all()) == 1
