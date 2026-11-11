@@ -21,7 +21,6 @@ from typing import Dict, Any, List, Optional, Set, Tuple
 
 import httpx
 
-from app.scanner_engine import scan_repository
 
 logger = logging.getLogger("repo-analyzer-service.universal")
 
