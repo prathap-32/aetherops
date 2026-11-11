@@ -166,15 +166,19 @@ async def persist_analysis_report(
         "inspected_manifests": report.get("inspected_manifests") or [],
         "dependency_completeness": "DECLARED_DIRECT_DEPENDENCIES_ONLY",
     }
+    profile_rows_by_application: dict[str, ApplicationProfile] = {}
     for application in applications:
         application_profile = {
             **profile_base,
             "application_root": application.root_path,
+            "dependency_count": 0,
         }
-        session.add(ApplicationProfile(
+        profile_row = ApplicationProfile(
             application_id=application.id, run_id=run.id, snapshot_id=snapshot.id,
             profile_version=run.id, profile=application_profile,
-        ))
+        )
+        profile_rows_by_application[application.id] = profile_row
+        session.add(profile_row)
 
     # Persist direct dependencies against the application root containing each manifest.
     dependencies = report.get("dependencies_detected") or []
@@ -216,6 +220,8 @@ async def persist_analysis_report(
         await session.flush()
 
         app_dependencies = dependencies_by_application[application.id]
+        profile_row = profile_rows_by_application[application.id]
+        profile_row.profile = {**profile_row.profile, "dependency_count": len(app_dependencies)}
         for dependency in app_dependencies:
             session.add(Dependency(
                 application_id=application.id,
