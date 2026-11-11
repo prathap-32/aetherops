@@ -24,6 +24,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from rich.logging import RichHandler
+from sqlalchemy import text
+
+from app.database import SessionLocal, dispose_analysis_db
 
 from app.schemas import (
     ScanRequest, ScanResponse, DispatchRequest, DispatchResponse,
@@ -90,8 +93,11 @@ async def lifespan(app: FastAPI):
         logger.info("repo_analyzer library: [green]OK[/green]")
     except ImportError:
         logger.warning("repo_analyzer library not installed — scan endpoints will fail.")
-    yield
-    logger.info("Module 3 shutting down.")
+    try:
+        yield
+    finally:
+        await dispose_analysis_db()
+        logger.info("Module 3 shutting down.")
 
 
 # ---------------------------------------------------------------------------
@@ -107,12 +113,21 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "ALLOWED_ORIGINS",
+        "http://localhost:8000,http://127.0.0.1:8000,http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )
 
 # Static assets — shared fonts + Tailwind from the services directory
@@ -129,7 +144,7 @@ async def global_exception_handler(request, exc: Exception):
     logger.error("Unhandled exception: %s", exc, exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"message": "Internal server error.", "error": str(exc)},
+        content={"message": "Internal server error."},
     )
 
 
@@ -181,6 +196,21 @@ async def root(request: Request):
             "docs":          "/docs",
         },
     }
+
+
+@app.get("/ready", status_code=status.HTTP_200_OK)
+async def readiness_check():
+    """Readiness probe: verifies DB connectivity and applied Module 3 schema."""
+    try:
+        async with SessionLocal() as session:
+            await session.execute(text("SELECT 1 FROM sa_analysis_runs LIMIT 1"))
+    except Exception as exc:
+        logger.warning("Module 3 readiness check failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Source-analysis database is unavailable or its migration has not been applied.",
+        ) from exc
+    return {"status": "ready", "service": "source-code-analyzer", "database": "ready"}
 
 
 @app.get("/health", status_code=status.HTTP_200_OK)
