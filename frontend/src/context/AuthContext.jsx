@@ -29,6 +29,7 @@ export function AuthProvider({ children }) {
             uuid: me.uuid,
             account_id: me.account_id,
             account_id_formatted: me.account_id_formatted,
+            has_seen_welcome: me.has_seen_welcome !== undefined ? me.has_seen_welcome : 0,
           };
           setUser(updatedUser);
           setStoredSession(activeToken, updatedUser);
@@ -64,6 +65,7 @@ export function AuthProvider({ children }) {
       uuid: u.uuid,
       account_id: u.account_id,
       account_id_formatted: u.account_id_formatted,
+      has_seen_welcome: u.has_seen_welcome !== undefined ? u.has_seen_welcome : 0,
     };
     setStoredSession(data.token, authUser);
     setUser(authUser);
@@ -84,6 +86,7 @@ export function AuthProvider({ children }) {
       uuid: u.uuid,
       account_id: u.account_id,
       account_id_formatted: u.account_id_formatted,
+      has_seen_welcome: u.has_seen_welcome !== undefined ? u.has_seen_welcome : 0,
     };
     if (data.token) {
       setStoredSession(data.token, authUser);
@@ -103,6 +106,7 @@ export function AuthProvider({ children }) {
       uuid: u.uuid,
       account_id: u.account_id,
       account_id_formatted: u.account_id_formatted,
+      has_seen_welcome: u.has_seen_welcome !== undefined ? u.has_seen_welcome : 0,
     };
     setStoredSession(data.token, authUser);
     setUser(authUser);
@@ -121,13 +125,11 @@ export function AuthProvider({ children }) {
       role: u.role || user?.role || 'USER',
       uuid: u.uuid || user?.uuid,
       account_id: u.account_id || user?.account_id,
-      account_id_formatted: u.account_id_formatted || user?.account_id_formatted,
+      has_seen_welcome: u.has_seen_welcome !== undefined ? u.has_seen_welcome : (user?.has_seen_welcome ?? 0),
     };
-    const finalToken = data.token || activeTok;
-    if (finalToken) {
-      setStoredSession(finalToken, updated);
-      setUser(updated);
-      setToken(finalToken);
+    setUser(updated);
+    if (activeTok) {
+      setStoredSession(activeTok, updated);
     }
     return updated;
   };
@@ -135,17 +137,10 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     try {
       await authApi.logout();
-    } finally {
-      clearStoredSession();
-      try {
-        localStorage.removeItem('aether_architecture_designer_state');
-        localStorage.removeItem('aether_latest_sizing');
-        localStorage.removeItem('aether_active_project');
-        localStorage.removeItem('aether_active_env');
-      } catch (e) {}
-      setUser(null);
-      setToken('');
-    }
+    } catch (e) {}
+    clearStoredSession();
+    setUser(null);
+    setToken('');
   };
 
   const setSessionManually = (tok, usr) => {
@@ -157,15 +152,15 @@ export function AuthProvider({ children }) {
   const value = {
     user,
     token,
-    isAuthenticated: !!token && !!user,
-    isAdmin,
+    isAuthenticated: Boolean(token && user),
     isLoading,
+    isAdmin,
     login,
     register,
     completeOAuth,
     updateProfile,
-    setSessionManually,
     logout,
+    setSessionManually,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
