@@ -1275,6 +1275,48 @@ async def delete_connection(
 # SOURCE SNAPSHOTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+_SENSITIVE_MANIFEST_KEY = re.compile(
+    r"(?i)^(?:password|passwd|secret|secret_key|token|api[_-]?key|private[_-]?key|client[_-]?secret|access[_-]?key|session[_-]?token)$"
+)
+
+
+def _redact_analysis_manifest_content(path: str, content: str) -> str:
+    """Remove credential-like values before manifest/config text crosses service boundaries."""
+    filename = path.rsplit("/", 1)[-1].lower()
+    if filename.endswith(".json"):
+        try:
+            value = json.loads(content)
+
+            def redact_json(node):
+                if isinstance(node, dict):
+                    return {
+                        key: "[REDACTED]" if _SENSITIVE_MANIFEST_KEY.fullmatch(str(key)) else redact_json(item)
+                        for key, item in node.items()
+                    }
+                if isinstance(node, list):
+                    return [redact_json(item) for item in node]
+                return node
+
+            return json.dumps(redact_json(value), separators=(",", ":"))
+        except (ValueError, TypeError):
+            pass
+
+    line_pattern = re.compile(
+        r"(?i)(\\b(?:password|passwd|secret(?:_key)?|token|api[_-]?key|private[_-]?key|client[_-]?secret|access[_-]?key|session[_-]?token)\\b\\s*[:=]\\s*)(?:\"[^\"]*\"|'[^']*'|[^\\s,;#]+)"
+    )
+    redacted_lines = [
+        line_pattern.sub(lambda match: match.group(1) + '"[REDACTED]"', line)
+        for line in content.splitlines()
+    ]
+    redacted = "\\n".join(redacted_lines)
+    redacted = re.sub(
+        r"(?is)(<(?:password|secret|token|privateKey)\\b[^>]*>).*?(</(?:password|secret|token|privateKey)\\s*>)",
+        r"\\1[REDACTED]\\2",
+        redacted,
+    )
+    return redacted
+
+
 @router.get("/api/v1/connections/{connection_id}/analyzer-context")
 async def get_analyzer_source_context(
     connection_id: str,
@@ -1447,7 +1489,9 @@ async def get_analyzer_source_context(
                             unavailable.append(path)
                             continue
                         total_bytes += len(content_bytes)
-                        manifest_contents[path] = content_bytes.decode("utf-8", errors="replace")
+                        manifest_contents[path] = _redact_analysis_manifest_content(
+                            path, content_bytes.decode("utf-8", errors="replace")
+                        )
                 except httpx.RequestError:
                     unavailable.append(path)
 
