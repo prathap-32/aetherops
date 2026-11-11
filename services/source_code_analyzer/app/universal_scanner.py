@@ -1362,6 +1362,43 @@ def classify_workload(languages: List[str], frameworks: List[str], ports: List[i
     return "Web Application Service"
 
 
+def _collect_local_dependency_inventory(root: Path) -> tuple[list[dict[str, Any]], int, bool, list[str]]:
+    """Read only recognized dependency manifests with strict count and byte limits."""
+    max_manifests = max(1, int(os.getenv("AETHER_MAX_MANIFESTS", "100")))
+    max_bytes = max(1024, int(os.getenv("AETHER_MAX_MANIFEST_BYTES", "1048576")))
+    paths: list[Path] = []
+    for candidate in root.rglob("*"):
+        if not candidate.is_file() or candidate.is_symlink():
+            continue
+        try:
+            relative = candidate.relative_to(root)
+        except ValueError:
+            continue
+        if any(part in IGNORED_DIRS for part in relative.parts):
+            continue
+        filename = candidate.name
+        if (
+            filename in {"package.json", "pyproject.toml", "go.mod", "Cargo.toml", "pom.xml", "composer.json", "Gemfile"}
+            or filename.startswith("requirements") and filename.endswith(".txt")
+        ):
+            paths.append(candidate)
+    paths.sort(key=lambda item: str(item.relative_to(root)))
+    truncated = len(paths) > max_manifests
+    dependencies: list[dict[str, Any]] = []
+    skipped: list[str] = []
+    for candidate in paths[:max_manifests]:
+        relative_path = str(candidate.relative_to(root)).replace("\\", "/")
+        try:
+            if candidate.stat().st_size > max_bytes:
+                skipped.append(relative_path)
+                continue
+            content = candidate.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            continue
+        dependencies.extend(parse_dependency_manifest(relative_path, content))
+    return dependencies, len(paths), truncated, skipped
+
+
 def run_universal_scan(
     repo_path: Path | str,
     environment_tier: str = "development",
@@ -1377,6 +1414,7 @@ def run_universal_scan(
     # repo_analyzer package is not installed.
     ast_profile = {}
     deep_meta = _scan_deep_manifest_contents(root)
+    dependencies_detected, dependency_manifest_count, dependency_manifests_truncated, skipped_dependency_manifests = _collect_local_dependency_inventory(root)
 
     canonical_fw = {
         "fastapi": "FastAPI", "django": "Django", "flask": "Flask",
@@ -1628,6 +1666,12 @@ def run_universal_scan(
         },
         "languages_breakdown": local_breakdown,
         "inspected_manifests": deep_meta.get("manifests_found", []),
+        "dependencies_detected": dependencies_detected,
+        "dependency_count": len(dependencies_detected),
+        "dependency_manifest_count": dependency_manifest_count,
+        "dependency_manifests_truncated": dependency_manifests_truncated,
+        "skipped_dependency_manifests": skipped_dependency_manifests,
+        "max_manifest_bytes": max(1024, int(os.getenv("AETHER_MAX_MANIFEST_BYTES", "1048576"))),
         "accuracy_score": None,
         "accuracy_method": "NOT_CALIBRATED",
     }
