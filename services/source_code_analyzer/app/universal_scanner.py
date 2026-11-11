@@ -713,7 +713,7 @@ async def run_remote_universal_scan(
             max_bytes=max_manifest_bytes,
         )
         if raw_content is None:
-            if declared_size > max_manifest_bytes:
+            if isinstance(declared_size, int) and declared_size > max_manifest_bytes:
                 skipped_large_manifests.append(m_path)
             continue
         if not raw_content:
