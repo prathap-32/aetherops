@@ -1315,22 +1315,7 @@ def _scan_deep_manifest_contents(root: Path) -> Dict[str, Any]:
                 except Exception:
                     pass
 
-    # 7. Fallback default ports based on frameworks
-    if not found_ports:
-        if "FastAPI" in found_frameworks or "Django" in found_frameworks:
-            found_ports.add(8000)
-        elif "Flask" in found_frameworks:
-            found_ports.add(5000)
-        elif "Express" in found_frameworks or "NestJS" in found_frameworks:
-            found_ports.add(3000)
-        elif "Next.js" in found_frameworks or "React" in found_frameworks:
-            found_ports.add(3000)
-        elif "Spring Boot" in found_frameworks or "Gin" in found_frameworks or "Fiber" in found_frameworks:
-            found_ports.add(8080)
-        elif has_docker:
-            found_ports.add(80)
-        else:
-            found_ports.add(8000)
+    # Do not infer listening ports from frameworks; report only explicit evidence.
 
     return {
         "frameworks": sorted(list(found_frameworks)),
