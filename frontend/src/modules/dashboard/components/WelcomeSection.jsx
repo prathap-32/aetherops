@@ -1,8 +1,21 @@
 // frontend/src/modules/dashboard/components/WelcomeSection.jsx
-import React from 'react';
-import { Sparkles, ArrowRight, ShieldCheck, Clock } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { Sparkles, ArrowRight } from 'lucide-react';
 
 export default function WelcomeSection({ user, lifecycleState, primaryAction, onNavigate }) {
+  const isNewUser = user && user.has_seen_welcome === 0;
+
+  useEffect(() => {
+    if (isNewUser) {
+      // Acknowledge welcome state on server so returning visits display "Welcome back"
+      fetch('/api/v1/auth/ack-welcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      }).catch(() => {});
+    }
+  }, [isNewUser]);
+
   return (
     <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
       <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -14,7 +27,7 @@ export default function WelcomeSection({ user, lifecycleState, primaryAction, on
             <span>Workspace Lifecycle: {lifecycleState.replace(/_/g, ' ')}</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Welcome back, {user?.username || 'Cloud Operator'}
+            {isNewUser ? `Welcome to AetherOps, ${user?.username || 'Cloud Operator'}` : `Welcome back, ${user?.username || 'Cloud Operator'}`}
           </h2>
           <p className="text-slate-300 text-sm sm:text-base max-w-2xl leading-relaxed">
             AetherOps is continuously monitoring your multi-cloud workspace boundaries, IAM security posture, and Terraform synthesis pipelines.
