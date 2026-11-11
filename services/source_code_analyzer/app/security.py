@@ -50,10 +50,10 @@ def verify_request_identity(request: Request) -> dict[str, Any] | None:
             detail="The bearer token is invalid or expired.",
         ) from exc
 
-    if not claims.get("uuid") or not claims.get("tenant_id"):
+    if not claims.get("uuid") or not claims.get("sub"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="The authenticated token is missing required tenant identity claims.",
+            detail="The authenticated token is missing required user identity claims.",
         )
 
     header_tenant = request.headers.get("x-tenant-id")
