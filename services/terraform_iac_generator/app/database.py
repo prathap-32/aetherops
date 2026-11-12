@@ -14,7 +14,7 @@ POSTGRES_USER     = os.getenv("POSTGRES_USER", "postgres")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgrespassword")
 POSTGRES_HOST     = os.getenv("POSTGRES_HOST", "localhost")
 POSTGRES_PORT     = os.getenv("POSTGRES_PORT", "5432")
-POSTGRES_DB       = os.getenv("POSTGRES_DB", "aether_catalog")
+POSTGRES_DB       = os.getenv("POSTGRES_DB", "aetherops_platform")
 RAW_DATABASE_URL  = os.getenv("DATABASE_URL", "")
 ECHO_SQL          = os.getenv("ECHO_SQL", "False").lower() in ("true", "1", "yes")
 
@@ -63,7 +63,7 @@ def get_pg_engine():
             get_postgres_url(), echo=ECHO_SQL, future=True,
             pool_size=5, max_overflow=10, pool_pre_ping=True,
             connect_args={"command_timeout": 10,
-                          "server_settings": {"search_path": '"iac", public'}},
+                          "server_settings": {"search_path": '"iac_artifacts", public'}},
         )
     return _pg_engine
 

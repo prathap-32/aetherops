@@ -114,6 +114,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={"detail": str(exc)},
+    )
+
 ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv(

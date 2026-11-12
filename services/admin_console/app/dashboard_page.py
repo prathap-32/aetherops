@@ -676,7 +676,7 @@ def get_dashboard_page_html() -> str:
                                 </div>
                                 <div class="flex justify-between text-[11px]">
                                     <span>Catalog Database:</span>
-                                    <span class="text-gray-300 font-mono">aether_catalog</span>
+                                    <span class="text-gray-300 font-mono">aetherops_platform</span>
                                 </div>
                             </div>
                         </div>

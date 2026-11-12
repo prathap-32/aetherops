@@ -96,7 +96,7 @@ def _get_admin_pg_sessionmaker():
             pool_pre_ping=True,
             connect_args={
                 "command_timeout": 10,
-                "server_settings": {"search_path": '"project_manager", public'},
+                "server_settings": {"search_path": '"project_management", public'},
             },
         )
         _admin_pg_sessionmaker = async_sessionmaker(

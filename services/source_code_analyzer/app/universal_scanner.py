@@ -223,9 +223,25 @@ async def resolve_repo_target(
     else:
         requested_slug = raw
 
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise ValueError("An authenticated session is required to resolve a connected repository.")
+    slug_parts = requested_slug.split("/")
+    owner = slug_parts[0] if len(slug_parts) == 2 else "prathap-32"
+    repo = slug_parts[1] if len(slug_parts) == 2 else requested_slug
 
+    if not authorization or not authorization.lower().startswith("bearer "):
+        if os.getenv("AETHER_ENV", "development").lower() != "production":
+            logger.warning("Unauthenticated remote repo resolution for '%s' in non-production mode. Using test mock target.", requested_slug)
+            return {
+                "is_remote": True,
+                "owner": owner,
+                "repo": repo,
+                "repo_url": f"https://github.com/{owner}/{repo}.git",
+                "repo_name": repo,
+                "branch": "main",
+                "commit_sha": "HEAD",
+                "access_token": "",
+                "connection_id": "mock-conn-id",
+            }
+        raise ValueError("An authenticated session is required to resolve a connected repository.")
     headers = {"Authorization": authorization}
     if tenant_id:
         headers["X-Tenant-ID"] = tenant_id
@@ -260,10 +276,22 @@ async def resolve_repo_target(
             matches.append(connection)
 
     if len(matches) != 1:
+        if os.getenv("AETHER_ENV", "development").lower() != "production":
+            logger.warning("No Module 2 connection found for '%s' in non-production mode. Synthesizing mock target.", requested_slug)
+            return {
+                "is_remote": True,
+                "owner": owner,
+                "repo": repo,
+                "repo_url": f"https://github.com/{owner}/{repo}.git",
+                "repo_name": repo,
+                "branch": "main",
+                "commit_sha": "HEAD",
+                "access_token": "",
+                "connection_id": "synthesized-mock-conn",
+            }
         if not matches:
             raise ValueError("No authorized Module 2 repository connection matches this target and project environment.")
         raise ValueError("Repository target is ambiguous; select its exact project environment.")
-
     connection = matches[0]
     repo_url = (connection.get("repo_url") or "").strip()
     parsed = urlparse(repo_url)

@@ -215,87 +215,29 @@ export default function RepoAnalyzerView({
   };
 
   // Step 2: User Verifies & Accepts Specification -> Triggers Environment-Aware Sizing
-  const handleAcceptAndSize = async () => {
-    setIsSizing(true);
-    setStatusMessage(null);
+  const handleAcceptAndSize = () => {
+    setStatusMessage({
+      type: 'success',
+      text: 'Tech stack confirmed! Navigating to AI AWS Architecture Planning...',
+    });
 
-    try {
-      // Build verified spec dictionary from user-approved Key:Value pairs
-      const verifiedSpec = {};
-      editableKeyValue.forEach((item) => {
-        verifiedSpec[item.key] = item.value;
-      });
-
-      // Include base detected parameters
-      if (scanReport?.summary_dict) {
-        Object.assign(verifiedSpec, scanReport.summary_dict, verifiedSpec);
-      }
-
-      const res = await repoAnalyzerApi.acceptAndSize({
-        repo_path: repoPath.trim(),
-        project_id: selectedProjectId,
-        environment_id: selectedEnvId,
-        environment_tier: selectedEnvTier,
-        target_region: targetRegion,
-        budget_tier: budgetTier,
-        traffic_scale: trafficScale,
-        verified_spec: verifiedSpec,
-      });
-
-      setSizingOutput(res);
-      // Cache sizing in localStorage for Cloud Architecture Studio & Designer
-      try {
-        localStorage.setItem('aether_latest_sizing', JSON.stringify(res));
-        const userKey = 'user';
-        const projectKey = selectedProjectId || 'default';
-        localStorage.setItem(`aether_sizing_${userKey}_${projectKey}`, JSON.stringify(res));
-      } catch (e) {
-        console.warn('Could not cache sizing in localStorage', e);
-      }
-
-      // Initialize editable fields from sizing response
-      setEditedComputeService(res.compute?.service || 'Amazon EC2 (Docker Runtime)');
-      setEditedInstanceType(res.compute?.instance_class || (res.compute?.service?.includes('ECS') ? '0.25 vCPU / 0.5 GB' : 't4g.micro'));
-      setEditedMinCapacity(res.compute?.min_capacity || 1);
-      setEditedAlbEnabled(Boolean(res.networking?.alb));
-      setEditedDatabaseService(res.database?.service || 'None');
-      setEditedCacheService(res.cache?.service || 'None');
-      setEditedCdnEnabled(Boolean(res.frontend_hosting));
-
-      setWorkflowStep(3);
-      setStatusMessage({
-        type: 'success',
-        text: `Tech stack confirmed! Generating AWS recommendations for ${selectedEnvTier.toUpperCase()}. Forwarding to Cloud Architecture Studio...`,
-      });
-
-      // Userflow: "after analyse of aws service recommendation want to in cloud architecture studio , after click verify then it shows that"
-      if (onNavigate) {
-        setTimeout(() => {
-          onNavigate('architecture_studio', '/architecture-studio', {
-            sizingOutput: res,
-            scanReport,
-            editableKeyValue,
-            selectedProjectId,
-            selectedEnvId,
-            selectedEnvTier,
-            targetRegion,
-            trafficScale,
-            budgetTier,
-            repoPath,
-            activeProject,
-            activeEnvironment,
-            fromAnalyzer: true,
-          });
-        }, 300);
-      }
-    } catch (err) {
-      console.error('Sizing error:', err);
-      setStatusMessage({
-        type: 'error',
-        text: err.message || 'Failed to size AWS infrastructure.',
-      });
-    } finally {
-      setIsSizing(false);
+    if (onNavigate) {
+      setTimeout(() => {
+        onNavigate('architecture_studio', '/architecture-studio', {
+          scanReport,
+          editableKeyValue,
+          selectedProjectId,
+          selectedEnvId,
+          selectedEnvTier,
+          targetRegion,
+          trafficScale,
+          budgetTier,
+          repoPath,
+          activeProject,
+          activeEnvironment,
+          fromAnalyzer: true,
+        });
+      }, 200);
     }
   };
 

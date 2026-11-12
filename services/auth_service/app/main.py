@@ -669,11 +669,9 @@ def _get_base_url(request: Optional[Request] = None) -> str:
 def _send_verification_email(recipient_email: str, username: str, token: str, request: Optional[Request] = None) -> str:
     base_url = _get_base_url(request)
     verification_url = f"{base_url}/?verify_token={token}"
+    smtp_host = os.getenv("SMTP_HOST")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_pass = os.getenv("SMTP_PASSWORD")
     smtp_from = os.getenv("SMTP_FROM", "no-reply@aetherops.cloud")
-
     html_content = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -758,11 +756,11 @@ async def register(req: RegisterRequest, request: Request):
     Creates a new user with unverified email, generates secure confirmation token,
     and dispatches confirmation email.
     """
+    clean_username = req.username.strip()
     clean_email = req.email.strip().lower()
     conn = get_db_connection()
     try:
         c = conn.cursor()
-
         c.execute("SELECT id FROM users WHERE lower(username) = lower(?)", (clean_username,))
         if c.fetchone():
             return JSONResponse(status_code=400, content={"detail": "Username already exists."})

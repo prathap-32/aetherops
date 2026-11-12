@@ -63,7 +63,7 @@ def _get_pg_sm():
         _pg_engine = create_async_engine(get_postgres_url(), echo=ECHO_SQL, future=True,
                                          pool_size=5, max_overflow=10, pool_pre_ping=True,
                                          connect_args={"command_timeout": 10,
-                                                       "server_settings": {"search_path": '"source_connection", public'}})
+                                                       "server_settings": {"search_path": '"source_connections", public'}})
         _pg_sm = async_sessionmaker(bind=_pg_engine, class_=AsyncSession, expire_on_commit=False,
                                     autocommit=False, autoflush=False)
     return _pg_sm

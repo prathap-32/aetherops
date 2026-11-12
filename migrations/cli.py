@@ -18,8 +18,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("aether-migrations")
 
 MIGRATIONS_BY_TARGET = {
-    "project_manager": [m_01],
-    "source_connection": [m_01, m_02],
+    "project_management": [m_01],
+    "source_connections": [m_01, m_02],
     "source_analysis": [m_03],
 }
 
@@ -66,7 +66,7 @@ async def run_migrations(db_url: str, target_schema: str = "all", direction: str
 def main():
     parser = argparse.ArgumentParser(description="AetherOps Database Migration CLI")
     parser.add_argument("--db-url", required=True, help="Database connection URL")
-    parser.add_argument("--target", default="all", choices=["all", "project_manager", "source_connection", "source_analysis"], help="Target schema/module")
+    parser.add_argument("--target", default="all", choices=["all", "project_management", "source_connections", "source_analysis"], help="Target schema/module")
     parser.add_argument("--action", default="upgrade", choices=["upgrade", "downgrade"], help="Migration action")
     args = parser.parse_args()
 

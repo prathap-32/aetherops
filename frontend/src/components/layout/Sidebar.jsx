@@ -19,8 +19,8 @@ import {
   X,
   PanelLeftClose,
   PanelLeftOpen,
+  CheckCircle2,
 } from 'lucide-react';
-
 const NAV_GROUPS = [
   {
     name: 'CORE DEVOPS PIPELINE',
@@ -31,10 +31,9 @@ const NAV_GROUPS = [
       { id: 'repo_analyzer', path: '/source-analysis', label: 'Source Code Analyzer', icon: FileCode2 },
       { id: 'architecture_studio', path: '/architecture-studio', label: 'AI AWS Architecture', icon: Network },
       { id: 'iac', path: '/terraform', label: 'Infrastructure as Code Synthesizer', icon: Code2 },
-      { id: 'risk_analysis', path: '/risk-analysis', label: 'AI Dry Run & Approval Gate', icon: ShieldCheck },
+      { id: 'risk_analysis', path: '/risk-analysis', label: 'Pre-Deployment Risk Analysis', icon: ShieldCheck },
+      { id: 'execution', path: '/execution', label: 'Approval & Execution', icon: CheckCircle2 },
       { id: 'deployments', path: '/deployment', label: 'Cloud Deployment', icon: Rocket },
-      { id: 'state_inventory', path: '/state-inventory', label: 'State Inventory', icon: Database },
-      { id: 'audit', path: '/audit', label: 'Security & Session Audit', icon: ShieldCheck },
       { id: 'settings', path: '/settings', label: 'User & Credential Settings', icon: Settings },
     ],
   },

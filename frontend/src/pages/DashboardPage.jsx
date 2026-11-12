@@ -57,8 +57,9 @@ const PATH_VIEW_MAP = {
   '/approval-gate': 'approval_gate',
   '/state-inventory': 'state_inventory',
   '/deployment': 'deployments',
+  '/deployement': 'deployments',
+  '/deployement/': 'deployments',
   '/documentation': 'docs',
-  '/docs': 'docs',
   '/account': 'settings',
   '/settings': 'settings',
   '/admin': 'admin',
@@ -146,6 +147,26 @@ export default function DashboardPage() {
     } catch (e) {}
   };
 
+  const [activeEnvironment, setActiveEnvironment] = useState(() => {
+    try {
+      const cached = localStorage.getItem('aether_active_environment');
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  const selectEnvironment = (env) => {
+    setActiveEnvironment(env);
+    try {
+      if (env) {
+        localStorage.setItem('aether_active_environment', JSON.stringify(env));
+      } else {
+        localStorage.removeItem('aether_active_environment');
+      }
+    } catch (e) {}
+  };
+
   // Sync browser URL history on view change
   const handleNavigate = (viewId, customPath, extraState = {}) => {
     setActiveView(viewId);
@@ -195,12 +216,11 @@ export default function DashboardPage() {
         return <IacView onNavigate={handleNavigate} />;
       case 'execution':
       case 'approval_gate':
-        return <ApprovalExecutionView onNavigate={handleNavigate} />;
+        return <ApprovalExecutionView onNavigate={handleNavigate} activeProject={activeProject} activeEnvironment={activeEnvironment} user={user} />;
       case 'state_inventory':
-        return <StateInventoryView onNavigate={handleNavigate} />;
+        return <StateInventoryView onNavigate={handleNavigate} activeProject={activeProject} activeEnvironment={activeEnvironment} user={user} />;
       case 'deployments':
-        return <DeploymentsView onNavigate={handleNavigate} />;
-      case 'cicd':
+        return <DeploymentsView onNavigate={handleNavigate} activeProject={activeProject} activeEnvironment={activeEnvironment} user={user} />;
       case 'cicd-pipeline':
         return <CicdView onNavigate={handleNavigate} />;
       case 'monitoring':

@@ -40,6 +40,7 @@ import { formatAiProvider } from '../../utils/formatters';
 export default function ArchitectureView({ onNavigate, activeProject, activeEnvironment, navState, user }) {
   // Sizing Context from Module 3 or scoped localStorage
   const [activeSizing, setActiveSizing] = useState(() => {
+    if (navState?.fromAnalyzer) return null;
     if (navState?.sizingOutput) return navState.sizingOutput;
     try {
       const userKey = user?.uuid || user?.username || 'user';
@@ -62,7 +63,9 @@ export default function ArchitectureView({ onNavigate, activeProject, activeEnvi
   });
 
   useEffect(() => {
-    if (navState?.sizingOutput) {
+    if (navState?.fromAnalyzer) {
+      setActiveSizing(null);
+    } else if (navState?.sizingOutput) {
       setActiveSizing(navState.sizingOutput);
     }
   }, [navState]);
@@ -682,32 +685,113 @@ ${hasDb ? `output "database_endpoint" {
 
       {/* When no sizing has been generated yet for this project/user */}
       {!activeSizing ? (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-10 text-center max-w-2xl mx-auto space-y-5">
-          <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto border border-blue-200 shadow-xs">
-            <Palette className="w-8 h-8" />
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 max-w-4xl mx-auto space-y-6">
+          <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+            <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-200 shadow-xs">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">AI AWS Architecture Planning Session</h2>
+              <p className="text-xs text-slate-500">Source code analysis context received. Configure parameters and click Plan AWS Architecture.</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">No Architecture Generated Yet</h2>
+
+          <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-xl space-y-2">
+            <div className="text-xs font-bold text-blue-900 flex items-center gap-2">
+              <FileCode className="w-4 h-4 text-blue-600" />
+              Application analysis context is ready from Source Code Analyzer.
+            </div>
+            <p className="text-xs text-blue-800">
+              Configure your AWS architecture planning preferences and select <strong>Plan AWS Architecture</strong> to generate recommendations based on your source code analysis.
+            </p>
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            {onNavigate && (
-              <button
-                onClick={() => onNavigate('repo_analyzer', '/source-analysis')}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
-              >
-                <Sparkles className="w-4 h-4 text-blue-200" />
-                <span>Analyze Codebase</span>
-              </button>
+
+          {/* Ingested Primitives from Module 3 */}
+          <div className="flex items-center gap-2 flex-wrap text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+            <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+              <FileCode className="w-4 h-4 text-blue-600" />
+              <span>Ingested Stack Primitives:</span>
+            </span>
+            {navState?.editableKeyValue && navState.editableKeyValue.length > 0 ? (
+              navState.editableKeyValue.map((item) => (
+                <span key={item.key} className="px-2.5 py-1 rounded bg-white text-slate-700 font-mono text-xs border border-slate-200">
+                  {item.label}: <strong className="text-slate-900">{item.value}</strong>
+                </span>
+              ))
+            ) : (
+              <span className="px-2.5 py-1 rounded bg-white text-slate-700 font-mono text-xs border border-slate-200">
+                Repository: <strong className="text-slate-900">{navState?.repoPath || 'Active Codebase'}</strong>
+              </span>
             )}
-            {onNavigate && (
-              <button
-                onClick={() => onNavigate('architecture_designer', '/architecture-designer')}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold shadow-xs transition cursor-pointer"
+          </div>
+
+          {/* Planning Configuration Controls */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Environment Tier</label>
+              <select
+                value={planningEnvTier}
+                onChange={(e) => setPlanningEnvTier(e.target.value)}
+                className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               >
-                <Network className="w-4 h-4 text-slate-500" />
-                <span>Open Blank Architecture Designer</span>
-              </button>
-            )}
+                <option value="development">Development (EC2 Lean &lt;$7/mo)</option>
+                <option value="staging">Staging (Dual-AZ Parity)</option>
+                <option value="production">Production (Multi-AZ HA)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Traffic Profile</label>
+              <select
+                value={planningTraffic}
+                onChange={(e) => setPlanningTraffic(e.target.value)}
+                className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              >
+                <option value="LOW">Low (1-10 RPS / Dev Traffic)</option>
+                <option value="MODERATE">Moderate (10-100 RPS / Standard)</option>
+                <option value="HIGH">High (100-1000+ RPS / Scale-Out)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Budget Strategy</label>
+              <select
+                value={planningBudget}
+                onChange={(e) => setPlanningBudget(e.target.value)}
+                className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              >
+                <option value="LOW">Frugal / Lean (Cost Minimized)</option>
+                <option value="STANDARD">Standard Production</option>
+                <option value="ENTERPRISE">Enterprise (HA &amp; Multi-AZ)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Target AWS Region</label>
+              <select
+                value={planningRegion}
+                onChange={(e) => setPlanningRegion(e.target.value)}
+                className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono"
+              >
+                {AWS_REGIONS_39.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.value} ({r.group})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={handleRePlanWithAi}
+              disabled={isRecommendingAi}
+              className="w-full py-3.5 px-6 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <Sparkles className={`w-5 h-5 ${isRecommendingAi ? 'animate-spin' : ''}`} />
+              <span>{isRecommendingAi ? 'Generating AI Architecture Recommendations...' : 'Plan AWS Architecture'}</span>
+            </button>
           </div>
         </div>
       ) : (
@@ -817,7 +901,7 @@ ${hasDb ? `output "database_endpoint" {
                     className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
                     <Sparkles className={`w-3.5 h-3.5 ${isRecommendingAi ? 'animate-spin' : ''}`} />
-                    <span>{isRecommendingAi ? 'Planning...' : 'AI & Rule Re-Plan'}</span>
+                    <span>{isRecommendingAi ? 'Planning...' : 'Plan AWS Architecture'}</span>
                   </button>
                 </div>
               </div>
